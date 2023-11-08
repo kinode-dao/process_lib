@@ -489,6 +489,32 @@ impl Request {
             },
         }
     }
+
+    pub fn send_and_await_response_serde<T, U, V>(self, timeout: u64) -> anyhow::Result<Result<(Address, bool, T, Option<U>, Option<V>), SendError>>
+    where
+        T: serde::de::DeserializeOwned,
+        U: serde::de::DeserializeOwned,
+        V: serde::de::DeserializeOwned,
+    {
+        match self.send_and_await_response_unpack(timeout)? {
+            Err(e) => Ok(Err(e)),
+            Ok((source, response, context)) => {
+                Ok(Ok((
+                    source,
+                    response.inherit,
+                    serde_json::from_slice(&response.ipc)?,
+                    match response.metadata {
+                        None => None,
+                        Some(m) => Some(serde_json::from_str(&m)?),
+                    },
+                    match context {
+                        None => None,
+                        Some(c) => Some(serde_json::from_slice(&c)?),
+                    },
+                )))
+            },
+        }
+    }
 }
 
 pub struct Response {
