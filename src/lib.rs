@@ -350,9 +350,25 @@ impl Request {
         Ok(self)
     }
 
+    pub fn ipc_serde<T>(mut self, ipc: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        self.ipc = Some(serde_json::to_vec(&ipc)?);
+        Ok(self)
+    }
+
     pub fn metadata(mut self, metadata: String) -> Self {
         self.metadata = Some(metadata);
         self
+    }
+
+    pub fn metadata_serde<T>(mut self, metadata: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        self.metadata = Some(serde_json::to_string(&metadata)?);
+        Ok(self)
     }
 
     pub fn payload(mut self, payload: Payload) -> Self {
@@ -389,6 +405,22 @@ impl Request {
         }
     }
 
+    pub fn payload_serde<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        if self.payload.is_none() {
+            self.payload = Some(Payload { mime: None, bytes: serde_json::to_vec(&bytes)? });
+            Ok(self)
+        } else {
+            self.payload = Some(Payload {
+                mime: self.payload.unwrap().mime,
+                bytes: serde_json::to_vec(&bytes)?,
+            });
+            Ok(self)
+        }
+    }
+
     pub fn context_bytes(mut self, context: Vec<u8>) -> Self {
         self.context = Some(context);
         self
@@ -399,6 +431,14 @@ impl Request {
         F: Fn(&T) -> anyhow::Result<Vec<u8>>,
     {
         self.context = Some(serializer(context)?);
+        Ok(self)
+    }
+
+    pub fn context_serde<T>(mut self, context: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        self.context = Some(serde_json::to_vec(&context)?);
         Ok(self)
     }
 
@@ -437,6 +477,18 @@ impl Request {
             Err(anyhow::anyhow!("missing fields"))
         }
     }
+
+    pub fn send_and_await_response_unpack(self, timeout: u64) -> anyhow::Result<Result<(Address, wit::Response, Option<Context>), SendError>> {
+        match self.send_and_await_response(timeout)? {
+            Err(e) => Ok(Err(e)),
+            Ok((source, message)) => {
+                let Message::Response((response, context)) = message else {
+                    return Err(anyhow::anyhow!("did not receive Response"));
+                };
+                Ok(Ok((source, response, context)))
+            },
+        }
+    }
 }
 
 pub struct Response {
@@ -471,6 +523,14 @@ impl Response {
         F: Fn(&T) -> anyhow::Result<Vec<u8>>,
     {
         self.ipc = Some(serializer(ipc)?);
+        Ok(self)
+    }
+
+    pub fn ipc_serde<T>(mut self, ipc: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        self.ipc = Some(serde_json::to_vec(&ipc)?);
         Ok(self)
     }
 
@@ -513,6 +573,22 @@ impl Response {
         }
     }
 
+    pub fn payload_serde<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        if self.payload.is_none() {
+            self.payload = Some(Payload { mime: None, bytes: serde_json::to_vec(&bytes)? });
+            Ok(self)
+        } else {
+            self.payload = Some(Payload {
+                mime: self.payload.unwrap().mime,
+                bytes: serde_json::to_vec(&bytes)?,
+            });
+            Ok(self)
+        }
+    }
+
     pub fn send(self) -> anyhow::Result<()> {
         if let Some(ipc) = self.ipc {
             crate::send_response(
@@ -540,6 +616,16 @@ where
     })
 }
 
+pub fn make_payload_serde<T>(payload: &T) -> anyhow::Result<Payload>
+where
+    T: serde::Serialize,
+{
+    Ok(Payload {
+        mime: None,
+        bytes: serde_json::to_vec(payload)?,
+    })
+}
+
 pub fn get_typed_payload<T, F>(deserializer: F) -> Option<T>
 where
     F: Fn(&[u8]) -> anyhow::Result<T>,
@@ -553,12 +639,38 @@ where
     }
 }
 
+pub fn get_typed_payload_serde<T>() -> Option<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    match crate::get_payload() {
+        Some(payload) => match serde_json::from_slice(&payload.bytes) {
+            Ok(thing) => Some(thing),
+            Err(_) => None,
+        },
+        None => None,
+    }
+}
+
 pub fn get_typed_state<T, F>(deserializer: F) -> Option<T>
 where
     F: Fn(&[u8]) -> anyhow::Result<T>,
 {
     match crate::get_state() {
         Some(bytes) => match deserializer(&bytes) {
+            Ok(thing) => Some(thing),
+            Err(_) => None,
+        },
+        None => None,
+    }
+}
+
+pub fn get_typed_state_serde<T>() -> Option<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    match crate::get_state() {
+        Some(bytes) => match serde_json::from_slice(&bytes) {
             Ok(thing) => Some(thing),
             Err(_) => None,
         },
