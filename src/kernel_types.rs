@@ -129,7 +129,7 @@ pub struct Payload {
     pub bytes: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Request {
     pub inherit: bool,
     pub expects_response: Option<u64>, // number of seconds until timeout
@@ -137,14 +137,14 @@ pub struct Request {
     pub metadata: Option<String>, // JSON-string
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Response {
     pub inherit: bool,
     pub ipc: Vec<u8>,
     pub metadata: Option<String>, // JSON-string
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Message {
     Request(Request),
     Response((Response, Option<Context>)),
