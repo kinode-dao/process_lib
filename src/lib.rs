@@ -414,7 +414,7 @@ impl Request {
             Ok(self)
         } else {
             self.payload = Some(Payload {
-                mime: self.payload.unwrap().mime,
+                mime: Some("application/json".into()),
                 bytes: serde_json::to_vec(&bytes)?,
             });
             Ok(self)
@@ -608,7 +608,7 @@ impl Response {
             Ok(self)
         } else {
             self.payload = Some(Payload {
-                mime: self.payload.unwrap().mime,
+                mime: Some("application/json".into()),
                 bytes: serde_json::to_vec(&bytes)?,
             });
             Ok(self)
@@ -647,7 +647,7 @@ where
     T: serde::Serialize,
 {
     Ok(Payload {
-        mime: None,
+        mime: Some("application/json".into()),
         bytes: serde_json::to_vec(payload)?,
     })
 }
