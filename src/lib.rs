@@ -478,27 +478,26 @@ impl Request {
         }
     }
 
-    pub fn send_and_await_response_unpack(self, timeout: u64) -> anyhow::Result<Result<(Address, wit::Response, Option<Context>), SendError>> {
+    pub fn send_and_await_response_unpack(self, timeout: u64) -> anyhow::Result<Result<(Address, wit::Response), SendError>> {
         match self.send_and_await_response(timeout)? {
             Err(e) => Ok(Err(e)),
             Ok((source, message)) => {
-                let Message::Response((response, context)) = message else {
+                let Message::Response((response, _context)) = message else {
                     return Err(anyhow::anyhow!("did not receive Response"));
                 };
-                Ok(Ok((source, response, context)))
+                Ok(Ok((source, response)))
             },
         }
     }
 
-    pub fn send_and_await_response_serde<T, U, V>(self, timeout: u64) -> anyhow::Result<Result<(Address, bool, T, Option<U>, Option<V>), SendError>>
+    pub fn send_and_await_response_serde<T, U>(self, timeout: u64) -> anyhow::Result<Result<(Address, bool, T, Option<U>), SendError>>
     where
         T: serde::de::DeserializeOwned,
         U: serde::de::DeserializeOwned,
-        V: serde::de::DeserializeOwned,
     {
         match self.send_and_await_response_unpack(timeout)? {
             Err(e) => Ok(Err(e)),
-            Ok((source, response, context)) => {
+            Ok((source, response)) => {
                 Ok(Ok((
                     source,
                     response.inherit,
@@ -506,10 +505,6 @@ impl Request {
                     match response.metadata {
                         None => None,
                         Some(m) => Some(serde_json::from_str(&m)?),
-                    },
-                    match context {
-                        None => None,
-                        Some(c) => Some(serde_json::from_slice(&c)?),
                     },
                 )))
             },
