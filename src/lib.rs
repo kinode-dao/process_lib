@@ -10,6 +10,8 @@ wit_bindgen::generate!({
 });
 
 pub mod kernel_types;
+/// Interact with the timer runtime module.
+pub mod timer;
 
 /// Override the println! macro to print to the terminal
 #[macro_export]
@@ -56,14 +58,17 @@ impl PackageId {
             publisher_node,
         })
     }
-    pub fn to_string(&self) -> String {
-        [self.package_name.as_str(), self.publisher_node.as_str()].join(":")
-    }
     pub fn package(&self) -> &str {
         &self.package_name
     }
-    pub fn publisher_node(&self) -> &str {
+    pub fn publisher(&self) -> &str {
         &self.publisher_node
+    }
+}
+
+impl std::fmt::Display for PackageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.package_name, self.publisher_node)
     }
 }
 
@@ -102,38 +107,20 @@ impl ProcessId {
             publisher_node,
         })
     }
-    pub fn to_string(&self) -> String {
-        [
-            self.process_name.as_str(),
-            self.package_name.as_str(),
-            self.publisher_node.as_str(),
-        ]
-        .join(":")
-    }
     pub fn process(&self) -> &str {
         &self.process_name
     }
     pub fn package(&self) -> &str {
         &self.package_name
     }
-    pub fn publisher_node(&self) -> &str {
+    pub fn publisher(&self) -> &str {
         &self.publisher_node
     }
 }
 
-pub trait IntoProcessId {
-    fn into_process_id(self) -> Result<ProcessId, ProcessIdParseError>;
-}
-
-impl IntoProcessId for ProcessId {
-    fn into_process_id(self) -> Result<ProcessId, ProcessIdParseError> {
-        Ok(self)
-    }
-}
-
-impl IntoProcessId for &str {
-    fn into_process_id(self) -> Result<ProcessId, ProcessIdParseError> {
-        ProcessId::from_str(self)
+impl From<(&str, &str, &str)> for ProcessId {
+    fn from(input: (&str, &str, &str)) -> Self {
+        ProcessId::new(input.0, input.1, input.2)
     }
 }
 
@@ -197,11 +184,14 @@ impl std::error::Error for ProcessIdParseError {
 
 /// Address is defined in the wit bindings, but constructors and methods here.
 impl Address {
-    pub fn new<T: IntoProcessId>(node: &str, process: T) -> Result<Address, ProcessIdParseError> {
-        Ok(Address {
+    pub fn new<T>(node: &str, process: T) -> Address
+    where
+        T: Into<ProcessId>,
+    {
+        Address {
             node: node.to_string(),
-            process: process.into_process_id()?,
-        })
+            process: process.into(),
+        }
     }
     pub fn from_str(input: &str) -> Result<Self, AddressParseError> {
         // split string on colons into 4 segments,
@@ -239,24 +229,26 @@ impl Address {
             },
         })
     }
-    pub fn to_string(&self) -> String {
-        [self.node.as_str(), &self.process.to_string()].join("@")
+}
+
+impl From<(&str, &str, &str, &str)> for Address {
+    fn from(input: (&str, &str, &str, &str)) -> Self {
+        Address::new(input.0, (input.1, input.2, input.3))
     }
 }
 
-pub trait IntoAddress {
-    fn into_address(self) -> Result<Address, AddressParseError>;
-}
-
-impl IntoAddress for Address {
-    fn into_address(self) -> Result<Address, AddressParseError> {
-        Ok(self)
+impl<T> From<(&str, T)> for Address
+where
+    T: Into<ProcessId>,
+{
+    fn from(input: (&str, T)) -> Self {
+        Address::new(input.0, input.1)
     }
 }
 
-impl IntoAddress for &str {
-    fn into_address(self) -> Result<Address, AddressParseError> {
-        Address::from_str(self)
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.node, self.process)
     }
 }
 
@@ -291,13 +283,13 @@ impl std::error::Error for AddressParseError {
     }
 }
 
-///
-/// Here, we define wrappers over the wit bindings to make them easier to use.
-/// This library prescribes the use of IPC and metadata types serialized and
-/// deserialized to JSON, which is far from optimal for performance, but useful
-/// for applications that want to maximize composability and introspectability.
-/// For payloads, we use bincode to serialize and deserialize to bytes.
-///
+//
+// Here, we define wrappers over the wit bindings to make them easier to use.
+// This library prescribes the use of IPC and metadata types serialized and
+// deserialized to JSON, which is far from optimal for performance, but useful
+// for applications that want to maximize composability and introspectability.
+// For payloads, we use bincode to serialize and deserialize to bytes.
+//
 
 pub struct Request {
     target: Option<Address>,
@@ -322,9 +314,28 @@ impl Request {
         }
     }
 
-    pub fn target<T: IntoAddress>(mut self, target: T) -> Result<Self, AddressParseError> {
-        self.target = Some(target.into_address()?);
-        Ok(self)
+    /// Build a request with the Address of the target.
+    pub fn to<T>(target: T) -> Self
+    where
+        T: Into<Address>,
+    {
+        Request {
+            target: Some(target.into()),
+            inherit: false,
+            timeout: None,
+            ipc: None,
+            metadata: None,
+            payload: None,
+            context: None,
+        }
+    }
+
+    pub fn target<T>(mut self, target: T) -> Self
+    where
+        T: Into<Address>,
+    {
+        self.target = Some(target.into());
+        self
     }
 
     pub fn inherit(mut self, inherit: bool) -> Self {
@@ -337,21 +348,24 @@ impl Request {
         self
     }
 
-    pub fn ipc_bytes(mut self, ipc: Vec<u8>) -> Self {
-        self.ipc = Some(ipc);
+    pub fn ipc<T>(mut self, ipc: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
+        self.ipc = Some(ipc.into());
         self
     }
 
-    pub fn ipc<T, F>(mut self, ipc: &T, serializer: F) -> anyhow::Result<Self>
+    pub fn try_ipc<T>(mut self, ipc: T) -> anyhow::Result<Self>
     where
-        F: Fn(&T) -> anyhow::Result<Vec<u8>>,
+        T: TryInto<Vec<u8>, Error = anyhow::Error>,
     {
-        self.ipc = Some(serializer(ipc)?);
+        self.ipc = Some(ipc.try_into()?);
         Ok(self)
     }
 
-    pub fn metadata(mut self, metadata: String) -> Self {
-        self.metadata = Some(metadata);
+    pub fn metadata(mut self, metadata: &str) -> Self {
+        self.metadata = Some(metadata.to_string());
         self
     }
 
@@ -360,45 +374,73 @@ impl Request {
         self
     }
 
-    pub fn payload_mime(mut self, mime: String) -> Self {
+    pub fn payload_mime(mut self, mime: &str) -> Self {
         if self.payload.is_none() {
             self.payload = Some(Payload {
-                mime: Some(mime),
+                mime: Some(mime.to_string()),
                 bytes: vec![],
             });
             self
         } else {
             self.payload = Some(Payload {
-                mime: Some(mime),
+                mime: Some(mime.to_string()),
                 bytes: self.payload.unwrap().bytes,
             });
             self
         }
     }
 
-    pub fn payload_bytes(mut self, bytes: Vec<u8>) -> Self {
+    pub fn payload_bytes<T>(mut self, bytes: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
         if self.payload.is_none() {
-            self.payload = Some(Payload { mime: None, bytes });
+            self.payload = Some(Payload {
+                mime: None,
+                bytes: bytes.into(),
+            });
             self
         } else {
             self.payload = Some(Payload {
                 mime: self.payload.unwrap().mime,
-                bytes,
+                bytes: bytes.into(),
             });
             self
         }
     }
 
-    pub fn context_bytes(mut self, context: Vec<u8>) -> Self {
-        self.context = Some(context);
+    pub fn try_payload_bytes<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    where
+        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+    {
+        if self.payload.is_none() {
+            self.payload = Some(Payload {
+                mime: None,
+                bytes: bytes.try_into()?,
+            });
+            Ok(self)
+        } else {
+            self.payload = Some(Payload {
+                mime: self.payload.unwrap().mime,
+                bytes: bytes.try_into()?,
+            });
+            Ok(self)
+        }
+    }
+
+    pub fn context<T>(mut self, context: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
+        self.context = Some(context.into());
         self
     }
 
-    pub fn context<T, F>(mut self, context: &T, serializer: F) -> anyhow::Result<Self>
+    pub fn try_context<T>(mut self, context: T) -> anyhow::Result<Self>
     where
-        F: Fn(&T) -> anyhow::Result<Vec<u8>>,
+        T: TryInto<Vec<u8>, Error = anyhow::Error>,
     {
-        self.context = Some(serializer(context)?);
+        self.context = Some(context.try_into()?);
         Ok(self)
     }
 
@@ -410,7 +452,10 @@ impl Request {
                     inherit: self.inherit,
                     expects_response: self.timeout,
                     ipc,
-                    metadata: self.metadata,
+                    metadata: match self.metadata {
+                        None => None,
+                        Some(str) => Some(str.to_string()),
+                    },
                 },
                 self.context.as_ref(),
                 self.payload.as_ref(),
@@ -421,7 +466,10 @@ impl Request {
         }
     }
 
-    pub fn send_and_await_response(self, timeout: u64) -> anyhow::Result<Result<(Address, Message), SendError>> {
+    pub fn send_and_await_response(
+        self,
+        timeout: u64,
+    ) -> anyhow::Result<Result<(Address, Message), SendError>> {
         if let (Some(target), Some(ipc)) = (self.target, self.ipc) {
             Ok(crate::send_and_await_response(
                 &target,
@@ -461,21 +509,24 @@ impl Response {
         self
     }
 
-    pub fn ipc_bytes(mut self, ipc: Vec<u8>) -> Self {
-        self.ipc = Some(ipc);
+    pub fn ipc<T>(mut self, ipc: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
+        self.ipc = Some(ipc.into());
         self
     }
 
-    pub fn ipc<T, F>(mut self, ipc: &T, serializer: F) -> anyhow::Result<Self>
+    pub fn try_ipc<T>(mut self, ipc: T) -> anyhow::Result<Self>
     where
-        F: Fn(&T) -> anyhow::Result<Vec<u8>>,
+        T: TryInto<Vec<u8>, Error = anyhow::Error>,
     {
-        self.ipc = Some(serializer(ipc)?);
+        self.ipc = Some(ipc.try_into()?);
         Ok(self)
     }
 
-    pub fn metadata(mut self, metadata: Option<String>) -> Self {
-        self.metadata = metadata;
+    pub fn metadata(mut self, metadata: &str) -> Self {
+        self.metadata = Some(metadata.to_string());
         self
     }
 
@@ -484,32 +535,57 @@ impl Response {
         self
     }
 
-    pub fn payload_mime(mut self, mime: String) -> Self {
+    pub fn payload_mime(mut self, mime: &str) -> Self {
         if self.payload.is_none() {
             self.payload = Some(Payload {
-                mime: Some(mime),
+                mime: Some(mime.to_string()),
                 bytes: vec![],
             });
             self
         } else {
             self.payload = Some(Payload {
-                mime: Some(mime),
+                mime: Some(mime.to_string()),
                 bytes: self.payload.unwrap().bytes,
             });
             self
         }
     }
 
-    pub fn payload_bytes(mut self, bytes: Vec<u8>) -> Self {
+    pub fn payload_bytes<T>(mut self, bytes: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
         if self.payload.is_none() {
-            self.payload = Some(Payload { mime: None, bytes });
+            self.payload = Some(Payload {
+                mime: None,
+                bytes: bytes.into(),
+            });
             self
         } else {
             self.payload = Some(Payload {
                 mime: self.payload.unwrap().mime,
-                bytes,
+                bytes: bytes.into(),
             });
             self
+        }
+    }
+
+    pub fn try_payload_bytes<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    where
+        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+    {
+        if self.payload.is_none() {
+            self.payload = Some(Payload {
+                mime: None,
+                bytes: bytes.try_into()?,
+            });
+            Ok(self)
+        } else {
+            self.payload = Some(Payload {
+                mime: self.payload.unwrap().mime,
+                bytes: bytes.try_into()?,
+            });
+            Ok(self)
         }
     }
 
@@ -566,17 +642,16 @@ where
     }
 }
 
-pub fn grant_messaging(our: &Address, grant_to: &Vec<ProcessId>) -> anyhow::Result<()> {
-    let Some(our_messaging_cap) = crate::get_capability(our, &"\"messaging\"".into()) else {
-        // the kernel will always give us this capability, so this should never happen
-        return Err(anyhow::anyhow!(
-            "failed to get our own messaging capability!"
-        ));
-    };
-    for process in grant_to {
-        crate::share_capability(&process, &our_messaging_cap);
-    }
-    Ok(())
+pub fn grant_messaging<I, T>(our: &Address, grant_to: I)
+where
+    I: IntoIterator<Item = T>,
+    T: Into<ProcessId>,
+{
+    // the kernel will always give us this capability, so this should never ever fail
+    let our_messaging_cap = crate::get_capability(our, &"\"messaging\"".into()).unwrap();
+    grant_to.into_iter().for_each(|process| {
+        crate::share_capability(&process.into(), &our_messaging_cap);
+    });
 }
 
 pub fn can_message(address: &Address) -> bool {
