@@ -30,12 +30,9 @@ where
 
 /// Set a timer using the runtime that will return a Response after the specified duration,
 /// then wait for that timer to resolve. The duration should be a number of seconds.
-pub async fn set_and_await_timer<T>(
+pub async fn set_and_await_timer(
     duration: u64,
-) -> anyhow::Result<Result<(Address, Message), SendError>>
-where
-    T: TryInto<Vec<u8>, Error = anyhow::Error>,
-{
+) -> anyhow::Result<Result<(Address, Message), SendError>> {
     Request::new()
         .target(Address::new("our", ProcessId::new("timer", "sys", "uqbar")))
         .ipc(duration.to_le_bytes())
