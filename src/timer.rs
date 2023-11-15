@@ -3,7 +3,7 @@ use anyhow::Result;
 
 /// Set a timer using the runtime that will return a Response after the specified duration.
 /// The duration should be a number of seconds.
-pub async fn set_timer<T>(duration: u64, context: Option<T>) -> Result<()>
+pub fn set_timer<T>(duration: u64, context: Option<T>) -> Result<()>
 where
     T: TryInto<Vec<u8>, Error = anyhow::Error>,
 {
@@ -30,7 +30,7 @@ where
 
 /// Set a timer using the runtime that will return a Response after the specified duration,
 /// then wait for that timer to resolve. The duration should be a number of seconds.
-pub async fn set_and_await_timer(
+pub fn set_and_await_timer(
     duration: u64,
 ) -> anyhow::Result<Result<(Address, Message), SendError>> {
     Request::new()
