@@ -237,6 +237,15 @@ impl From<(&str, &str, &str, &str)> for Address {
     }
 }
 
+impl<T> From<(&str, T)> for Address
+where
+    T: Into<ProcessId>,
+{
+    fn from(input: (&str, T)) -> Self {
+        Address::new(input.0, input.1)
+    }
+}
+
 impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}@{}", self.node, self.process)
@@ -633,17 +642,16 @@ where
     }
 }
 
-pub fn grant_messaging(our: &Address, grant_to: &Vec<ProcessId>) -> anyhow::Result<()> {
-    let Some(our_messaging_cap) = crate::get_capability(our, &"\"messaging\"".into()) else {
-        // the kernel will always give us this capability, so this should never happen
-        return Err(anyhow::anyhow!(
-            "failed to get our own messaging capability!"
-        ));
-    };
-    for process in grant_to {
-        crate::share_capability(&process, &our_messaging_cap);
-    }
-    Ok(())
+pub fn grant_messaging<I, T>(our: &Address, grant_to: I)
+where
+    I: IntoIterator<Item = T>,
+    T: Into<ProcessId>,
+{
+    // the kernel will always give us this capability, so this should never ever fail
+    let our_messaging_cap = crate::get_capability(our, &"\"messaging\"".into()).unwrap();
+    grant_to.into_iter().for_each(|process| {
+        crate::share_capability(&process.into(), &our_messaging_cap);
+    });
 }
 
 pub fn can_message(address: &Address) -> bool {
