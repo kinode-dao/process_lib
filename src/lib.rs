@@ -13,6 +13,8 @@ wit_bindgen::generate!({
 pub mod kernel_types;
 /// Interact with the timer runtime module.
 pub mod timer;
+/// Interact with the HTTP server and client modules.
+pub mod http;
 
 /// Override the println! macro to print to the terminal
 #[macro_export]
@@ -216,12 +218,13 @@ impl std::error::Error for ProcessIdParseError {
 
 /// Address is defined in the wit bindings, but constructors and methods here.
 impl Address {
-    pub fn new<T>(node: &str, process: T) -> Address
+    pub fn new<T, U>(node: T, process: U) -> Address
     where
-        T: Into<ProcessId>,
+        T: Into<String>,
+        U: Into<ProcessId>,
     {
         Address {
-            node: node.to_string(),
+            node: node.into(),
             process: process.into(),
         }
     }
@@ -309,9 +312,15 @@ impl PartialEq for Address {
     }
 }
 
-impl From<(&str, &str, &str, &str)> for Address {
-    fn from(input: (&str, &str, &str, &str)) -> Self {
-        Address::new(input.0, (input.1, input.2, input.3))
+impl<T, U, V, W> From<(T, U, V, W)> for Address
+where
+    T: Into<String>,
+    U: Into<&'static str>,
+    V: Into<&'static str>,
+    W: Into<&'static str>,
+{
+    fn from(input: (T, U, V, W)) -> Self {
+        Address::new(input.0.into(), (input.1.into(), input.2.into(), input.3.into()))
     }
 }
 
