@@ -1,5 +1,5 @@
-use crate::*;
 use crate::kernel_types::Payload;
+use crate::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -67,17 +67,13 @@ pub enum HttpClientError {
 /// with the shape Result<(), HttpServerActionError> serialized to JSON.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerAction {
-    /// Bind does not expect payload.
+    /// Bind expects a payload if and only if `cache` is TRUE. The payload should
+    /// be the static file to serve at this path.
     Bind {
         path: String,
         authenticated: bool,
         local_only: bool,
-    },
-    /// BindStatic expects a payload containing the static file to serve at this path.
-    BindStatic {
-        path: String,
-        authenticated: bool,
-        local_only: bool,
+        cache: bool,
     },
     /// Expects a payload containing the WebSocket message bytes to send.
     WebSocketPush {
@@ -104,7 +100,7 @@ pub enum WsMessageType {
 
 /// Part of the Response type issued by http_server
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum HttpServerActionError {
+pub enum HttpServerError {
     #[error(
         "http_server: request could not be parsed to HttpServerAction: {}.",
         req
@@ -159,21 +155,45 @@ pub struct JwtClaims {
 
 /// Register a new path with the HTTP server. This will cause the HTTP server to
 /// forward any requests on this path to the calling process. Requests will be
-/// given in the form of <TODO>
-pub fn bind_to_path(our_name: &str, path: &str) -> anyhow::Result<()> {
+/// given in the form of `Result<(), HttpServerError>`
+pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyhow::Result<()>
+where
+    T: Into<String>,
+{
     Request::new()
-        .target((our_name, "http_server", "sys", "uqbar"))
-        .ipc(
-            serde_json::json!({
-                "BindPath": {
-                    "path": path,
-                    "authenticated": true,
-                    "local_only": false
-                }
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
-        )
+        .target(("our", "http_server", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&HttpServerAction::Bind {
+            path: path.into(),
+            authenticated,
+            local_only,
+            cache: false,
+        })?)
+        .send()
+}
+
+/// Register a new path with the HTTP server, and serve a static file from it.
+/// The server will respond to GET requests on this path with the given file.
+pub fn bind_http_static_path<T>(
+    path: T,
+    authenticated: bool,
+    local_only: bool,
+    content_type: Option<String>,
+    content: Vec<u8>,
+) -> anyhow::Result<()>
+where
+    T: Into<String>,
+{
+    Request::new()
+        .target(("our", "http_server", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&HttpServerAction::Bind {
+            path: path.into(),
+            authenticated,
+            local_only,
+            cache: true,
+        })?)
+        .payload(crate::uqbar::process::standard::Payload {
+            mime: content_type,
+            bytes: content,
+        })
         .send()
 }
