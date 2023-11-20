@@ -160,7 +160,7 @@ pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyh
 where
     T: Into<String>,
 {
-    Request::new()
+    let res = Request::new()
         .target(("our", "http_server", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -168,7 +168,14 @@ where
             local_only,
             cache: false,
         })?)
-        .send()
+        .send_and_await_response(5)?;
+    match res {
+        Ok((_src, Message::Response((resp, _context)))) => {
+            let resp: Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
+            resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
+        }
+        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
+    }
 }
 
 /// Register a new path with the HTTP server, and serve a static file from it.
@@ -183,7 +190,7 @@ pub fn bind_http_static_path<T>(
 where
     T: Into<String>,
 {
-    Request::new()
+    let res = Request::new()
         .target(("our", "http_server", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -195,5 +202,12 @@ where
             mime: content_type,
             bytes: content,
         })
-        .send()
+        .send_and_await_response(5)?;
+    match res {
+        Ok((_src, Message::Response((resp, _context)))) => {
+            let resp: Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
+            resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
+        }
+        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
+    }
 }
