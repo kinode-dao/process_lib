@@ -1,5 +1,6 @@
 use crate::kernel_types::Payload;
-use crate::*;
+use crate::{Address, Message, Request as uqRequest, Response as uqResponse};
+pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -153,6 +154,33 @@ pub struct JwtClaims {
     pub expiration: u64,
 }
 
+impl IncomingHttpRequest {
+    pub fn url(&self) -> anyhow::Result<url::Url> {
+        url::Url::parse(&self.raw_path)
+            .map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
+    }
+
+    pub fn query_params(&self) -> anyhow::Result<HashMap<String, String>> {
+        let url = url::Url::parse(&self.raw_path)?;
+        Ok(url.query_pairs().into_owned().collect())
+    }
+
+    pub fn full_path(&self) -> anyhow::Result<String> {
+        let url = url::Url::parse(&self.raw_path)?;
+        Ok(url.path().to_string())
+    }
+
+    pub fn path(&self) -> anyhow::Result<String> {
+        let url = url::Url::parse(&self.raw_path)?;
+        // skip the first path segment, which is the process ID.
+        Ok(url
+            .path_segments()
+            .ok_or(anyhow::anyhow!("url path missing process ID!"))?
+            .skip(1)
+            .collect())
+    }
+}
+
 /// Register a new path with the HTTP server. This will cause the HTTP server to
 /// forward any requests on this path to the calling process. Requests will be
 /// given in the form of `Result<(), HttpServerError>`
@@ -160,7 +188,7 @@ pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyh
 where
     T: Into<String>,
 {
-    let res = Request::new()
+    let res = uqRequest::new()
         .target(("our", "http_server", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -171,7 +199,7 @@ where
         .send_and_await_response(5)?;
     match res {
         Ok((_src, Message::Response((resp, _context)))) => {
-            let resp: Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
             resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
@@ -190,7 +218,7 @@ pub fn bind_http_static_path<T>(
 where
     T: Into<String>,
 {
-    let res = Request::new()
+    let res = uqRequest::new()
         .target(("our", "http_server", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -205,9 +233,24 @@ where
         .send_and_await_response(5)?;
     match res {
         Ok((_src, Message::Response((resp, _context)))) => {
-            let resp: Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
             resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
     }
+}
+
+/// Send an HTTP response to the incoming HTTP request.
+pub fn send_response(
+    status: StatusCode,
+    headers: Option<HashMap<String, String>>,
+    body: Vec<u8>,
+) -> anyhow::Result<()> {
+    uqResponse::new()
+        .ipc(serde_json::to_vec(&HttpResponse {
+            status: status.as_u16(),
+            headers: headers.unwrap_or_default(),
+        })?)
+        .payload_bytes(body)
+        .send()
 }
