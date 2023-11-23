@@ -1,5 +1,5 @@
-use crate::{Address, ProcessId};
 use crate::uqbar::process::standard as wit;
+use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -262,6 +262,20 @@ impl std::fmt::Display for Message {
 // conversions between wit types and kernel types (annoying!)
 //
 
+pub fn de_wit_address(wit: wit::Address) -> Address {
+    Address {
+        node: wit.node,
+        process: wit.process,
+    }
+}
+
+pub fn en_wit_address(address: Address) -> wit::Address {
+    wit::Address {
+        node: address.node,
+        process: address.process,
+    }
+}
+
 pub fn de_wit_request(wit: wit::Request) -> Request {
     Request {
         inherit: wit.inherit,
@@ -333,7 +347,7 @@ pub fn de_wit_signed_capability(wit: wit::SignedCapability) -> SignedCapability 
 
 pub fn en_wit_signed_capability(cap: SignedCapability) -> wit::SignedCapability {
     wit::SignedCapability {
-        issuer: cap.issuer.en_wit(),
+        issuer: en_wit_address(cap.issuer),
         params: cap.params,
         signature: cap.signature,
     }
@@ -371,7 +385,7 @@ pub fn de_wit_on_panic(wit: wit::OnPanic) -> OnPanic {
             reqs.into_iter()
                 .map(|(address, request, payload)| {
                     (
-                        Address::de_wit(address),
+                        de_wit_address(address),
                         de_wit_request(request),
                         de_wit_payload(payload),
                     )

@@ -1,5 +1,5 @@
 use crate::kernel_types::Payload;
-use crate::{Address, Message, Request as uqRequest, Response as uqResponse};
+use crate::{Message, Request as uqRequest, Response as uqResponse};
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use thiserror::Error;
 //
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the http_server:sys:uqbar service.
+/// This is the one you receive from the `http_server:sys:uqbar` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IncomingHttpRequest {
     pub source_socket_addr: Option<String>, // will parse to SocketAddr
@@ -21,7 +21,7 @@ pub struct IncomingHttpRequest {
 }
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the http_client:sys:uqbar service.
+/// This is the one you send to the `http_client:sys:uqbar` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
     pub method: String,          // must parse to http::Method
@@ -33,6 +33,7 @@ pub struct OutgoingHttpRequest {
 }
 
 /// HTTP Response type that can be shared over WASM boundary to apps.
+/// Respond to [`IncomingHttpRequest`] with this type.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HttpResponse {
     pub status: u16,
@@ -76,7 +77,12 @@ pub enum HttpServerAction {
         local_only: bool,
         cache: bool,
     },
-    /// Expects a payload containing the WebSocket message bytes to send.
+    /// Processes will RECEIVE this kind of request when a client connects to them.
+    /// If a process does not want this websocket open, they can respond with an
+    /// [`enum@HttpServerAction::WebSocketClose`] message.
+    WebSocketOpen(u64),
+    /// Processes can both SEND and RECEIVE this kind of request.
+    /// When sent, expects a payload containing the WebSocket message bytes to send.
     WebSocketPush {
         channel_id: u64,
         message_type: WsMessageType,
@@ -115,37 +121,22 @@ pub enum HttpServerError {
     WebSocketPushError { error: String },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum WebSocketClientMessage {
-    /// Must be the first message sent along a newly-opened WebSocket connection.
-    WsRegister(WsRegister),
-    WsMessage(WsMessage),
-    EncryptedWsMessage(EncryptedWsMessage),
-}
-
+/// Structure sent from client websocket to this server upon opening a new connection.
+/// After this is sent, depending on the `encrypted` flag, the channel will either be
+/// open to send and receive plaintext messages or messages encrypted with a symmetric
+/// key derived from the JWT.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WsRegister {
-    pub ws_auth_token: String,
     pub auth_token: String,
-    pub channel_id: String,
+    pub target_process: String,
+    pub encrypted: bool, // TODO symmetric key exchange here if true
 }
 
+/// Structure sent from this server to client websocket upon opening a new connection.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WsMessage {
-    pub ws_auth_token: String,
-    pub auth_token: String,
-    pub channel_id: String,
-    pub target: Address,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptedWsMessage {
-    pub ws_auth_token: String,
-    pub auth_token: String,
-    pub channel_id: String,
-    pub target: Address,
-    pub encrypted: String, // Encrypted JSON as hex with the 32-byte authentication tag appended
-    pub nonce: String,     // Hex of the 12-byte nonce
+pub struct WsRegisterResponse {
+    pub channel_id: u64,
+    // TODO symmetric key exchange here
 }
 
 #[derive(Debug, Serialize, Deserialize)]
