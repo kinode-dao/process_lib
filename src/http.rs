@@ -1,5 +1,5 @@
 use crate::kernel_types::Payload;
-use crate::{Message, RequestBuilder as uqRequest, ResponseBuilder as uqResponse};
+use crate::{Message, Request as uqRequest, Response as uqResponse};
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

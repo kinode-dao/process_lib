@@ -423,9 +423,9 @@ impl std::error::Error for AddressParseError {
 // For payloads, we use bincode to serialize and deserialize to bytes.
 //
 
-/// Request builder. Use [`RequestBuilder::new()`] to start a request, then build it,
-/// then call [`RequestBuilder::send()`] on it to fire.
-pub struct RequestBuilder {
+/// Request builder. Use [`Request::new()`] to start a request, then build it,
+/// then call [`Request::send()`] on it to fire.
+pub struct Request {
     target: Option<Address>,
     inherit: bool,
     timeout: Option<u64>,
@@ -436,12 +436,12 @@ pub struct RequestBuilder {
 }
 
 #[allow(dead_code)]
-impl RequestBuilder {
+impl Request {
     /// Start building a new `Request`. In order to successfully send, a
     /// `Request` must have at least a `target` and an `ipc`. Calling send
     /// on this before filling out these fields will result in an error.
     pub fn new() -> Self {
-        RequestBuilder {
+        Request {
             target: None,
             inherit: false,
             timeout: None,
@@ -458,7 +458,7 @@ impl RequestBuilder {
     where
         T: Into<Address>,
     {
-        RequestBuilder {
+        Request {
             target: Some(target.into()),
             inherit: false,
             timeout: None,
@@ -688,9 +688,9 @@ impl RequestBuilder {
     }
 }
 
-/// Response builder. Use [`ResponseBuilder::new()`] to start a response, then build it,
-/// then call [`ResponseBuilder::send()`] on it to fire.
-pub struct ResponseBuilder {
+/// Response builder. Use [`Response::new()`] to start a response, then build it,
+/// then call [`Response::send()`] on it to fire.
+pub struct Response {
     inherit: bool,
     ipc: Option<Vec<u8>>,
     metadata: Option<String>,
@@ -698,11 +698,11 @@ pub struct ResponseBuilder {
 }
 
 #[allow(dead_code)]
-impl ResponseBuilder {
+impl Response {
     /// Start building a new response. Attempting to send this response will
     /// not succeed until its `ipc` has been set with `ipc()` or `try_ipc()`.
     pub fn new() -> Self {
-        ResponseBuilder {
+        Response {
             inherit: false,
             ipc: None,
             metadata: None,
