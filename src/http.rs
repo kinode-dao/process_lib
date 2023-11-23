@@ -1,5 +1,5 @@
 use crate::kernel_types::Payload;
-use crate::{Message, Request as uqRequest, Response as uqResponse};
+use crate::{Message, RequestBuilder as uqRequest, ResponseBuilder as uqResponse};
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,8 +62,8 @@ pub enum HttpClientError {
 }
 
 /// Request type sent to `http_server:sys:uqbar` in order to configure it.
-/// You can also send [`WebSocketPush`], which allows you to push messages
-/// across an existing open WebSocket connection.
+/// You can also send [`type@HttpServerAction::WebSocketPush`], which
+/// allows you to push messages across an existing open WebSocket connection.
 ///
 /// If a response is expected, all HttpServerActions will return a Response
 /// with the shape Result<(), HttpServerActionError> serialized to JSON.
@@ -79,7 +79,7 @@ pub enum HttpServerAction {
     },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they can respond with an
-    /// [`enum@HttpServerAction::WebSocketClose`] message.
+    /// [`type@HttpServerAction::WebSocketClose`] message.
     WebSocketOpen(u64),
     /// Processes can both SEND and RECEIVE this kind of request.
     /// When sent, expects a payload containing the WebSocket message bytes to send.

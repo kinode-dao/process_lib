@@ -6,7 +6,7 @@
 //! are available in processes via the wit_bindgen macro, if a process needs
 //! to use them directly. However, the most convenient way to do most things
 //! will be via this library.
-use crate::uqbar::process::standard::*;
+pub use crate::uqbar::process::standard::*;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
@@ -423,9 +423,9 @@ impl std::error::Error for AddressParseError {
 // For payloads, we use bincode to serialize and deserialize to bytes.
 //
 
-/// Request builder. Use [`Request::new()`] to start a request, then build it,
-/// then call [`send()`] on it to fire.
-struct Request {
+/// Request builder. Use [`RequestBuilder::new()`] to start a request, then build it,
+/// then call [`RequestBuilder::send()`] on it to fire.
+pub struct RequestBuilder {
     target: Option<Address>,
     inherit: bool,
     timeout: Option<u64>,
@@ -436,12 +436,12 @@ struct Request {
 }
 
 #[allow(dead_code)]
-impl Request {
+impl RequestBuilder {
     /// Start building a new `Request`. In order to successfully send, a
     /// `Request` must have at least a `target` and an `ipc`. Calling send
     /// on this before filling out these fields will result in an error.
     pub fn new() -> Self {
-        Request {
+        RequestBuilder {
             target: None,
             inherit: false,
             timeout: None,
@@ -458,7 +458,7 @@ impl Request {
     where
         T: Into<Address>,
     {
-        Request {
+        RequestBuilder {
             target: Some(target.into()),
             inherit: false,
             timeout: None,
@@ -688,9 +688,9 @@ impl Request {
     }
 }
 
-/// Response builder. Use [`Response::new()`] to start a response, then build it,
-/// then call [`send()`] on it to fire.
-struct Response {
+/// Response builder. Use [`ResponseBuilder::new()`] to start a response, then build it,
+/// then call [`ResponseBuilder::send()`] on it to fire.
+pub struct ResponseBuilder {
     inherit: bool,
     ipc: Option<Vec<u8>>,
     metadata: Option<String>,
@@ -698,11 +698,11 @@ struct Response {
 }
 
 #[allow(dead_code)]
-impl Response {
+impl ResponseBuilder {
     /// Start building a new response. Attempting to send this response will
     /// not succeed until its `ipc` has been set with `ipc()` or `try_ipc()`.
     pub fn new() -> Self {
-        Response {
+        ResponseBuilder {
             inherit: false,
             ipc: None,
             metadata: None,
