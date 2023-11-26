@@ -7,7 +7,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
     match context {
         None => {
             Request::new()
-                .target(Address::new("our", ProcessId::new("timer", "sys", "uqbar")))
+                .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
                 .ipc(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
                 .send()
@@ -15,7 +15,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
         }
         Some(context) => {
             Request::new()
-                .target(Address::new("our", ProcessId::new("timer", "sys", "uqbar")))
+                .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
                 .ipc(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
                 .context(context)
@@ -29,7 +29,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
 /// then wait for that timer to resolve. The duration should be a number of milliseconds.
 pub fn set_and_await_timer(duration: u64) -> anyhow::Result<Result<(Address, Message), SendError>> {
     Request::new()
-        .target(Address::new("our", ProcessId::new("timer", "sys", "uqbar")))
+        .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
         .ipc(duration.to_le_bytes())
         .send_and_await_response((duration / 1000) + 1)
 }
