@@ -242,9 +242,9 @@ pub struct PackageManifestEntry {
     pub process_wasm_path: String,
     pub on_panic: OnPanic,
     pub request_networking: bool,
-    pub request_messaging: Vec<String>,
-    pub public: bool,
+    pub request_messaging: Option<Vec<String>>,
     pub grant_messaging: Option<Vec<String>>,
+    pub public: bool,
 }
 
 impl std::fmt::Display for Message {
