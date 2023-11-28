@@ -244,6 +244,7 @@ pub struct PackageManifestEntry {
     pub request_networking: bool,
     pub request_messaging: Vec<String>,
     pub public: bool,
+    pub grant_messaging: Option<Vec<String>>,
 }
 
 impl std::fmt::Display for Message {
