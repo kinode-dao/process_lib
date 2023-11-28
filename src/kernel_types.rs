@@ -108,11 +108,6 @@ pub enum KernelCommand {
     RunProcess(ProcessId),
     /// Kill a running process immediately. This may result in the dropping / mishandling of messages!
     KillProcess(ProcessId),
-    /// RUNTIME ONLY: take a persisted process from the filesystem and reboot it.
-    RebootProcess {
-        process_id: ProcessId,
-        persisted: PersistedProcess,
-    },
     /// RUNTIME ONLY: notify the kernel that the runtime is shutting down and it
     /// should gracefully stop and persist the running processes.
     Shutdown,
