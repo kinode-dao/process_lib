@@ -83,28 +83,48 @@ impl OnPanic {
     }
 }
 
+/// IPC format for requests sent to kernel runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KernelCommand {
-    StartProcess {
+    /// RUNTIME ONLY: used to notify the kernel that booting is complete and
+    /// all processes have been loaded in from their persisted or bootstrapped state.
+    Booted,
+    /// Tell the kernel to install and prepare a new process for execution.
+    /// The process will not begin execution until the kernel receives a
+    /// `RunProcess` command with the same `id`.
+    ///
+    /// The process that sends this command will be given messaging capabilities
+    /// for the new process if `public` is false.
+    InitializeProcess {
         id: ProcessId,
         wasm_bytes_handle: u128,
         on_panic: OnPanic,
         initial_capabilities: HashSet<SignedCapability>,
         public: bool,
     },
-    KillProcess(ProcessId), // this is extrajudicial killing: we might lose messages!
-    // kernel only
+    /// Tell the kernel to run a process that has already been installed.
+    /// TODO: in the future, this command could be extended to allow for
+    /// resource provision.
+    RunProcess(ProcessId),
+    /// Kill a running process immediately. This may result in the dropping / mishandling of messages!
+    KillProcess(ProcessId),
+    /// RUNTIME ONLY: take a persisted process from the filesystem and reboot it.
     RebootProcess {
         process_id: ProcessId,
         persisted: PersistedProcess,
     },
+    /// RUNTIME ONLY: notify the kernel that the runtime is shutting down and it
+    /// should gracefully stop and persist the running processes.
     Shutdown,
 }
 
+/// IPC format for all KernelCommand responses
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KernelResponse {
+    InitializedProcess,
+    InitializeProcessError,
     StartedProcess,
-    StartProcessError,
+    RunProcessError,
     KilledProcess(ProcessId),
 }
 
