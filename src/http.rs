@@ -147,8 +147,7 @@ pub struct JwtClaims {
 
 impl IncomingHttpRequest {
     pub fn url(&self) -> anyhow::Result<url::Url> {
-        url::Url::parse(&self.raw_path)
-            .map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
+        url::Url::parse(&self.raw_path).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
     }
 
     pub fn query_params(&self) -> anyhow::Result<HashMap<String, String>> {
@@ -244,4 +243,66 @@ pub fn send_response(
         })?)
         .payload_bytes(body)
         .send()
+}
+
+/// Fire off an HTTP request. If a timeout is given, the response will
+/// come in the main event loop, otherwise none will be given.
+pub fn send_request(
+    method: Method,
+    url: url::Url,
+    headers: Option<HashMap<String, String>>,
+    timeout: Option<u64>,
+    body: Vec<u8>,
+) -> anyhow::Result<()> {
+    let req = uqRequest::new()
+        .target(("our", "http_client", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&OutgoingHttpRequest {
+            method: method.to_string(),
+            version: None,
+            url: url.to_string(),
+            headers: headers.unwrap_or_default(),
+        })?)
+        .payload_bytes(body);
+    if let Some(timeout) = timeout {
+        req.expects_response(timeout).send()
+    } else {
+        req.send()
+    }
+}
+
+/// Make an HTTP request using http_client and await its response.
+pub fn send_request_await_response(
+    method: Method,
+    url: url::Url,
+    headers: Option<HashMap<String, String>>,
+    timeout: u64,
+    body: Vec<u8>,
+) -> std::result::Result<HttpResponse, HttpClientError> {
+    let res = uqRequest::new()
+        .target(("our", "http_client", "sys", "uqbar"))
+        .ipc(
+            serde_json::to_vec(&OutgoingHttpRequest {
+                method: method.to_string(),
+                version: None,
+                url: url.to_string(),
+                headers: headers.unwrap_or_default(),
+            })
+            .map_err(|e| HttpClientError::BadRequest {
+                req: format!("{e:?}"),
+            })?,
+        )
+        .payload_bytes(body)
+        .send_and_await_response(timeout)
+        .map_err(|e| HttpClientError::RequestFailed {
+            error: e.to_string(),
+        })?;
+    match res {
+        Ok((_src, Message::Response((resp, _context)))) => serde_json::from_slice(&resp.ipc)
+            .map_err(|e| HttpClientError::RequestFailed {
+                error: format!("http_client gave bad response: {e}"),
+            }),
+        _ => Err(HttpClientError::RequestFailed {
+            error: format!("http_client timed out"),
+        }),
+    }
 }
