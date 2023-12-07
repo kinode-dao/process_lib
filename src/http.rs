@@ -12,6 +12,25 @@ use thiserror::Error;
 /// HTTP Request type that can be shared over WASM boundary to apps.
 /// This is the one you receive from the `http_server:sys:uqbar` service.
 #[derive(Debug, Serialize, Deserialize)]
+pub enum HttpServerRequest {
+    Http(IncomingHttpRequest),
+    /// Processes will receive this kind of request when a client connects to them.
+    /// If a process does not want this websocket open, they should issue a *request*
+    /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
+    WebSocketOpen(u32),
+    /// Processes can both SEND and RECEIVE this kind of request
+    /// (send as [`type@HttpServerAction::WebSocketPush`]).
+    /// When received, will contain the message bytes as payload.
+    WebSocketPush {
+        channel_id: u32,
+        message_type: WsMessageType,
+    },
+    /// Receiving will indicate that the client closed the socket. Can be sent to close
+    /// from the server-side, as [`type@HttpServerAction::WebSocketClose`].
+    WebSocketClose(u32),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IncomingHttpRequest {
     pub source_socket_addr: Option<String>, // will parse to SocketAddr
     pub method: String,                     // will parse to http::Method
@@ -101,15 +120,12 @@ pub enum HttpServerAction {
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
     WebSocketOpen(u32),
-    /// Processes can both SEND and RECEIVE this kind of request.
     /// When sent, expects a payload containing the WebSocket message bytes to send.
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
     },
-    /// Processes can both SEND and RECEIVE this kind of request. Sending will
-    /// close a socket the process controls. Receiving will indicate that the
-    /// client closed the socket.
+    /// Sending will close a socket the process controls.
     WebSocketClose(u32),
 }
 
