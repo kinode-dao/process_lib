@@ -36,6 +36,7 @@ pub struct IncomingHttpRequest {
     pub method: String,                     // will parse to http::Method
     pub raw_path: String,
     pub headers: HashMap<String, String>,
+    pub query_params: HashMap<String, String>,
     // BODY is stored in the payload, as bytes
 }
 
@@ -186,14 +187,9 @@ impl IncomingHttpRequest {
         url::Url::parse(&self.raw_path).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
     }
 
-    pub fn query_params(&self) -> anyhow::Result<HashMap<String, String>> {
-        let url = url::Url::parse(&self.raw_path)?;
-        Ok(url.query_pairs().into_owned().collect())
-    }
-
-    pub fn full_path(&self) -> anyhow::Result<String> {
-        let url = url::Url::parse(&self.raw_path)?;
-        Ok(url.path().to_string())
+    pub fn method(&self) -> anyhow::Result<http::Method> {
+        http::Method::from_bytes(self.method.as_bytes())
+            .map_err(|e| anyhow::anyhow!("couldn't parse method: {:?}", e))
     }
 
     pub fn path(&self) -> anyhow::Result<String> {
