@@ -23,6 +23,12 @@ pub enum Message {
 }
 
 impl Message {
+    pub fn is_request(&self) -> bool {
+        match self {
+            Message::Request { .. } => true,
+            Message::Response { .. } => false,
+        }
+    }
     /// Get the source of a message.
     pub fn source(&self) -> &Address {
         match self {
