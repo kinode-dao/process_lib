@@ -12,4 +12,4 @@ serde_json = "1.0"
 rand = "0.8"
 thiserror = "1.0"
 url = "2.4.1"
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5390bab780733f1660d14c254ec985df2816bf1d" }
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "efcc759" }
