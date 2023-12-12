@@ -220,9 +220,9 @@ where
         })?)
         .send_and_await_response(5)?;
     match res {
-        Ok((_src, Message::Response((resp, _context)))) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
-            resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
+        Ok(Message::Response { ipc, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&ipc)?;
+            resp.map_err(|e| anyhow::anyhow!(e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
     }
@@ -254,9 +254,9 @@ where
         })
         .send_and_await_response(5)?;
     match res {
-        Ok((_src, Message::Response((resp, _context)))) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&resp.ipc)?;
-            resp.map_err(|e| anyhow::anyhow!("http_server: {:?}", e))
+        Ok(Message::Response { ipc, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&ipc)?;
+            resp.map_err(|e| anyhow::anyhow!(e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
     }
@@ -329,10 +329,11 @@ pub fn send_request_await_response(
             error: e.to_string(),
         })?;
     match res {
-        Ok((_src, Message::Response((resp, _context)))) => serde_json::from_slice(&resp.ipc)
-            .map_err(|e| HttpClientError::RequestFailed {
-                error: format!("http_client gave bad response: {e}"),
-            }),
+        Ok(Message::Response { ipc, .. }) => {
+            serde_json::from_slice(&ipc).map_err(|e| HttpClientError::RequestFailed {
+                error: format!("http_client gave unparsable response: {e}"),
+            })
+        }
         _ => Err(HttpClientError::RequestFailed {
             error: format!("http_client timed out"),
         }),
