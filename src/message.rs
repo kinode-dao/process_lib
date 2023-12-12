@@ -10,14 +10,12 @@ use crate::*;
 pub enum Message {
     Request {
         source: Address,
-        inherit: bool,
         expects_response: Option<u64>,
         ipc: Vec<u8>,
         metadata: Option<String>,
     },
     Response {
         source: Address,
-        inherit: bool,
         ipc: Vec<u8>,
         metadata: Option<String>,
         context: Option<Vec<u8>>,
@@ -110,14 +108,12 @@ pub fn wit_message_to_message(
     match message {
         crate::uqbar::process::standard::Message::Request(req) => Message::Request {
             source,
-            inherit: req.inherit,
             expects_response: req.expects_response,
             ipc: req.ipc,
             metadata: req.metadata,
         },
         crate::uqbar::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
-            inherit: resp.inherit,
             ipc: resp.ipc,
             metadata: resp.metadata,
             context,
