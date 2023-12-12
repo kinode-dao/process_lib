@@ -61,6 +61,25 @@ impl Address {
             },
         })
     }
+    /// Read the node ID from an `Address`.
+    pub fn node(&self) -> &str {
+        &self.node
+    }
+    /// Read the process name from an `Address`.
+    pub fn process(&self) -> &str {
+        &self.process.process_name
+    }
+    /// Read the package name from an `Address`.
+    pub fn package(&self) -> &str {
+        &self.process.package_name
+    }
+    /// Read the publisher node ID from an `Address`. Note that `Address`
+    /// segments are not parsed for validity, and a node ID stored here is
+    /// not guaranteed to be a valid ID in the Uqbar name system, or be connected
+    /// to an Uqbar identity at all.
+    pub fn publisher(&self) -> &str {
+        &self.process.publisher_node
+    }
 }
 
 impl Serialize for Address {
