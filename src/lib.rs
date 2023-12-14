@@ -50,6 +50,20 @@ mod message;
 pub use message::{Message, SendError, SendErrorKind};
 use message::wit_message_to_message;
 
+/// Implement the wit-bindgen specific code that the kernel uses to hook into
+/// a process. Write an `init(our: Address)` function and call it with this.
+#[macro_export]
+macro_rules! call_init {
+    ($init_func:ident) => {
+        impl Guest for Component {
+            fn init(our: String) {
+                let our = Address::from_str(&our).unwrap();
+                $init_func(our);
+            }
+        }
+    };
+}
+
 /// Override the println! macro to print to the terminal. Uses the
 /// `print_to_terminal` function from the WIT interface on maximally-verbose
 /// mode, i.e., this print will always show up in the terminal. To control
