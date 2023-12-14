@@ -21,9 +21,6 @@ wit_bindgen::generate!({
     world: "lib",
 });
 
-/// Interact with the Uqbar Filesystem. Usually you will not have the
-/// capability to do so! Use the VFS or a database app instead.
-pub mod filesystem;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
