@@ -55,6 +55,7 @@ use message::wit_message_to_message;
 #[macro_export]
 macro_rules! call_init {
     ($init_func:ident) => {
+        struct Component;
         impl Guest for Component {
             fn init(our: String) {
                 let our = Address::from_str(&our).unwrap();
