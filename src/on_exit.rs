@@ -64,13 +64,14 @@ impl OnExit {
     }
     /// Set the OnExit behavior for this process
     pub fn set(self) -> anyhow::Result<()> {
+        crate::uqbar::process::standard::set_on_exit(&self.to_standard()?);
+        Ok(())
+    }
+    /// Convert this OnExit to the kernel's OnExit type
+    pub fn to_standard(self) -> anyhow::Result<crate::uqbar::process::standard::OnExit> {
         match self {
-            OnExit::None => crate::uqbar::process::standard::set_on_exit(
-                &crate::uqbar::process::standard::OnExit::None,
-            ),
-            OnExit::Restart => crate::uqbar::process::standard::set_on_exit(
-                &crate::uqbar::process::standard::OnExit::Restart,
-            ),
+            OnExit::None => Ok(crate::uqbar::process::standard::OnExit::None),
+            OnExit::Restart => Ok(crate::uqbar::process::standard::OnExit::Restart),
             OnExit::Requests(reqs) => {
                 let mut kernel_reqs: Vec<(
                     Address,
@@ -92,11 +93,8 @@ impl OnExit {
                         req.payload,
                     ));
                 }
-                crate::uqbar::process::standard::set_on_exit(
-                    &crate::uqbar::process::standard::OnExit::Requests(kernel_reqs),
-                );
+                Ok(crate::uqbar::process::standard::OnExit::Requests(kernel_reqs))
             }
         }
-        Ok(())
     }
 }

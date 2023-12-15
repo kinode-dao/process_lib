@@ -47,8 +47,8 @@ pub use request::Request;
 mod response;
 pub use response::Response;
 mod message;
-pub use message::{Message, SendError, SendErrorKind};
 use message::wit_message_to_message;
+pub use message::{Message, SendError, SendErrorKind};
 mod on_exit;
 pub use on_exit::OnExit;
 
@@ -111,6 +111,23 @@ pub fn await_message() -> Result<Message, SendError> {
             context,
         }),
     }
+}
+
+/// Simple wrapper over spawn() in WIT to make use of our good types
+pub fn spawn(
+    name: Option<String>,
+    wasm_path: String,
+    on_exit: OnExit,
+    capabilities: Capabilities,
+    public: bool,
+) -> Result<ProcessId, SpawnError> {
+    crate::uqbar::process::standard::spawn(
+        name.as_ref().map(|s| s.as_str()),
+        &wasm_path,
+        &on_exit.to_standard().map_err(|_e| SpawnError::NameTaken)?,
+        &capabilities,
+        public,
+    )
 }
 
 /// Create a payload with no MIME type and a generic type, plus a serializer
