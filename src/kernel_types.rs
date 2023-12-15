@@ -98,7 +98,7 @@ pub enum KernelCommand {
     InitializeProcess {
         id: ProcessId,
         wasm_bytes_handle: u128,
-        on_panic: OnExit,
+        on_exit: OnExit,
         initial_capabilities: HashSet<SignedCapability>,
         public: bool,
     },
@@ -128,7 +128,7 @@ pub struct PersistedProcess {
     pub wasm_bytes_handle: u128,
     // pub drive: String,
     // pub full_path: String,
-    pub on_panic: OnExit,
+    pub on_exit: OnExit,
     pub capabilities: HashSet<Capability>,
     pub public: bool, // marks if a process allows messages from any process
 }
@@ -240,7 +240,7 @@ pub struct PackageMetadata {
 pub struct PackageManifestEntry {
     pub process_name: String,
     pub process_wasm_path: String,
-    pub on_panic: OnExit,
+    pub on_exit: OnExit,
     pub request_networking: bool,
     pub request_messaging: Option<Vec<String>>,
     pub grant_messaging: Option<Vec<String>>,
@@ -390,23 +390,5 @@ pub fn en_wit_send_error_kind(kind: SendErrorKind) -> wit::SendErrorKind {
     match kind {
         SendErrorKind::Offline => wit::SendErrorKind::Offline,
         SendErrorKind::Timeout => wit::SendErrorKind::Timeout,
-    }
-}
-
-pub fn de_wit_on_panic(wit: wit::OnExit) -> OnExit {
-    match wit {
-        wit::OnExit::None => OnExit::None,
-        wit::OnExit::Restart => OnExit::Restart,
-        wit::OnExit::Requests(reqs) => OnExit::Requests(
-            reqs.into_iter()
-                .map(|(address, request, payload)| {
-                    (
-                        de_wit_address(address),
-                        de_wit_request(request),
-                        de_wit_payload(payload),
-                    )
-                })
-                .collect(),
-        ),
     }
 }
