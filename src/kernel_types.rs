@@ -239,8 +239,8 @@ pub struct PackageManifestEntry {
     pub process_wasm_path: String,
     pub on_panic: OnPanic,
     pub request_networking: bool,
-    pub request_messaging: Option<Vec<String>>,
-    pub grant_messaging: Option<Vec<String>>,
+    pub request_messaging: Option<Vec<serde_json::Value>>,
+    pub grant_messaging: Option<Vec<serde_json::Value>>,
     pub public: bool,
 }
 
