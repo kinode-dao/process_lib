@@ -1,0 +1,102 @@
+use crate::*;
+
+#[derive(Clone, Debug)]
+pub enum OnExit {
+    None,
+    Restart,
+    Requests(Vec<Request>),
+}
+
+impl OnExit {
+    /// Call the kernel to get the current set OnExit behavior
+    pub fn get() -> Self {
+        match crate::uqbar::process::standard::get_on_exit() {
+            crate::uqbar::process::standard::OnExit::None => OnExit::None,
+            crate::uqbar::process::standard::OnExit::Restart => OnExit::Restart,
+            crate::uqbar::process::standard::OnExit::Requests(reqs) => {
+                let mut requests: Vec<Request> = Vec::with_capacity(reqs.len());
+                for req in reqs {
+                    requests.push(Request {
+                        target: Some(req.0),
+                        inherit: req.1.inherit,
+                        timeout: req.1.expects_response,
+                        ipc: Some(req.1.ipc),
+                        metadata: req.1.metadata,
+                        payload: req.2,
+                        context: None,
+                    });
+                }
+                OnExit::Requests(requests)
+            }
+        }
+    }
+    /// Check if this OnExit is None
+    pub fn is_none(&self) -> bool {
+        match self {
+            OnExit::None => true,
+            OnExit::Restart => false,
+            OnExit::Requests(_) => false,
+        }
+    }
+    /// Check if this OnExit is Restart
+    pub fn is_restart(&self) -> bool {
+        match self {
+            OnExit::None => false,
+            OnExit::Restart => true,
+            OnExit::Requests(_) => false,
+        }
+    }
+    /// Check if this OnExit is Requests
+    pub fn is_requests(&self) -> bool {
+        match self {
+            OnExit::None => false,
+            OnExit::Restart => false,
+            OnExit::Requests(_) => true,
+        }
+    }
+    /// Get the Requests variant of this OnExit, if it is one
+    pub fn get_requests(&self) -> Option<&[Request]> {
+        match self {
+            OnExit::None => None,
+            OnExit::Restart => None,
+            OnExit::Requests(reqs) => Some(reqs),
+        }
+    }
+    /// Set the OnExit behavior for this process
+    pub fn set(self) -> anyhow::Result<()> {
+        match self {
+            OnExit::None => crate::uqbar::process::standard::set_on_exit(
+                &crate::uqbar::process::standard::OnExit::None,
+            ),
+            OnExit::Restart => crate::uqbar::process::standard::set_on_exit(
+                &crate::uqbar::process::standard::OnExit::Restart,
+            ),
+            OnExit::Requests(reqs) => {
+                let mut kernel_reqs: Vec<(
+                    Address,
+                    uqbar::process::standard::Request,
+                    Option<Payload>,
+                )> = Vec::with_capacity(reqs.len());
+                for req in reqs {
+                    kernel_reqs.push((
+                        req.target
+                            .ok_or(anyhow::anyhow!("request without target given"))?,
+                        uqbar::process::standard::Request {
+                            inherit: req.inherit,
+                            expects_response: None,
+                            ipc: req
+                                .ipc
+                                .ok_or(anyhow::anyhow!("request without ipc given"))?,
+                            metadata: req.metadata,
+                        },
+                        req.payload,
+                    ));
+                }
+                crate::uqbar::process::standard::set_on_exit(
+                    &crate::uqbar::process::standard::OnExit::Requests(kernel_reqs),
+                );
+            }
+        }
+        Ok(())
+    }
+}

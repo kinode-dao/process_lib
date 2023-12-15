@@ -2,14 +2,15 @@ use crate::*;
 
 /// Request builder. Use [`Request::new()`] to start a request, then build it,
 /// then call [`Request::send()`] on it to fire.
+#[derive(Clone, Debug)]
 pub struct Request {
-    target: Option<Address>,
-    inherit: bool,
-    timeout: Option<u64>,
-    ipc: Option<Vec<u8>>,
-    metadata: Option<String>,
-    payload: Option<Payload>,
-    context: Option<Vec<u8>>,
+    pub target: Option<Address>,
+    pub inherit: bool,
+    pub timeout: Option<u64>,
+    pub ipc: Option<Vec<u8>>,
+    pub metadata: Option<String>,
+    pub payload: Option<Payload>,
+    pub context: Option<Vec<u8>>,
 }
 
 #[allow(dead_code)]

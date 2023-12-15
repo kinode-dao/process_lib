@@ -67,18 +67,18 @@ pub enum SendErrorKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum OnPanic {
+pub enum OnExit {
     None,
     Restart,
     Requests(Vec<(Address, Request, Option<Payload>)>),
 }
 
-impl OnPanic {
+impl OnExit {
     pub fn is_restart(&self) -> bool {
         match self {
-            OnPanic::None => false,
-            OnPanic::Restart => true,
-            OnPanic::Requests(_) => false,
+            OnExit::None => false,
+            OnExit::Restart => true,
+            OnExit::Requests(_) => false,
         }
     }
 }
@@ -98,7 +98,7 @@ pub enum KernelCommand {
     InitializeProcess {
         id: ProcessId,
         wasm_bytes_handle: u128,
-        on_panic: OnPanic,
+        on_panic: OnExit,
         initial_capabilities: HashSet<SignedCapability>,
         public: bool,
     },
@@ -128,7 +128,7 @@ pub struct PersistedProcess {
     pub wasm_bytes_handle: u128,
     // pub drive: String,
     // pub full_path: String,
-    pub on_panic: OnPanic,
+    pub on_panic: OnExit,
     pub capabilities: HashSet<Capability>,
     pub public: bool, // marks if a process allows messages from any process
 }
@@ -240,7 +240,7 @@ pub struct PackageMetadata {
 pub struct PackageManifestEntry {
     pub process_name: String,
     pub process_wasm_path: String,
-    pub on_panic: OnPanic,
+    pub on_panic: OnExit,
     pub request_networking: bool,
     pub request_messaging: Option<Vec<String>>,
     pub grant_messaging: Option<Vec<String>>,
@@ -393,11 +393,11 @@ pub fn en_wit_send_error_kind(kind: SendErrorKind) -> wit::SendErrorKind {
     }
 }
 
-pub fn de_wit_on_panic(wit: wit::OnPanic) -> OnPanic {
+pub fn de_wit_on_panic(wit: wit::OnExit) -> OnExit {
     match wit {
-        wit::OnPanic::None => OnPanic::None,
-        wit::OnPanic::Restart => OnPanic::Restart,
-        wit::OnPanic::Requests(reqs) => OnPanic::Requests(
+        wit::OnExit::None => OnExit::None,
+        wit::OnExit::Restart => OnExit::Restart,
+        wit::OnExit::Requests(reqs) => OnExit::Requests(
             reqs.into_iter()
                 .map(|(address, request, payload)| {
                     (
