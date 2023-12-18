@@ -124,7 +124,7 @@ pub fn spawn(
     crate::uqbar::process::standard::spawn(
         name,
         wasm_path,
-        &on_exit.to_standard().map_err(|_e| SpawnError::NameTaken)?,
+        &on_exit._to_standard().map_err(|_e| SpawnError::NameTaken)?,
         capabilities,
         public,
     )

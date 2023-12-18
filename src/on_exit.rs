@@ -62,13 +62,24 @@ impl OnExit {
             OnExit::Requests(reqs) => Some(reqs),
         }
     }
+    /// Add a request to this OnExit if it is Requests, fail otherwise
+    pub fn add_request(self, new: Request) -> anyhow::Result<()> {
+        match self {
+            OnExit::None => Err(anyhow::anyhow!("cannot add request to None")),
+            OnExit::Restart => Err(anyhow::anyhow!("cannot add request to Restart")),
+            OnExit::Requests(mut reqs) => {
+                reqs.push(new);
+                Ok(())
+            }
+        }
+    }
     /// Set the OnExit behavior for this process
     pub fn set(self) -> anyhow::Result<()> {
-        crate::uqbar::process::standard::set_on_exit(&self.to_standard()?);
+        crate::uqbar::process::standard::set_on_exit(&self._to_standard()?);
         Ok(())
     }
     /// Convert this OnExit to the kernel's OnExit type
-    pub fn to_standard(self) -> anyhow::Result<crate::uqbar::process::standard::OnExit> {
+    pub fn _to_standard(self) -> anyhow::Result<crate::uqbar::process::standard::OnExit> {
         match self {
             OnExit::None => Ok(crate::uqbar::process::standard::OnExit::None),
             OnExit::Restart => Ok(crate::uqbar::process::standard::OnExit::Restart),
@@ -93,7 +104,9 @@ impl OnExit {
                         req.payload,
                     ));
                 }
-                Ok(crate::uqbar::process::standard::OnExit::Requests(kernel_reqs))
+                Ok(crate::uqbar::process::standard::OnExit::Requests(
+                    kernel_reqs,
+                ))
             }
         }
     }
