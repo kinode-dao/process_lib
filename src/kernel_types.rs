@@ -133,6 +133,49 @@ pub struct PersistedProcess {
     pub public: bool, // marks if a process allows messages from any process
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StateAction {
+    GetState(ProcessId),
+    SetState(ProcessId),
+    DeleteState(ProcessId),
+    Backup,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StateResponse {
+    GetState,
+    SetState,
+    DeleteState,
+    Backup,
+    Err(StateError),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StateError {
+    RocksDBError { action: String, error: String },
+    StartupError { action: String },
+    BadBytes { action: String },
+    BadRequest { error: String },
+    BadJson { error: String },
+    NotFound { process_id: ProcessId },
+    IOError { error: String },
+}
+
+#[allow(dead_code)]
+impl StateError {
+    pub fn kind(&self) -> &str {
+        match *self {
+            StateError::RocksDBError { .. } => "RocksDBError",
+            StateError::StartupError { .. } => "StartupError",
+            StateError::BadBytes { .. } => "BadBytes",
+            StateError::BadRequest { .. } => "BadRequest",
+            StateError::BadJson { .. } => "NoJson",
+            StateError::NotFound { .. } => "NotFound",
+            StateError::IOError { .. } => "IOError",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
     pub path: String,
@@ -162,7 +205,6 @@ pub enum VfsAction {
     RemoveDirAll,
     Rename(String),
     AddZip,
-    // Metadata,
     Len,
     SetLen(u64),
     Hash,
@@ -214,6 +256,105 @@ impl VfsError {
             VfsError::CreateDirError { .. } => "CreateDirError",
         }
     }
+}
+
+#[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq, Hash)]
+pub struct DBKey {
+    pub package_id: crate::package_id::PackageId,
+    pub db: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KvRequest {
+    pub db: DBKey,
+    pub action: KvAction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum KvAction {
+    New,
+    Set { key: Vec<u8>, tx_id: Option<u64> },
+    Delete { key: Vec<u8>, tx_id: Option<u64> },
+    Get { key: Vec<u8> },
+    BeginTx,
+    Commit { tx_id: u64 },
+    Backup,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KvResponse {
+    Ok,
+    BeginTx { tx_id: u64 },
+    Get { key: Vec<u8> },
+    Err { error: KvError },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KvError {
+    NoDb,
+    DbAlreadyExists,
+    KeyNotFound,
+    NoTx,
+    NoCap { error: String },
+    RocksDBError { action: String, error: String },
+    InputError { error: String },
+    IOError { error: String },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SqliteRequest {
+    pub db: DBKey,
+    pub action: SqliteAction,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SqliteAction {
+    New,
+    Write {
+        statement: String,
+        tx_id: Option<u64>,
+    },
+    Read {
+        query: String,
+    },
+    BeginTx,
+    Commit {
+        tx_id: u64,
+    },
+    Backup,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SqliteResponse {
+    Ok,
+    Read,
+    BeginTx { tx_id: u64 },
+    Err { error: SqliteError },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SqlValue {
+    Integer(i64),
+    Real(f64),
+    Text(String),
+    Blob(Vec<u8>),
+    Boolean(bool),
+    Null,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SqliteError {
+    NoDb,
+    DbAlreadyExists,
+    NoTx,
+    NoCap { error: String },
+    UnexpectedResponse,
+    NotAWriteKeyword,
+    NotAReadKeyword,
+    InvalidParameters,
+    IOError { error: String },
+    RusqliteError { error: String },
+    InputError { error: String },
 }
 
 //
