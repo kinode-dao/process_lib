@@ -1,8 +1,9 @@
-use crate::kernel_types::Payload;
-use crate::{Message, Request as uqRequest, Response as uqResponse};
+use crate::kernel_types::{Payload, VfsAction, VfsRequest, VfsResponse};
+use crate::{get_payload, Address, Message, Request as uqRequest, Response as uqResponse};
 pub use http::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use thiserror::Error;
 
 //
@@ -376,4 +377,156 @@ pub fn send_request_await_response(
             error: format!("http_client timed out"),
         }),
     }
+}
+
+pub fn get_mime_type(filename: &str) -> String {
+    let file_path = Path::new(filename);
+
+    let extension = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("octet-stream");
+
+    mime_guess::from_ext(extension)
+        .first_or_octet_stream()
+        .to_string()
+}
+
+// Serve index.html
+pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
+    let drive = our.process.to_string().split(":").collect::<Vec<&str>>()[1..].join(":");
+
+    let _ = uqRequest::new()
+        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .ipc(serde_json::to_vec(&VfsRequest {
+            drive,
+            action: VfsAction::GetEntry(format!("{}/index.html", directory)),
+        })?)
+        .send_and_await_response(5)?;
+
+    let Some(payload) = get_payload() else {
+        return Err(anyhow::anyhow!("serve_index_html: no index.html payload"));
+    };
+
+    let index = String::from_utf8(payload.bytes)?;
+
+    // index.html will be served from the root path of your app
+    bind_http_static_path(
+        "/",
+        true,
+        false,
+        Some("text/html".to_string()),
+        index.to_string().as_bytes().to_vec(),
+    )?;
+
+    Ok(())
+}
+
+// Serve static files by binding all of them statically, including index.html
+pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
+    serve_index_html(our, directory)?;
+
+    let drive = our.process.to_string().split(":").collect::<Vec<&str>>()[1..].join(":");
+    let leading_path_segment = format!("/{}", directory); // The process name
+
+    let mut queue = VecDeque::new();
+    queue.push_back(directory.to_string());
+
+    while let Some(path) = queue.pop_front() {
+        let assets_response = uqRequest::new()
+            .target(Address::from_str("our@vfs:sys:uqbar")?)
+            .ipc(serde_json::to_vec(&VfsRequest {
+                drive: drive.clone(),
+                action: VfsAction::GetEntry(path.clone()),
+            })?)
+            .send_and_await_response(5)?;
+
+        let Ok(assets_response) = assets_response else {
+            return Err(anyhow::anyhow!("serve_ui: no response for path"));
+        };
+
+        let assets_ipc = serde_json::from_slice::<VfsResponse>(&assets_response.ipc())?;
+
+        // Determine if it's a file or a directory
+        let (is_file, children) = match assets_ipc {
+            VfsResponse::GetEntry { children, is_file } => (is_file, children),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "serve_ui: unexpected response for path: {:?}",
+                    assets_ipc
+                ))
+            }
+        };
+
+        if is_file {
+            // Skip index.html, since we already served it
+            if format!("{}/index.html", directory) == path {
+                continue;
+            }
+
+            // If it's a file, serve it statically
+            let Some(payload) = get_payload() else {
+                return Err(anyhow::anyhow!("serve_ui: no payload for {}", path));
+            };
+
+            let content_type = get_mime_type(&path);
+
+            bind_http_static_path(
+                path.replace(&leading_path_segment, ""),
+                true,  // Must be authenticated
+                false, // Is not local-only
+                Some(content_type),
+                payload.bytes,
+            )?;
+        } else {
+            // If it's a directory, push all of its children onto the queue
+            for child in children {
+                if child != path {
+                    queue.push_back(child);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn handle_ui_asset_request(
+    our: &Address,
+    directory: &str,
+    path: &str,
+) -> anyhow::Result<(), anyhow::Error> {
+    let parts: Vec<&str> = path.split(&our.process.to_string()).collect();
+    let after_process = parts.get(1).unwrap_or(&"");
+
+    let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
+
+    let drive = our.process.to_string().split(":").collect::<Vec<&str>>()[1..].join(":");
+
+    let _ = uqRequest::new()
+        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .ipc(serde_json::to_vec(&VfsRequest {
+            drive,
+            action: VfsAction::GetEntry(target_path),
+        })?)
+        .send_and_await_response(5)?;
+
+    let mut headers = HashMap::new();
+    let content_type = get_mime_type(&path);
+    headers.insert("Content-Type".to_string(), content_type);
+
+    uqResponse::new()
+        .ipc(
+            serde_json::json!(HttpResponse {
+                status: 200,
+                headers,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .inherit(true)
+        .send()?;
+
+    Ok(())
 }
