@@ -178,7 +178,6 @@ pub fn delete(
 pub fn begin_tx(
     package_id: PackageId,
     db: String,
-    key: Vec<u8>,
 ) -> anyhow::Result<u64> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
