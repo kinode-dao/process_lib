@@ -20,8 +20,6 @@ pub enum HttpServerRequest {
     WebSocketOpen {
         path: String,
         channel_id: u32,
-        authenticated: bool,
-        encrypted: bool,
     },
     /// Processes can both SEND and RECEIVE this kind of request
     /// (send as [`type@HttpServerAction::WebSocketPush`]).
@@ -137,12 +135,7 @@ pub enum HttpServerAction {
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
-    WebSocketOpen {
-        path: String,
-        channel_id: u32,
-        authenticated: bool,
-        encrypted: bool,
-    },
+    WebSocketOpen { path: String, channel_id: u32 },
     /// When sent, expects a payload containing the WebSocket message bytes to send.
     WebSocketPush {
         channel_id: u32,
