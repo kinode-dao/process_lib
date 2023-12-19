@@ -1,4 +1,4 @@
-pub use crate::{Address, ProcessId};
+pub use crate::{Address, ProcessId, PackageId};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
