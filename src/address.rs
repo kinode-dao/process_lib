@@ -80,6 +80,10 @@ impl Address {
     pub fn publisher(&self) -> &str {
         &self.process.publisher_node
     }
+    /// Read the package_id (package + publisher) from an `Address`.
+    pub fn package_id(&self) -> &PackageId {
+        &PackageId::new(self.package(), self.publisher())
+    }
 }
 
 impl Serialize for Address {
