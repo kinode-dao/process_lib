@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use crate::package_id::PackageId;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqliteRequest {
