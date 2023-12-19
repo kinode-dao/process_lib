@@ -1,4 +1,4 @@
-pub use crate::{Address, ProcessId};
+pub use crate::{Address, ProcessId, PackageId};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
@@ -79,6 +79,10 @@ impl Address {
     /// to an Uqbar identity at all.
     pub fn publisher(&self) -> &str {
         &self.process.publisher_node
+    }
+    /// Read the package_id (package + publisher) from an `Address`.
+    pub fn package_id(&self) -> PackageId {
+        PackageId::new(self.package(), self.publisher())
     }
 }
 

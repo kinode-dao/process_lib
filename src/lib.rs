@@ -21,12 +21,13 @@ wit_bindgen::generate!({
     world: "lib",
 });
 
-/// Interact with the Uqbar Filesystem. Usually you will not have the
-/// capability to do so! Use the VFS or a database app instead.
-pub mod filesystem;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
+/// Interact with the key_value module
+pub mod kv;
+/// Interact with the sqlite module
+pub mod sqlite;
 /// The types that the kernel itself uses -- warning -- these will
 /// be incompatible with WIT types in some cases, leading to annoying errors.
 /// Use only to interact with the kernel or runtime in certain ways.

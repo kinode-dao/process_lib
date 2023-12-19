@@ -97,7 +97,7 @@ pub enum KernelCommand {
     /// for the new process if `public` is false.
     InitializeProcess {
         id: ProcessId,
-        wasm_bytes_handle: u128,
+        wasm_bytes_handle: String,
         on_exit: OnExit,
         initial_capabilities: HashSet<SignedCapability>,
         public: bool,
@@ -125,7 +125,7 @@ pub enum KernelResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
-    pub wasm_bytes_handle: u128,
+    pub wasm_bytes_handle: String,
     // pub drive: String,
     // pub full_path: String,
     pub on_exit: OnExit,
@@ -133,88 +133,129 @@ pub struct PersistedProcess {
     pub public: bool, // marks if a process allows messages from any process
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StateAction {
+    GetState(ProcessId),
+    SetState(ProcessId),
+    DeleteState(ProcessId),
+    Backup,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StateResponse {
+    GetState,
+    SetState,
+    DeleteState,
+    Backup,
+    Err(StateError),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StateError {
+    RocksDBError { action: String, error: String },
+    StartupError { action: String },
+    BadBytes { action: String },
+    BadRequest { error: String },
+    BadJson { error: String },
+    NotFound { process_id: ProcessId },
+    IOError { error: String },
+}
+
+#[allow(dead_code)]
+impl StateError {
+    pub fn kind(&self) -> &str {
+        match *self {
+            StateError::RocksDBError { .. } => "RocksDBError",
+            StateError::StartupError { .. } => "StartupError",
+            StateError::BadBytes { .. } => "BadBytes",
+            StateError::BadRequest { .. } => "BadRequest",
+            StateError::BadJson { .. } => "NoJson",
+            StateError::NotFound { .. } => "NotFound",
+            StateError::IOError { .. } => "IOError",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
-    pub drive: String,
+    pub path: String,
     pub action: VfsAction,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum VfsAction {
-    New,
-    Add {
-        full_path: String,
-        entry_type: AddEntryType,
-    },
-    Rename {
-        full_path: String,
-        new_full_path: String,
-    },
-    Delete(String),
-    WriteOffset {
-        full_path: String,
-        offset: u64,
-    },
-    SetSize {
-        full_path: String,
-        size: u64,
-    },
-    GetPath(u128),
-    GetHash(String),
-    GetEntry(String),
-    GetFileChunk {
-        full_path: String,
-        offset: u64,
-        length: u64,
-    },
-    GetEntryLength(String),
+    CreateDrive,
+    CreateDir,
+    CreateDirAll,
+    CreateFile,
+    OpenFile,
+    CloseFile,
+    WriteAll,
+    Write,
+    ReWrite,
+    WriteAt(u64),
+    Append,
+    SyncAll,
+    Read,
+    ReadToEnd,
+    ReadDir,
+    ReadExact(u64),
+    ReadToString,
+    Seek(SeekFrom),
+    RemoveFile,
+    RemoveDir,
+    RemoveDirAll,
+    Rename(String),
+    AddZip,
+    Len,
+    SetLen(u64),
+    Hash,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum AddEntryType {
-    Dir,
-    NewFile,                     //  add a new file to fs and add name in vfs
-    ExistingFile { hash: u128 }, //  link an existing file in fs to a new name in vfs
-    ZipArchive,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum GetEntryType {
-    Dir,
-    File,
+pub enum SeekFrom {
+    Start(u64),
+    End(i64),
+    Current(i64),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum VfsResponse {
     Ok,
     Err(VfsError),
-    GetPath(Option<String>),
-    GetHash(Option<u128>),
-    GetEntry {
-        // file bytes in payload, if entry was a file
-        is_file: bool,
-        children: Vec<String>,
-    },
-    GetFileChunk, // chunk in payload
-    GetEntryLength(u64),
+    Read,
+    ReadDir(Vec<String>),
+    ReadToString(String),
+    Len(u64),
+    Hash([u8; 32]),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum VfsError {
-    BadDriveName,
-    BadDescriptor,
-    NoCap,
-    EntryNotFound,
+    NoCap { action: String, path: String },
+    BadBytes { action: String, path: String },
+    BadRequest { error: String },
+    ParseError { error: String, path: String },
+    IOError { error: String, path: String },
+    CapChannelFail { error: String },
+    BadJson { error: String },
+    NotFound { path: String },
+    CreateDirError { path: String, error: String },
 }
 
 #[allow(dead_code)]
 impl VfsError {
     pub fn kind(&self) -> &str {
         match *self {
-            VfsError::BadDriveName => "BadDriveName",
-            VfsError::BadDescriptor => "BadDescriptor",
-            VfsError::NoCap => "NoCap",
-            VfsError::EntryNotFound => "EntryNotFound",
+            VfsError::NoCap { .. } => "NoCap",
+            VfsError::BadBytes { .. } => "BadBytes",
+            VfsError::BadRequest { .. } => "BadRequest",
+            VfsError::ParseError { .. } => "ParseError",
+            VfsError::IOError { .. } => "IOError",
+            VfsError::CapChannelFail { .. } => "CapChannelFail",
+            VfsError::BadJson { .. } => "NoJson",
+            VfsError::NotFound { .. } => "NotFound",
+            VfsError::CreateDirError { .. } => "CreateDirError",
         }
     }
 }
@@ -243,8 +284,8 @@ pub struct PackageManifestEntry {
     pub process_wasm_path: String,
     pub on_exit: OnExit,
     pub request_networking: bool,
-    pub request_messaging: Option<Vec<String>>,
-    pub grant_messaging: Option<Vec<String>>,
+    pub request_messaging: Option<Vec<serde_json::Value>>,
+    pub grant_messaging: Option<Vec<serde_json::Value>>,
     pub public: bool,
 }
 
