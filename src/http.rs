@@ -1,8 +1,12 @@
-use crate::kernel_types::Payload;
-use crate::{Message, Request as uqRequest, Response as uqResponse};
+use crate::kernel_types::{FileType, Payload, VfsAction, VfsRequest, VfsResponse};
+use crate::{
+    get_payload, Address, Message, Payload as uqPayload, ProcessId, Request as uqRequest,
+    Response as uqResponse,
+};
 pub use http::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use thiserror::Error;
 
 //
@@ -376,4 +380,195 @@ pub fn send_request_await_response(
             error: format!("http_client timed out"),
         }),
     }
+}
+
+pub fn get_mime_type(filename: &str) -> String {
+    let file_path = Path::new(filename);
+
+    let extension = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("octet-stream");
+
+    mime_guess::from_ext(extension)
+        .first_or_octet_stream()
+        .to_string()
+}
+
+// Serve index.html
+pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
+    let _ = uqRequest::new()
+        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .ipc(serde_json::to_vec(&VfsRequest {
+            path: format!(
+                "/{}/pkg/{}/index.html",
+                our.package_id().to_string(),
+                directory
+            ),
+            action: VfsAction::Read,
+        })?)
+        .send_and_await_response(5)?;
+
+    let Some(payload) = get_payload() else {
+        return Err(anyhow::anyhow!("serve_index_html: no index.html payload"));
+    };
+
+    let index = String::from_utf8(payload.bytes)?;
+
+    // index.html will be served from the root path of your app
+    bind_http_static_path(
+        "/",
+        true,
+        false,
+        Some("text/html".to_string()),
+        index.to_string().as_bytes().to_vec(),
+    )?;
+
+    Ok(())
+}
+
+// Serve static files by binding all of them statically, including index.html
+pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
+    serve_index_html(our, directory)?;
+
+    let initial_path = format!("{}/pkg/{}", our.package_id().to_string(), directory);
+
+    let mut queue = VecDeque::new();
+    queue.push_back(initial_path.clone());
+
+    while let Some(path) = queue.pop_front() {
+        let directory_response = uqRequest::new()
+            .target(Address::from_str("our@vfs:sys:uqbar")?)
+            .ipc(serde_json::to_vec(&VfsRequest {
+                path,
+                action: VfsAction::ReadDir,
+            })?)
+            .send_and_await_response(5)?;
+
+        let Ok(directory_response) = directory_response else {
+            return Err(anyhow::anyhow!("serve_ui: no response for path"));
+        };
+
+        let directory_ipc = serde_json::from_slice::<VfsResponse>(&directory_response.ipc())?;
+
+        // Determine if it's a file or a directory and handle appropriately
+        match directory_ipc {
+            VfsResponse::ReadDir(directory_info) => {
+                for entry in directory_info {
+                    match entry.file_type {
+                        // If it's a file, serve it statically
+                        FileType::File => {
+                            if format!("{}/index.html", initial_path.trim_start_matches("/"))
+                                == entry.path
+                            {
+                                continue;
+                            }
+
+                            let _ = uqRequest::new()
+                                .target(Address::from_str("our@vfs:sys:uqbar")?)
+                                .ipc(serde_json::to_vec(&VfsRequest {
+                                    path: entry.path.clone(),
+                                    action: VfsAction::Read,
+                                })?)
+                                .send_and_await_response(5)?;
+
+                            let Some(payload) = get_payload() else {
+                                return Err(anyhow::anyhow!(
+                                    "serve_ui: no payload for {}",
+                                    entry.path
+                                ));
+                            };
+
+                            let content_type = get_mime_type(&entry.path);
+
+                            bind_http_static_path(
+                                entry.path.replace(&initial_path, ""),
+                                true,  // Must be authenticated
+                                false, // Is not local-only
+                                Some(content_type),
+                                payload.bytes,
+                            )?;
+                        }
+                        FileType::Directory => {
+                            // Push the directory onto the queue
+                            queue.push_back(entry.path);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "serve_ui: unexpected response for path: {:?}",
+                    directory_ipc
+                ))
+            }
+        };
+    }
+
+    Ok(())
+}
+
+pub fn handle_ui_asset_request(
+    our: &Address,
+    directory: &str,
+    path: &str,
+) -> anyhow::Result<(), anyhow::Error> {
+    let parts: Vec<&str> = path.split(&our.process.to_string()).collect();
+    let after_process = parts.get(1).unwrap_or(&"");
+
+    let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
+
+    let _ = uqRequest::new()
+        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .ipc(serde_json::to_vec(&VfsRequest {
+            path: format!("{}/pkg/{}", our.package_id().to_string(), target_path),
+            action: VfsAction::Read,
+        })?)
+        .send_and_await_response(5)?;
+
+    let mut headers = HashMap::new();
+    let content_type = get_mime_type(&path);
+    headers.insert("Content-Type".to_string(), content_type);
+
+    uqResponse::new()
+        .ipc(
+            serde_json::json!(HttpResponse {
+                status: 200,
+                headers,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .inherit(true)
+        .send()?;
+
+    Ok(())
+}
+
+pub fn send_ws_push(
+    node: String,
+    channel_id: u32,
+    message_type: WsMessageType,
+    payload: uqPayload,
+) -> anyhow::Result<()> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_server:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(HttpServerRequest::WebSocketPush {
+                channel_id,
+                message_type,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .payload(payload)
+        .send()?;
+
+    Ok(())
 }
