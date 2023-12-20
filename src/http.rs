@@ -1,5 +1,5 @@
 use crate::kernel_types::{Payload, VfsAction, VfsRequest, VfsResponse};
-use crate::{get_payload, Address, Message, Request as uqRequest, Response as uqResponse};
+use crate::{get_payload, Address, ProcessId, Message, Request as uqRequest, Response as uqResponse, Payload as uqPayload};
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -526,6 +526,29 @@ pub fn handle_ui_asset_request(
             .to_vec(),
         )
         .inherit(true)
+        .send()?;
+
+    Ok(())
+}
+
+pub fn send_ws_push(
+    node: String,
+    channel_id: u32,
+    message_type: WsMessageType,
+    payload: uqPayload,
+) -> anyhow::Result<()> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_server:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(HttpServerRequest::WebSocketPush {
+                channel_id,
+                message_type,
+            }).to_string().as_bytes().to_vec(),
+        )
+        .payload(payload)
         .send()?;
 
     Ok(())
