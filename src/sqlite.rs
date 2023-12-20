@@ -142,7 +142,7 @@ pub fn write(
     package_id: PackageId,
     db: String,
     statement: String,
-    params: Vec<SqlValue>,
+    params: Vec<serde_json::Value>,
     tx_id: Option<u64>,
 ) -> anyhow::Result<()> {
     let res = Request::new()
