@@ -24,14 +24,14 @@ wit_bindgen::generate!({
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
-/// Interact with the key_value module
-pub mod kv;
-/// Interact with the sqlite module
-pub mod sqlite;
 /// The types that the kernel itself uses -- warning -- these will
 /// be incompatible with WIT types in some cases, leading to annoying errors.
 /// Use only to interact with the kernel or runtime in certain ways.
 pub mod kernel_types;
+/// Interact with the key_value module
+pub mod kv;
+/// Interact with the sqlite module
+pub mod sqlite;
 /// Interact with the timer runtime module.
 pub mod timer;
 

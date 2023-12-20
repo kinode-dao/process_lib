@@ -1,11 +1,11 @@
+use crate::{get_payload, Message, PackageId, Request, Response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use crate::{PackageId, Request, Message, Response, get_payload};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KvRequest {
     pub package_id: PackageId,
-    pub db: String, 
+    pub db: String,
     pub action: KvAction,
 }
 
@@ -48,10 +48,7 @@ pub enum KvError {
     IOError { error: String },
 }
 
-pub fn new(
-    package_id: PackageId,
-    db: String,
-) -> anyhow::Result<()> {
+pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
@@ -60,28 +57,25 @@ pub fn new(
             action: KvAction::New,
         })?)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::Ok = resp {
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }
 
-pub fn get(
-    package_id: PackageId,
-    db: String,
-    key: Vec<u8>,
-) -> anyhow::Result<Vec<u8>> {
+pub fn get(package_id: PackageId, db: String, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
@@ -90,12 +84,13 @@ pub fn get(
             action: KvAction::Get { key },
         })?)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::Get { .. } = resp {
                 let bytes = match get_payload() {
@@ -106,7 +101,7 @@ pub fn get(
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }
@@ -127,19 +122,20 @@ pub fn set(
         })?)
         .payload_bytes(value)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::Ok = resp {
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }
@@ -158,27 +154,25 @@ pub fn delete(
             action: KvAction::Delete { key, tx_id },
         })?)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::Ok = resp {
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }
 
-pub fn begin_tx(
-    package_id: PackageId,
-    db: String,
-) -> anyhow::Result<u64> {
+pub fn begin_tx(package_id: PackageId, db: String) -> anyhow::Result<u64> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
@@ -187,28 +181,25 @@ pub fn begin_tx(
             action: KvAction::BeginTx,
         })?)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::BeginTx { tx_id } = resp {
                 Ok(tx_id)
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }
 
-pub fn commit_tx(
-    package_id: PackageId,
-    db: String,
-    tx_id: u64,
-) -> anyhow::Result<()> {
+pub fn commit_tx(package_id: PackageId, db: String, tx_id: u64) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
@@ -217,19 +208,20 @@ pub fn commit_tx(
             action: KvAction::Commit { tx_id },
         })?)
         .send_and_await_response(5)?;
-    
+
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
-                error: format!("kv: gave unparsable response: {}", e),
-            })?;
+            let resp =
+                serde_json::from_slice::<KvResponse>(&ipc).map_err(|e| KvError::InputError {
+                    error: format!("kv: gave unparsable response: {}", e),
+                })?;
 
             if let KvResponse::Ok = resp {
                 Ok(())
             } else {
                 Err(anyhow::anyhow!("kv: unexpected response: {:?}", resp))
             }
-        },
+        }
         _ => return Err(anyhow::anyhow!("kv: unexpected response")),
     }
 }

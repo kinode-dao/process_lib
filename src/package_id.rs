@@ -1,6 +1,6 @@
+use crate::ProcessIdParseError;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use crate::ProcessIdParseError;
 
 /// PackageId is like a ProcessId, but for a package. Only contains the name
 /// of the package and the name of the publisher.

@@ -7,7 +7,10 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
     match context {
         None => {
             Request::new()
-                .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
+                .target(Address::new(
+                    "our",
+                    ProcessId::new(Some("timer"), "sys", "uqbar"),
+                ))
                 .ipc(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
                 // safe to unwrap this call when we know we've set both target and ipc
@@ -16,7 +19,10 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
         }
         Some(context) => {
             Request::new()
-                .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
+                .target(Address::new(
+                    "our",
+                    ProcessId::new(Some("timer"), "sys", "uqbar"),
+                ))
                 .ipc(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
                 .context(context)
@@ -31,8 +37,12 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
 /// then wait for that timer to resolve. The duration should be a number of milliseconds.
 pub fn set_and_await_timer(duration: u64) -> Result<Message, SendError> {
     Request::new()
-        .target(Address::new("our", ProcessId::new(Some("timer"), "sys", "uqbar")))
+        .target(Address::new(
+            "our",
+            ProcessId::new(Some("timer"), "sys", "uqbar"),
+        ))
         .ipc(duration.to_le_bytes())
         // safe to unwrap this call when we know we've set both target and ipc
-        .send_and_await_response((duration / 1000) + 1).unwrap()
+        .send_and_await_response((duration / 1000) + 1)
+        .unwrap()
 }
