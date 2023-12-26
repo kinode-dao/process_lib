@@ -107,6 +107,24 @@ impl SendError {
     }
 }
 
+impl std::fmt::Display for SendError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            SendErrorKind::Offline => write!(f, "Offline"),
+            SendErrorKind::Timeout => write!(f, "Timeout"),
+        }
+    }
+}
+
+impl std::error::Error for SendError {
+    fn description(&self) -> &str {
+        match &self.kind {
+            SendErrorKind::Offline => "Offline",
+            SendErrorKind::Timeout => "Timeout",
+        }
+    }
+}
+
 pub fn wit_message_to_message(
     source: Address,
     message: crate::uqbar::process::standard::Message,

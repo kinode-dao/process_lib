@@ -230,10 +230,7 @@ impl Request {
                     inherit: self.inherit,
                     expects_response: self.timeout,
                     ipc,
-                    metadata: match self.metadata {
-                        None => None,
-                        Some(str) => Some(str.to_string()),
-                    },
+                    metadata: self.metadata,
                 },
                 self.context.as_ref(),
                 self.payload.as_ref(),
