@@ -14,3 +14,5 @@ thiserror = "1.0"
 url = "2.4.1"
 mime_guess = "2.0"
 wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "efcc759" }
+ethers = "2.0"
+ethers-providers = "2.0.9"
