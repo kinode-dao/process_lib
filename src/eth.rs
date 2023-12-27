@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use ethers::core::types::{
+use ethers_core::types::{
     Address as ethAddress, 
     BlockNumber, 
     Filter, 
@@ -8,7 +8,6 @@ use ethers::core::types::{
     Topic, 
     ValueOrArray,
     U64,
-    U256,
 };
 use crate::{ Address as uqAddress, Request as uqRequest };
 use crate::*;
