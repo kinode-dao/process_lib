@@ -21,6 +21,8 @@ wit_bindgen::generate!({
     world: "lib",
 });
 
+/// Interact with the eth provider module.
+pub mod eth;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
@@ -34,8 +36,6 @@ pub mod kv;
 pub mod sqlite;
 /// Interact with the timer runtime module.
 pub mod timer;
-/// Interact with the eth provider module.
-pub mod eth;
 
 // Types
 
