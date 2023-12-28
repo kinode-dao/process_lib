@@ -188,7 +188,7 @@ pub struct VfsRequest {
 /// VfsActions mostly mirror the behaviour of std::fs
 #[derive(Debug, Serialize, Deserialize)]
 pub enum VfsAction {
-    /// creates a drive ["your_package:publisher.uq/your_drive/other_path"] and attaches capabilities 
+    /// creates a drive ["your_package:publisher.uq/your_drive/other_path"] and attaches capabilities
     /// to the process calling it
     CreateDrive,
     CreateDir,

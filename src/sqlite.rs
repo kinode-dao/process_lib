@@ -15,8 +15,8 @@ pub struct SqliteRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SqliteAction {
-    /// New is called to create a new database and be given capabilities, 
-    /// or to open a connection to an existing one. 
+    /// New is called to create a new database and be given capabilities,
+    /// or to open a connection to an existing one.
     New,
     Write {
         statement: String,
