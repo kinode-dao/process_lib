@@ -176,14 +176,20 @@ impl StateError {
     }
 }
 
+/// IPC format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
+    /// path is always prepended by package_id, the capabilities of the topmost folder are checked
+    /// "/your_package:publisher.uq/drive_folder/another_folder_or_file"
     pub path: String,
     pub action: VfsAction,
 }
 
+/// VfsActions mostly mirror the behaviour of std::fs
 #[derive(Debug, Serialize, Deserialize)]
 pub enum VfsAction {
+    /// creates a drive ["your_package:publisher.uq/your_drive/other_path"] and attaches capabilities 
+    /// to the process calling it
     CreateDrive,
     CreateDir,
     CreateDirAll,

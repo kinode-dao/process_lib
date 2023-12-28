@@ -2,6 +2,9 @@ use crate::{get_payload, Message, PackageId, Request, Response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Actions are sent to a specific key value database, "db" is the name,
+/// "package_id" is the package. Capabilities are checked, you can access another process's
+/// database if it has given you the capability.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KvRequest {
     pub package_id: PackageId,
@@ -11,6 +14,8 @@ pub struct KvRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum KvAction {
+    /// New is called to create a new database and be given capabilities, 
+    /// or to open a connection to an existing one. 
     New,
     Set { key: Vec<u8>, tx_id: Option<u64> },
     Delete { key: Vec<u8>, tx_id: Option<u64> },
