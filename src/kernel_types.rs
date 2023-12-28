@@ -410,8 +410,8 @@ pub fn en_wit_payload(load: Option<Payload>) -> Option<wit::Payload> {
     }
 }
 
-pub fn de_wit_signed_capability(wit: wit::SignedCapability) -> SignedCapability {
-    SignedCapability {
+pub fn de_wit_capability(wit: wit::Capability) -> Capability {
+    Capability {
         issuer: Address {
             node: wit.issuer.node,
             process: ProcessId {
@@ -421,15 +421,13 @@ pub fn de_wit_signed_capability(wit: wit::SignedCapability) -> SignedCapability 
             },
         },
         params: wit.params,
-        signature: wit.signature,
     }
 }
 
-pub fn en_wit_signed_capability(cap: SignedCapability) -> wit::SignedCapability {
-    wit::SignedCapability {
+pub fn en_wit_capability(cap: Capability) -> wit::Capability {
+    wit::Capability {
         issuer: en_wit_address(cap.issuer),
         params: cap.params,
-        signature: cap.signature,
     }
 }
 

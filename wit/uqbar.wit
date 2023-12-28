@@ -1,4 +1,4 @@
-package uqbar:process@0.5.0;
+package uqbar:process@0.6.0;
 
 interface standard {
     // JSON is passed over WASM boundary as a string.
@@ -59,13 +59,12 @@ interface standard {
     variant capabilities {
         none,
         all,
-        some(list<signed-capability>),
+        some(list<capability>),
     }
 
-    record signed-capability {
+    record capability {
         issuer: address,
         params: json,
-        signature: list<u8>,
     }
 
     // on-exit is a setting that determines what happens when a process panics, completes, or otherwise "ends"
@@ -128,29 +127,18 @@ interface standard {
 
     // capabilities management
 
-    // gives us all our signed capabilities so we can send them to others
-    get-capabilities: func() -> list<signed-capability>;
+    // attaches a list of capabilities to our next message
+    attach-capabilities: func(capabilities: list<capability>);
 
-    // gets a single specific capability
-    get-capability: func(issuer: address, params: json) -> option<signed-capability>;
+    // gets all capabilities attached to the last message we received
+    // doesn't impact persisted state
+    get-capabilities: func() -> list<capability>;
 
-    // attaches a specific signed capability to our next message
-    attach-capability: func(capability: signed-capability);
+    // saves the capabilities to persisted process state
+    save-capabilities: func(caps: list<capability>); // TODO result<string, string> ?
 
-    // saves capabilities to our store, so we can use them
-    save-capabilities: func(capabilities: list<signed-capability>);
-
-    // check to see if the sender of a prompting message has a given capability, issued by us
-    // if the prompting message has a remote source, they must have attached it.
-    has-capability: func(params: json) -> bool;
-
-    // generates a new capability with our process as the issuer and gives it to the target,
-    // which must be a locally-running process.
-    create-capability: func(to: process-id, params: json);
-
-    // take a signed capability and save it to a given locally-running process
-    share-capability: func(to: process-id, capability: signed-capability);
-
+    // gets all capabilities from persisted process state
+    our-capabilities: func() -> list<capability>;
 
     // message I/O:
 

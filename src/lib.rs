@@ -193,27 +193,27 @@ where
     }
 }
 
-/// Send the capability to message this process to other process(es). This takes an iterator
-/// of [`ProcessId`] since capabilities shared this way are only shared locally. To share
-/// a capability remotely, first acquire its signed form using [`get_capability`] then
-/// attach it to a request/response using [`attach_capability`]. (This will be streamlined
-/// in the future!)
-///
-/// If `our` is not the `Address` of this process, this function will panic, unless you also
-/// hold the messaging capability for the given `Address`!
-pub fn grant_messaging<I, T>(our: &Address, grant_to: I)
-where
-    I: IntoIterator<Item = T>,
-    T: Into<ProcessId>,
-{
-    // the kernel will always give us this capability, so this should never ever fail
-    let our_messaging_cap = crate::get_capability(our, &"\"messaging\"".into()).unwrap();
-    grant_to.into_iter().for_each(|process| {
-        crate::share_capability(&process.into(), &our_messaging_cap);
-    });
+/// Attach the capability to message this process to the next message.
+pub fn attach_messaging(our: &Address) {
+    let _ = crate::attach_capabilities(&vec![
+        Capability {
+            issuer: our.clone(),
+            params: "\"messaging\"".to_string(),
+        }
+    ]);
 }
 
 /// See if we have the capability to message a certain process.
+/// Note if you have not saved the capability, you will not be able to message the other process.
 pub fn can_message(address: &Address) -> bool {
-    crate::get_capability(address, &"\"messaging\"".into()).is_some()
+    crate::our_capabilities()
+        .iter()
+        .any(|cap| cap.params == "\"messaging\"" && cap.issuer == *address)
+}
+
+/// See if the sender attached the specified capability
+pub fn has_capability(our: &Address, params: &str) -> bool {
+    crate::get_capabilities()
+        .iter()
+        .any(|cap| cap.issuer == *our && cap.params == params)
 }
