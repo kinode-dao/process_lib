@@ -1,6 +1,9 @@
+use crate::*;
+use crate::{ Address as uqAddress, Request as uqRequest };
 use serde::{Deserialize, Serialize};
-use ethers_core::types::{
-    Address as ethAddress, 
+
+pub use ethers_core::types::{
+    Address as EthAddress, 
     BlockNumber, 
     Filter, 
     FilterBlockOption, 
@@ -9,8 +12,6 @@ use ethers_core::types::{
     ValueOrArray,
     U64,
 };
-use crate::{ Address as uqAddress, Request as uqRequest };
-use crate::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthRequest {
@@ -22,6 +23,7 @@ pub struct SubscribeLogs {
     pub filter: Filter
 }
 
+#[derive(Debug)]
 pub struct SubscribeLogsRequest {
     pub request: uqRequest,
     pub filter: Filter
@@ -63,7 +65,7 @@ impl SubscribeLogsRequest {
         self
     }
 
-    pub fn address<T: Into<ValueOrArray<ethAddress>>>(mut self, address: T) -> Self {
+    pub fn address<T: Into<ValueOrArray<EthAddress>>>(mut self, address: T) -> Self {
         self.filter = self.filter.address(address);
         self
     }
