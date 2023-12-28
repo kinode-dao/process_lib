@@ -195,12 +195,10 @@ where
 
 /// Attach the capability to message this process to the next message.
 pub fn attach_messaging(our: &Address) {
-    let _ = crate::attach_capabilities(&vec![
-        Capability {
-            issuer: our.clone(),
-            params: "\"messaging\"".to_string(),
-        }
-    ]);
+    let _ = crate::attach_capabilities(&vec![Capability {
+        issuer: our.clone(),
+        params: "\"messaging\"".to_string(),
+    }]);
 }
 
 /// See if we have the capability to message a certain process.
