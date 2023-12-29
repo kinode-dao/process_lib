@@ -107,6 +107,9 @@ impl VfsError {
     }
 }
 
+/// Creates a drive with path "/package_id/drive", gives you read and write caps.
+/// Will only work on the same package_id as you're calling it from, unless you
+/// have root capabilities.
 pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
     let path = format!("/{}/{}", package_id.to_string(), drive);
     let res = Request::new()
@@ -130,6 +133,8 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
     }
 }
 
+/// Opens or creates a file at path.
+/// If trying to create an existing file, will just open it.
 pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     let action = match create {
         true => VfsAction::CreateFile,
@@ -165,7 +170,9 @@ pub struct File {
 }
 
 impl File {
-    pub fn read(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
+    /// Reads the entire file, from start position, into given buffer.
+    /// Returns the number of bytes read.
+    pub fn read_from_start(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Read,
@@ -196,15 +203,50 @@ impl File {
         }
     }
 
-    pub fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+    /// Read to buffer from current position.
+    pub fn read(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
+        let length = buffer.len();
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::Write,
+            action: VfsAction::ReadExact(length as u64),
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "uqbar"))
             .ipc(serde_json::to_vec(&request)?)
-            .payload_bytes(data)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::Read => {
+                        let data = match get_payload() {
+                            Some(bytes) => bytes.bytes,
+                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                        };
+                        let len = std::cmp::min(data.len(), buffer.len());
+                        buffer[..len].copy_from_slice(&data[..len]);
+                        Ok(len)
+                    }
+                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read error: {:?}", e)),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message (not response)")),
+        }
+    }
+
+    /// Overwrites starting from position 0, truncates file to input buffer length.
+    pub fn write_from_start(&self, buffer: &[u8]) -> anyhow::Result<()> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::ReWrite,
+        };
+
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .payload_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
@@ -220,6 +262,32 @@ impl File {
         }
     }
 
+    /// Write buffer to file at current position, overwriting any existing data.
+    pub fn write(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::Write,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .payload_bytes(buffer)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::Ok => Ok(()),
+                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: write error: {:?}", e)),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        }
+    }
+
+    /// Seek file to position
     pub fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
         let request = VfsRequest {
             path: self.path.clone(),
@@ -242,6 +310,8 @@ impl File {
             _ => Err(anyhow::anyhow!("vfs: unexpected message")),
         }
     }
+
+    /// Set file length, if given size > underlying file, fills it with 0s.
     pub fn set_len(&mut self, size: u64) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
@@ -265,6 +335,7 @@ impl File {
         }
     }
 
+    /// Metadata of a path, returns file type and length.
     pub fn metadata(&self) -> anyhow::Result<FileMetadata> {
         let request = VfsRequest {
             path: self.path.clone(),
@@ -288,6 +359,7 @@ impl File {
         }
     }
 
+    /// Syncs path file buffers to disk.
     pub fn sync_all(&self) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
@@ -312,6 +384,8 @@ impl File {
     }
 }
 
+/// Opens or creates a directory at path.
+/// If trying to create an existing file, will just open it.
 pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     if !create {
         return Ok(Directory {
@@ -348,6 +422,8 @@ pub struct Directory {
 }
 
 impl Directory {
+    /// Iterates through children of directory, returning a vector of DirEntries.
+    /// DirEntries contain the path and file type of each child.
     pub fn read(&self) -> anyhow::Result<Vec<DirEntry>> {
         let request = VfsRequest {
             path: self.path.clone(),
