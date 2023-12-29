@@ -1,8 +1,11 @@
 use crate::{get_payload, Message, PackageId, Request};
 use serde::{Deserialize, Serialize};
 
+/// IPC format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
+    /// path is always prepended by package_id, the capabilities of the topmost folder are checked
+    /// "/your_package:publisher.uq/drive_folder/another_folder_or_file"
     pub path: String,
     pub action: VfsAction,
 }
