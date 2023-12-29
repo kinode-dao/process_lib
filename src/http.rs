@@ -1,8 +1,9 @@
-use crate::kernel_types::{FileType, Payload, VfsAction, VfsRequest, VfsResponse};
+use crate::kernel_types::Payload;
 use crate::{
     get_payload, Address, Message, Payload as uqPayload, ProcessId, Request as uqRequest,
     Response as uqResponse,
 };
+use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
