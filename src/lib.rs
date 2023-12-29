@@ -210,8 +210,17 @@ pub fn can_message(address: &Address) -> bool {
 }
 
 /// See if the sender attached the specified capability
-pub fn has_capability(our: &Address, params: &str) -> bool {
+pub fn has_attached_capability(our: &Address, params: &str) -> bool {
     crate::get_capabilities()
         .iter()
         .any(|cap| cap.issuer == *our && cap.params == params)
+}
+
+/// Get a capability in our store
+/// NOTE unfortunatly this is O(n), not sure if wit let's us do any better
+pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
+    crate::our_capabilities()
+        .iter()
+        .find(|cap| cap.issuer == *our && cap.params == params)
+        .cloned()
 }
