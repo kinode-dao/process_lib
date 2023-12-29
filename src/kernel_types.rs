@@ -99,7 +99,7 @@ pub enum KernelCommand {
         id: ProcessId,
         wasm_bytes_handle: String,
         on_exit: OnExit,
-        initial_capabilities: HashSet<SignedCapability>,
+        initial_capabilities: HashSet<Capability>,
         public: bool,
     },
     /// Tell the kernel to run a process that has already been installed.
