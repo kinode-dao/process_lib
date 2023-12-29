@@ -130,7 +130,7 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
     }
 }
 
-pub async fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
+pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     let action = match create {
         true => VfsAction::CreateFile,
         false => VfsAction::OpenFile,
@@ -165,7 +165,7 @@ pub struct File {
 }
 
 impl File {
-    pub async fn read(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
+    pub fn read(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Read,
@@ -196,7 +196,7 @@ impl File {
         }
     }
 
-    pub async fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+    pub fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Write,
@@ -220,7 +220,7 @@ impl File {
         }
     }
 
-    pub async fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
+    pub fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Seek(pos),
@@ -242,7 +242,7 @@ impl File {
             _ => Err(anyhow::anyhow!("vfs: unexpected message")),
         }
     }
-    pub async fn set_len(&mut self, size: u64) -> anyhow::Result<()> {
+    pub fn set_len(&mut self, size: u64) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::SetLen(size),
@@ -265,7 +265,7 @@ impl File {
         }
     }
 
-    pub async fn metadata(&self) -> anyhow::Result<FileMetadata> {
+    pub fn metadata(&self) -> anyhow::Result<FileMetadata> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Metadata,
@@ -288,7 +288,7 @@ impl File {
         }
     }
 
-    pub async fn sync_all(&self) -> anyhow::Result<()> {
+    pub fn sync_all(&self) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::SyncAll,
@@ -312,7 +312,7 @@ impl File {
     }
 }
 
-pub async fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
+pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     if !create {
         return Ok(Directory {
             path: path.to_string(),
@@ -348,7 +348,7 @@ pub struct Directory {
 }
 
 impl Directory {
-    pub async fn read(&self) -> anyhow::Result<Vec<DirEntry>> {
+    pub fn read(&self) -> anyhow::Result<Vec<DirEntry>> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::ReadDir,
