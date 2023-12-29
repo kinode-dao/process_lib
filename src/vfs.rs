@@ -149,7 +149,9 @@ pub async fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(File { path: path.to_string() }),
+                VfsResponse::Ok => Ok(File {
+                    path: path.to_string(),
+                }),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open file error: {:?}", e)),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
@@ -312,7 +314,9 @@ impl File {
 
 pub async fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     if !create {
-        return Ok(Directory { path: path.to_string() });
+        return Ok(Directory {
+            path: path.to_string(),
+        });
     }
     let request = VfsRequest {
         path: path.to_string(),
@@ -328,7 +332,9 @@ pub async fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(Directory { path: path.to_string() }),
+                VfsResponse::Ok => Ok(Directory {
+                    path: path.to_string(),
+                }),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open directory error: {:?}", e)),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
