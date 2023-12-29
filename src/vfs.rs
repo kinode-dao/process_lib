@@ -130,10 +130,10 @@ pub fn create_drive(package_id: PackageId, drive: String) -> anyhow::Result<()> 
     }
 }
 
-pub async fn open_file(path: String, create: Option<bool>) -> anyhow::Result<File> {
+pub async fn open_file(path: String, create: bool) -> anyhow::Result<File> {
     let action = match create {
-        Some(true) => VfsAction::CreateFile,
-        _ => VfsAction::OpenFile,
+        true => VfsAction::CreateFile,
+        false => VfsAction::OpenFile,
     };
 
     let request = VfsRequest {
@@ -302,6 +302,62 @@ impl File {
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: sync error: {:?}", e)),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        }
+    }
+}
+
+pub async fn open_dir(path: String, create: bool) -> anyhow::Result<Directory> {
+    if !create {
+        return Ok(Directory { path });
+    }
+    let request = VfsRequest {
+        path: path.clone(),
+        action: VfsAction::CreateDir,
+    };
+
+    let message = Request::new()
+        .target(("our", "vfs", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&request)?)
+        .send_and_await_response(5)?;
+
+    match message {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            match response {
+                VfsResponse::Ok => Ok(Directory { path }),
+                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open directory error: {:?}", e)),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+            }
+        }
+        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+    }
+}
+
+pub struct Directory {
+    path: String,
+}
+
+impl Directory {
+    pub async fn read(&self) -> anyhow::Result<Vec<DirEntry>> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::ReadDir,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::ReadDir(entries) => Ok(entries),
+                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read_dir error: {:?}", e)),
                     _ => Err(anyhow::anyhow!("vfs: unexpected response")),
                 }
             }
