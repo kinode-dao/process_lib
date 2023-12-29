@@ -17,11 +17,21 @@ pub enum KvAction {
     /// New is called to create a new database and be given capabilities,
     /// or to open a connection to an existing one.
     New,
-    Set { key: Vec<u8>, tx_id: Option<u64> },
-    Delete { key: Vec<u8>, tx_id: Option<u64> },
-    Get { key: Vec<u8> },
+    Set {
+        key: Vec<u8>,
+        tx_id: Option<u64>,
+    },
+    Delete {
+        key: Vec<u8>,
+        tx_id: Option<u64>,
+    },
+    Get {
+        key: Vec<u8>,
+    },
     BeginTx,
-    Commit { tx_id: u64 },
+    Commit {
+        tx_id: u64,
+    },
     Backup,
 }
 
