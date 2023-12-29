@@ -107,7 +107,7 @@ impl VfsError {
     }
 }
 
-pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<()> {
+pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
     let path = format!("/{}/{}", package_id.to_string(), drive);
     let res = Request::new()
         .target(("our", "vfs", "sys", "uqbar"))
@@ -121,7 +121,7 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<()> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(()),
+                VfsResponse::Ok => Ok(path),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: create drive error: {:?}", e)),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
