@@ -28,14 +28,14 @@ pub mod http;
 /// be incompatible with WIT types in some cases, leading to annoying errors.
 /// Use only to interact with the kernel or runtime in certain ways.
 pub mod kernel_types;
-/// Interact with the virtual filesystem
-pub mod vfs;
 /// Interact with the key_value module
 pub mod kv;
 /// Interact with the sqlite module
 pub mod sqlite;
 /// Interact with the timer runtime module.
 pub mod timer;
+/// Interact with the virtual filesystem
+pub mod vfs;
 
 // Types
 

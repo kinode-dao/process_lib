@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{get_payload, Message, PackageId, Request};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
@@ -120,10 +120,10 @@ pub fn create_drive(package_id: PackageId, drive: String) -> anyhow::Result<()> 
     match res {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
-               match response {
+            match response {
                 VfsResponse::Ok => Ok(()),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: create drive error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")), 
+                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
         }
         _ => return Err(anyhow::anyhow!("vfs: unexpected message")),
@@ -365,4 +365,3 @@ impl Directory {
         }
     }
 }
-
