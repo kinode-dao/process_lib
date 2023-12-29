@@ -107,7 +107,7 @@ impl VfsError {
     }
 }
 
-pub fn create_drive(package_id: PackageId, drive: String) -> anyhow::Result<()> {
+pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<()> {
     let path = format!("/{}/{}", package_id.to_string(), drive);
     let res = Request::new()
         .target(("our", "vfs", "sys", "uqbar"))
@@ -130,14 +130,14 @@ pub fn create_drive(package_id: PackageId, drive: String) -> anyhow::Result<()> 
     }
 }
 
-pub async fn open_file(path: String, create: bool) -> anyhow::Result<File> {
+pub async fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     let action = match create {
         true => VfsAction::CreateFile,
         false => VfsAction::OpenFile,
     };
 
     let request = VfsRequest {
-        path: path.clone(),
+        path: path.to_string(),
         action,
     };
     let message = Request::new()
@@ -149,7 +149,7 @@ pub async fn open_file(path: String, create: bool) -> anyhow::Result<File> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(File { path }),
+                VfsResponse::Ok => Ok(File { path: path.to_string() }),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open file error: {:?}", e)),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
@@ -310,12 +310,12 @@ impl File {
     }
 }
 
-pub async fn open_dir(path: String, create: bool) -> anyhow::Result<Directory> {
+pub async fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     if !create {
-        return Ok(Directory { path });
+        return Ok(Directory { path: path.to_string() });
     }
     let request = VfsRequest {
-        path: path.clone(),
+        path: path.to_string(),
         action: VfsAction::CreateDir,
     };
 
@@ -328,7 +328,7 @@ pub async fn open_dir(path: String, create: bool) -> anyhow::Result<Directory> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(Directory { path }),
+                VfsResponse::Ok => Ok(Directory { path: path.to_string() }),
                 VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open directory error: {:?}", e)),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response")),
             }
