@@ -140,6 +140,10 @@ interface standard {
     // gets all capabilities from persisted process state
     our-capabilities: func() -> list<capability>;
 
+    // grants a capability to another process
+    // only available to processes with the "root" capability
+    grant-capabilities: func(target: process-id, capabilities: list<capability>);
+
     // message I/O:
 
     // ingest next message when it arrives along with its source.
