@@ -477,7 +477,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
 }
 
 pub struct Directory {
-    path: String,
+    pub path: String,
 }
 
 impl Directory {
