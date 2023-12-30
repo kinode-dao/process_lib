@@ -27,11 +27,11 @@ pub enum VfsAction {
     ReadToEnd,
     ReadExact(u64),
     ReadToString,
-    Seek { seek_from: SeekFrom},
+    Seek { seek_from: SeekFrom },
     RemoveFile,
     RemoveDir,
     RemoveDirAll,
-    Rename { new_path: String},
+    Rename { new_path: String },
     Metadata,
     AddZip,
     CopyFile { new_path: String },
@@ -293,7 +293,7 @@ impl File {
         }
     }
 
-    /// Write entire slice as the new file. 
+    /// Write entire slice as the new file.
     /// Truncates anything that existed at path before.
     pub fn write(&self, buffer: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
@@ -350,7 +350,7 @@ impl File {
     pub fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::Seek { seek_from: pos},
+            action: VfsAction::Seek { seek_from: pos },
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "uqbar"))
