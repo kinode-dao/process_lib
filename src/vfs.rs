@@ -444,7 +444,7 @@ impl File {
 }
 
 /// Creates a directory at path.
-/// If trying to create an existing folder, will return IOError. 
+/// If trying to create an existing folder, will return IOError.
 pub fn create_dir(path: &str) -> anyhow::Result<Directory> {
     let request = VfsRequest {
         path: path.to_string(),
