@@ -16,26 +16,25 @@ pub enum VfsAction {
     CreateDir,
     CreateDirAll,
     CreateFile,
-    OpenFile,
+    OpenFile { create: bool },
     CloseFile,
-    WriteAll,
     Write,
-    ReWrite,
-    WriteAt(u64),
+    WriteAt,
     Append,
     SyncAll,
     Read,
-    ReadToEnd,
     ReadDir,
+    ReadToEnd,
     ReadExact(u64),
     ReadToString,
-    Seek(SeekFrom),
+    Seek { seek_from: SeekFrom},
     RemoveFile,
     RemoveDir,
     RemoveDirAll,
-    Rename(String),
+    Rename { new_path: String},
     Metadata,
     AddZip,
+    CopyFile { new_path: String },
     Len,
     SetLen(u64),
     Hash,
@@ -73,6 +72,7 @@ pub enum VfsResponse {
     Ok,
     Err(VfsError),
     Read,
+    SeekFrom(u64),
     ReadDir(Vec<DirEntry>),
     ReadToString(String),
     Metadata(FileMetadata),
@@ -136,18 +136,40 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
     }
 }
 
-/// Opens or creates a file at path.
-/// If trying to create an existing file, will just open it.
+/// Opens a file at path, if no file at path, creates one if boolean create is true.
 pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
-    let action = match create {
-        true => VfsAction::CreateFile,
-        false => VfsAction::OpenFile,
-    };
-
     let request = VfsRequest {
         path: path.to_string(),
-        action,
+        action: VfsAction::OpenFile { create },
     };
+
+    let message = Request::new()
+        .target(("our", "vfs", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&request)?)
+        .send_and_await_response(5)?;
+
+    match message {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            match response {
+                VfsResponse::Ok => Ok(File {
+                    path: path.to_string(),
+                }),
+                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open file error: {:?}", e)),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+            }
+        }
+        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+    }
+}
+
+/// Creates a file at path, if file found at path, truncates it to 0.
+pub fn create_file(path: &str) -> anyhow::Result<File> {
+    let request = VfsRequest {
+        path: path.to_string(),
+        action: VfsAction::CreateFile,
+    };
+
     let message = Request::new()
         .target(("our", "vfs", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&request)?)
@@ -173,9 +195,40 @@ pub struct File {
 }
 
 impl File {
-    /// Reads the entire file, from start position, into given buffer.
-    /// Returns the number of bytes read.
-    pub fn read_from_start(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
+    /// Reads the entire file, from start position.
+    /// Returns a vector of bytes.
+    pub fn read(&self) -> anyhow::Result<Vec<u8>> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::Read,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::Read => {
+                        let data = match get_payload() {
+                            Some(bytes) => bytes.bytes,
+                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                        };
+                        Ok(data)
+                    }
+                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read error: {:?}", e)),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message (not response)")),
+        }
+    }
+
+    /// Reads the entire file, from start position, into buffer.
+    /// Returns the amount of bytes read.
+    pub fn read_into(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
         let request = VfsRequest {
             path: self.path.clone(),
             action: VfsAction::Read,
@@ -206,8 +259,9 @@ impl File {
         }
     }
 
-    /// Read to buffer from current position.
-    pub fn read(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
+    /// Read into buffer from current cursor position
+    /// Returns the amount of bytes read.
+    pub fn read_at(&self, buffer: &mut [u8]) -> anyhow::Result<usize> {
         let length = buffer.len();
         let request = VfsRequest {
             path: self.path.clone(),
@@ -239,11 +293,12 @@ impl File {
         }
     }
 
-    /// Overwrites starting from position 0, truncates file to input buffer length.
-    pub fn write_from_start(&self, buffer: &[u8]) -> anyhow::Result<()> {
+    /// Write entire slice as the new file. 
+    /// Truncates anything that existed at path before.
+    pub fn write(&self, buffer: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::ReWrite,
+            action: VfsAction::Write,
         };
 
         let message = Request::new()
@@ -266,10 +321,10 @@ impl File {
     }
 
     /// Write buffer to file at current position, overwriting any existing data.
-    pub fn write(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
+    pub fn write_at(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::Write,
+            action: VfsAction::WriteAt,
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "uqbar"))
@@ -290,11 +345,12 @@ impl File {
         }
     }
 
-    /// Seek file to position
+    /// Seek file to position.
+    /// Returns the new position.
     pub fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::Seek(pos),
+            action: VfsAction::Seek { seek_from: pos},
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "uqbar"))
@@ -305,7 +361,7 @@ impl File {
             Ok(Message::Response { ipc, .. }) => {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
-                    VfsResponse::Ok => Ok(0), // Replace with actual position
+                    VfsResponse::SeekFrom(new_pos) => Ok(new_pos),
                     VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: seek error: {:?}", e)),
                     _ => Err(anyhow::anyhow!("vfs: unexpected response")),
                 }
