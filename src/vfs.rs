@@ -443,14 +443,9 @@ impl File {
     }
 }
 
-/// Opens or creates a directory at path.
-/// If trying to create an existing file, will just open it.
-pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
-    if !create {
-        return Ok(Directory {
-            path: path.to_string(),
-        });
-    }
+/// Creates a directory at path.
+/// If trying to create an existing folder, will return IOError. 
+pub fn create_dir(path: &str) -> anyhow::Result<Directory> {
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::CreateDir,
