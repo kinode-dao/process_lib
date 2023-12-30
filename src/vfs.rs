@@ -506,3 +506,27 @@ impl Directory {
         }
     }
 }
+
+/// Metadata of a path, returns file type and length.
+pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
+    let request = VfsRequest {
+        path: path.to_string(),
+        action: VfsAction::Metadata,
+    };
+    let message = Request::new()
+        .target(("our", "vfs", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&request)?)
+        .send_and_await_response(5)?;
+
+    match message {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            match response {
+                VfsResponse::Metadata(metadata) => Ok(metadata),
+                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: metadata error: {:?}", e)),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+            }
+        }
+        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+    }
+}
