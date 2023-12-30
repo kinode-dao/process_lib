@@ -47,7 +47,7 @@ pub enum SeekFrom {
     Current(i64),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum FileType {
     File,
     Directory,
