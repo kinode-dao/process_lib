@@ -192,7 +192,7 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
 
 /// Vfs helper struct for a file.
 /// Opening or creating a file will give you a Result<File>.
-/// You can call it's impl functions to interact with it. 
+/// You can call it's impl functions to interact with it.
 pub struct File {
     pub path: String,
 }
