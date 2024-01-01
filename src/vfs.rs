@@ -114,7 +114,7 @@ impl VfsError {
 /// Will only work on the same package_id as you're calling it from, unless you
 /// have root capabilities.
 pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
-    let path = format!("/{}/{}", package_id.to_string(), drive);
+    let path = format!("/{}/{}", package_id, drive);
     let res = Request::new()
         .target(("our", "vfs", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&VfsRequest {
@@ -190,6 +190,9 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
     }
 }
 
+/// Vfs helper struct for a file.
+/// Opening or creating a file will give you a Result<File>.
+/// You can call it's impl functions to interact with it. 
 pub struct File {
     pub path: String,
 }
@@ -476,6 +479,9 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     }
 }
 
+/// Vfs helper struct for a directory.
+/// Opening or creating a directory will give you a Result<Directory>.
+/// You can call it's impl functions to interact with it.
 pub struct Directory {
     pub path: String,
 }
