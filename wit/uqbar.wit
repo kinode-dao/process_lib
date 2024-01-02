@@ -56,12 +56,6 @@ interface standard {
         response(tuple<response, option<context>>),
     }
 
-    variant capabilities {
-        none,
-        all,
-        some(list<capability>),
-    }
-
     record capability {
         issuer: address,
         params: json,
@@ -121,7 +115,9 @@ interface standard {
                 name: option<string>,
                 wasm-path: string, // must be located within package's drive
                 on-exit: on-exit,
-                capabilities: capabilities,
+                request-capabilities: list<capability>,
+                // note that we are restricting granting to just messaging the newly spawned process
+                grant-capabilities: list<process-id>,
                 public: bool
             ) -> result<process-id, spawn-error>;
 

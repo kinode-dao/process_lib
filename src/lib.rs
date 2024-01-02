@@ -119,14 +119,16 @@ pub fn spawn(
     name: Option<&str>,
     wasm_path: &str,
     on_exit: OnExit,
-    capabilities: &Capabilities,
+    request_capabilities: Vec<Capability>,
+    grant_capabilities: Vec<ProcessId>,
     public: bool,
 ) -> Result<ProcessId, SpawnError> {
     crate::uqbar::process::standard::spawn(
         name,
         wasm_path,
         &on_exit._to_standard().map_err(|_e| SpawnError::NameTaken)?,
-        capabilities,
+        &request_capabilities,
+        &grant_capabilities,
         public,
     )
 }
