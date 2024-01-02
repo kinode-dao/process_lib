@@ -1,65 +1,51 @@
 use crate::*;
-use crate::{ Address as uqAddress, Request as uqRequest };
+use crate::{Address as uqAddress, Request as uqRequest};
 use serde::{Deserialize, Serialize};
 
 pub use ethers_core::types::{
-    Address as EthAddress, 
-    BlockNumber, 
-    Filter, 
-    FilterBlockOption, 
-    H256, 
-    Topic, 
-    ValueOrArray,
-    U64,
+    Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthRequest {
-    SubscribeLogs(SubscribeLogs)
+    SubscribeLogs(SubscribeLogs),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubscribeLogs {
-    pub filter: Filter
+    pub filter: Filter,
 }
 
 #[derive(Debug)]
 pub struct SubscribeLogsRequest {
     pub request: uqRequest,
-    pub filter: Filter
+    pub filter: Filter,
 }
 
 impl SubscribeLogsRequest {
-
     pub fn new() -> Self {
-
-        let request = uqRequest::new()
-            .target(uqAddress::new(
-                "our",
-                ProcessId::new(Some("eth"), "sys", "uqbar"),
-            ));
+        let request = uqRequest::new().target(uqAddress::new(
+            "our",
+            ProcessId::new(Some("eth"), "sys", "uqbar"),
+        ));
 
         SubscribeLogsRequest {
             request,
             filter: SubscribeLogsRequest::new(),
         }
-
     }
 
     pub fn send(mut self) -> anyhow::Result<()> {
-
-        self.request = self.request.ipc(
-            serde_json::to_vec(&EthRequest::SubscribeLogs(
+        self.request = self
+            .request
+            .ipc(serde_json::to_vec(&EthRequest::SubscribeLogs(
                 SubscribeLogs {
                     filter: self.filter.clone(),
-                }
-            ))?,
-        );
+                },
+            ))?);
 
         self.request.send()
-
     }
-
 
     /// Sets the inner filter object
     ///
@@ -219,5 +205,4 @@ impl SubscribeLogsRequest {
     pub fn get_to_block(&self) -> Option<U64> {
         self.filter.get_to_block()
     }
-
 }
