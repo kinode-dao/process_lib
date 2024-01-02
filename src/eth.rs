@@ -23,6 +23,8 @@ pub struct SubscribeLogsRequest {
 }
 
 impl SubscribeLogsRequest {
+
+    /// Start building a new `SubscribeLogsRequest`. 
     pub fn new() -> Self {
         let request = uqRequest::new().target(uqAddress::new(
             "our",
@@ -35,6 +37,7 @@ impl SubscribeLogsRequest {
         }
     }
 
+    /// Attempt to send the request. 
     pub fn send(mut self) -> anyhow::Result<()> {
         self.request = self
             .request
@@ -43,7 +46,6 @@ impl SubscribeLogsRequest {
                     filter: self.filter.clone(),
                 },
             ))?);
-
         self.request.send()
     }
 
