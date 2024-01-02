@@ -33,7 +33,7 @@ impl SubscribeLogsRequest {
 
         SubscribeLogsRequest {
             request,
-            filter: SubscribeLogsRequest::new(),
+            filter: Filter::new(),
         }
     }
 
