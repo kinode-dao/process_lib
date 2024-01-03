@@ -20,9 +20,7 @@ pub enum KvAction {
     Delete { key: Vec<u8>, tx_id: Option<u64> },
     Get { key: Vec<u8> },
     BeginTx,
-    Commit {
-        tx_id: u64,
-    },
+    Commit { tx_id: u64 },
     Backup,
 }
 
