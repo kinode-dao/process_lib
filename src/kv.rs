@@ -2,6 +2,9 @@ use crate::{get_payload, Message, PackageId, Request};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Actions are sent to a specific key value database, "db" is the name,
+/// "package_id" is the package. Capabilities are checked, you can access another process's
+/// database if it has given you the capability.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KvRequest {
     pub package_id: PackageId,

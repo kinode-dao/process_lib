@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
+/// Actions are sent to a specific sqlite database, "db" is the name,
+/// "package_id" is the package. Capabilities are checked, you can access another process's
+/// database if it has given you the capability.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqliteRequest {
     pub package_id: PackageId,
