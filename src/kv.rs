@@ -11,7 +11,8 @@ pub struct KvRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum KvAction {
-    New,
+    Open,
+    RemoveDb,
     Set { key: Vec<u8>, tx_id: Option<u64> },
     Delete { key: Vec<u8>, tx_id: Option<u64> },
     Get { key: Vec<u8> },
@@ -32,8 +33,6 @@ pub enum KvResponse {
 pub enum KvError {
     #[error("kv: DbDoesNotExist")]
     NoDb,
-    #[error("kv: DbAlreadyExists")]
-    DbAlreadyExists,
     #[error("kv: KeyNotFound")]
     KeyNotFound,
     #[error("kv: no Tx found")]
@@ -56,13 +55,13 @@ pub struct Kv {
     pub db: String,
 }
 
-pub fn new(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
+pub fn open(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
             db: db.clone(),
-            action: KvAction::New,
+            action: KvAction::Open,
         })?)
         .send_and_await_response(5)?;
 
@@ -72,6 +71,30 @@ pub fn new(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
 
             match response {
                 KvResponse::Ok => Ok(Kv { package_id, db }),
+                KvResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+    }
+}
+
+pub fn remove_db(package_id: PackageId, db: String) -> anyhow::Result<()> {
+    let res = Request::new()
+        .target(("our", "kv", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&KvRequest {
+            package_id: package_id.clone(),
+            db: db.clone(),
+            action: KvAction::RemoveDb,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+
+            match response {
+                KvResponse::Ok => Ok(()),
                 KvResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }

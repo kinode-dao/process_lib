@@ -12,7 +12,8 @@ pub struct SqliteRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SqliteAction {
-    New,
+    Open,
+    RemoveDb,
     Write {
         statement: String,
         tx_id: Option<u64>,
@@ -49,8 +50,6 @@ pub enum SqlValue {
 pub enum SqliteError {
     #[error("sqlite: DbDoesNotExist")]
     NoDb,
-    #[error("sqlite: DbAlreadyExists")]
-    DbAlreadyExists,
     #[error("sqlite: NoTx")]
     NoTx,
     #[error("sqlite: No capability: {error}")]
@@ -77,7 +76,7 @@ pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
         .ipc(serde_json::to_vec(&SqliteRequest {
             package_id,
             db,
-            action: SqliteAction::New,
+            action: SqliteAction::Open,
         })?)
         .send_and_await_response(5)?;
 
