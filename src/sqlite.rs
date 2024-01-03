@@ -75,7 +75,7 @@ pub struct Sqlite {
     pub db: String,
 }
 
-pub fn new(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
+pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
     let res = Request::new()
         .target(("our", "sqlite", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&SqliteRequest {
