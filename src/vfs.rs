@@ -1,5 +1,6 @@
 use crate::{get_payload, Message, PackageId, Request};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// IPC format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,16 +81,25 @@ pub enum VfsResponse {
     Hash([u8; 32]),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum VfsError {
+    #[error("vfs: No capability for action {action} at path {path}")]
     NoCap { action: String, path: String },
+    #[error("vfs: Bytes payload required for {action} at path {path}")]
     BadBytes { action: String, path: String },
+    #[error("vfs: bad request error: {error}")]
     BadRequest { error: String },
+    #[error("vfs: error parsing path: {path}, error: {error}")]
     ParseError { error: String, path: String },
+    #[error("vfs: IO error: {error}, at path {path}")]
     IOError { error: String, path: String },
+    #[error("vfs: kernel capability channel error: {error}")]
     CapChannelFail { error: String },
+    #[error("vfs: Bad JSON payload: {error}")]
     BadJson { error: String },
+    #[error("vfs: File not found at path {path}")]
     NotFound { path: String },
+    #[error("vfs: Creating directory failed at path: {path}: {error}")]
     CreateDirError { path: String, error: String },
 }
 
@@ -128,11 +138,11 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
                 VfsResponse::Ok => Ok(path),
-                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: create drive error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => return Err(anyhow::anyhow!("vfs: unexpected message")),
+        _ => return Err(anyhow::anyhow!("vfs: unexpected message: {:?}", res)),
     }
 }
 
@@ -155,11 +165,11 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
                 }),
-                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open file error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
     }
 }
 
@@ -182,11 +192,11 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
                 }),
-                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open file error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
     }
 }
 
@@ -221,11 +231,11 @@ impl File {
                         };
                         Ok(data)
                     }
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message (not response)")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -254,11 +264,11 @@ impl File {
                         buffer[..len].copy_from_slice(&data[..len]);
                         Ok(len)
                     }
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message (not response)")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -288,11 +298,11 @@ impl File {
                         buffer[..len].copy_from_slice(&data[..len]);
                         Ok(len)
                     }
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message (not response)")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -315,11 +325,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: write error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -340,11 +350,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: write error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -365,11 +375,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::SeekFrom(new_pos) => Ok(new_pos),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: seek error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -389,11 +399,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: set_len error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -413,11 +423,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Metadata(metadata) => Ok(metadata),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: metadata error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 
@@ -437,11 +447,11 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: sync error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 }
@@ -471,11 +481,11 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
                 VfsResponse::Ok => Ok(Directory {
                     path: path.to_string(),
                 }),
-                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: open directory error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
     }
 }
 
@@ -504,11 +514,11 @@ impl Directory {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::ReadDir(entries) => Ok(entries),
-                    VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: read_dir error: {:?}", e)),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
                 }
             }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
         }
     }
 }
@@ -529,10 +539,10 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
                 VfsResponse::Metadata(metadata) => Ok(metadata),
-                VfsResponse::Err(e) => Err(anyhow::anyhow!("vfs: metadata error: {:?}", e)),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response")),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message")),
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
     }
 }
