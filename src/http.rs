@@ -202,6 +202,23 @@ pub struct JwtClaims {
     pub expiration: u64,
 }
 
+impl HttpServerRequest {
+    /// Parse a byte slice into an HttpServerRequest.
+    pub fn from_bytes(bytes: &[u8]) -> serde_json::Result<Self> {
+        serde_json::from_slice(bytes)
+    }
+
+    /// Filter the general-purpose [`HttpServerRequest`], which contains HTTP requests
+    /// and WebSocket messages, into just the HTTP request. Consumes the original request
+    /// and returns `None` if the request was WebSocket-related.
+    pub fn request(self) -> Option<IncomingHttpRequest> {
+        match self {
+            HttpServerRequest::Http(req) => Some(req),
+            _ => None,
+        }
+    }
+}
+
 impl IncomingHttpRequest {
     pub fn url(&self) -> anyhow::Result<url::Url> {
         url::Url::parse(&self.raw_path).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
