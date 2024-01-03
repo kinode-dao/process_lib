@@ -55,12 +55,12 @@ pub struct Kv {
     pub db: String,
 }
 
-pub fn open(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
+pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
-            db: db.clone(),
+            db: db.to_string(),
             action: KvAction::Open,
         })?)
         .send_and_await_response(5)?;
@@ -70,7 +70,10 @@ pub fn open(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
             let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
             match response {
-                KvResponse::Ok => Ok(Kv { package_id, db }),
+                KvResponse::Ok => Ok(Kv {
+                    package_id,
+                    db: db.to_string(),
+                }),
                 KvResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
@@ -79,12 +82,12 @@ pub fn open(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
     }
 }
 
-pub fn remove_db(package_id: PackageId, db: String) -> anyhow::Result<()> {
+pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
-            db: db.clone(),
+            db: db.to_string(),
             action: KvAction::RemoveDb,
         })?)
         .send_and_await_response(5)?;

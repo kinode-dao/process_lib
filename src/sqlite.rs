@@ -70,164 +70,196 @@ pub enum SqliteError {
     InputError { error: String },
 }
 
-pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
+pub struct Sqlite {
+    pub package_id: PackageId,
+    pub db: String,
+}
+
+pub fn new(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
     let res = Request::new()
         .target(("our", "sqlite", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id,
-            db,
+            package_id: package_id.clone(),
+            db: db.to_string(),
             action: SqliteAction::Open,
         })?)
         .send_and_await_response(5)?;
 
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<SqliteResponse>(&ipc).map_err(|e| {
-                SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
-                }
-            })?;
+            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
 
-            if let SqliteResponse::Ok = resp {
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("sqlite: unexpected response: {:?}", resp))
+            match response {
+                SqliteResponse::Ok => Ok(Sqlite {
+                    package_id,
+                    db: db.to_string(),
+                }),
+                SqliteResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!(
+                    "sqlite: unexpected response {:?}",
+                    response
+                )),
             }
         }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected response")),
+        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
     }
 }
 
-pub fn read(
-    package_id: PackageId,
-    db: String,
-    query: String,
-    params: Vec<SqlValue>,
-) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
+pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "sqlite", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id,
-            db,
-            action: SqliteAction::Read { query },
-        })?)
-        .payload_bytes(serde_json::to_vec(&params)?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<SqliteResponse>(&ipc).map_err(|e| {
-                SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
-                }
-            })?;
-
-            if let SqliteResponse::Read = resp {
-                let payload = get_payload().ok_or_else(|| SqliteError::InputError {
-                    error: format!("sqlite: no payload"),
-                })?;
-                let values = serde_json::from_slice::<Vec<HashMap<String, serde_json::Value>>>(
-                    &payload.bytes,
-                )
-                .map_err(|e| SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
-                })?;
-                Ok(values)
-            } else {
-                Err(anyhow::anyhow!("sqlite: unexpected response: {:?}", resp))
-            }
-        }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected response")),
-    }
-}
-
-pub fn write(
-    package_id: PackageId,
-    db: String,
-    statement: String,
-    params: Vec<serde_json::Value>,
-    tx_id: Option<u64>,
-) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id,
-            db,
-            action: SqliteAction::Write { statement, tx_id },
-        })?)
-        .payload_bytes(serde_json::to_vec(&params)?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<SqliteResponse>(&ipc).map_err(|e| {
-                SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
-                }
-            })?;
-
-            if let SqliteResponse::Ok = resp {
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("sqlite: unexpected response: {:?}", resp))
-            }
-        }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected response")),
-    }
-}
-
-pub fn begin_tx(package_id: PackageId, db: String) -> anyhow::Result<u64> {
-    let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id,
-            db,
-            action: SqliteAction::BeginTx,
+            package_id: package_id.clone(),
+            db: db.to_string(),
+            action: SqliteAction::RemoveDb,
         })?)
         .send_and_await_response(5)?;
 
     match res {
         Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<SqliteResponse>(&ipc).map_err(|e| {
-                SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
-                }
-            })?;
+            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
 
-            if let SqliteResponse::BeginTx { tx_id } = resp {
-                Ok(tx_id)
-            } else {
-                Err(anyhow::anyhow!("sqlite: unexpected response: {:?}", resp))
+            match response {
+                SqliteResponse::Ok => Ok(()),
+                SqliteResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!(
+                    "sqlite: unexpected response {:?}",
+                    response
+                )),
             }
         }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected response")),
+        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
     }
 }
 
-pub fn commit_tx(package_id: PackageId, db: String, tx_id: u64) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id,
-            db,
-            action: SqliteAction::Commit { tx_id },
-        })?)
-        .send_and_await_response(5)?;
+impl Sqlite {
+    pub fn read(
+        &self,
+        query: String,
+        params: Vec<SqlValue>,
+    ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
+        let res = Request::new()
+            .target(("our", "sqlite", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&SqliteRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: SqliteAction::Read { query },
+            })?)
+            .payload_bytes(serde_json::to_vec(&params)?)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp = serde_json::from_slice::<SqliteResponse>(&ipc).map_err(|e| {
-                SqliteError::InputError {
-                    error: format!("sqlite: gave unparsable response: {}", e),
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+                match response {
+                    SqliteResponse::Read => {
+                        let payload = get_payload().ok_or_else(|| SqliteError::InputError {
+                            error: format!("sqlite: no payload"),
+                        })?;
+                        let values = serde_json::from_slice::<
+                            Vec<HashMap<String, serde_json::Value>>,
+                        >(&payload.bytes)
+                        .map_err(|e| SqliteError::InputError {
+                            error: format!("sqlite: gave unparsable response: {}", e),
+                        })?;
+                        Ok(values)
+                    }
+                    SqliteResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!(
+                        "sqlite: unexpected response {:?}",
+                        response
+                    )),
                 }
-            })?;
-
-            if let SqliteResponse::Ok = resp {
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("sqlite: unexpected response: {:?}", resp))
             }
+            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected response")),
+    }
+
+    pub fn write(
+        &self,
+        statement: String,
+        params: Vec<serde_json::Value>,
+        tx_id: Option<u64>,
+    ) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "sqlite", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&SqliteRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: SqliteAction::Write { statement, tx_id },
+            })?)
+            .payload_bytes(serde_json::to_vec(&params)?)
+            .send_and_await_response(5)?;
+
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+                match response {
+                    SqliteResponse::Ok => Ok(()),
+                    SqliteResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!(
+                        "sqlite: unexpected response {:?}",
+                        response
+                    )),
+                }
+            }
+            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+        }
+    }
+
+    pub fn begin_tx(&self) -> anyhow::Result<u64> {
+        let res = Request::new()
+            .target(("our", "sqlite", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&SqliteRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: SqliteAction::BeginTx,
+            })?)
+            .send_and_await_response(5)?;
+
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+                match response {
+                    SqliteResponse::BeginTx { tx_id } => Ok(tx_id),
+                    SqliteResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!(
+                        "sqlite: unexpected response {:?}",
+                        response
+                    )),
+                }
+            }
+            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+        }
+    }
+
+    pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "sqlite", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&SqliteRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: SqliteAction::Commit { tx_id },
+            })?)
+            .send_and_await_response(5)?;
+
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+                match response {
+                    SqliteResponse::Ok => Ok(()),
+                    SqliteResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!(
+                        "sqlite: unexpected response {:?}",
+                        response
+                    )),
+                }
+            }
+            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+        }
     }
 }
