@@ -70,69 +70,16 @@ pub enum SqliteError {
     InputError { error: String },
 }
 
+/// Sqlite helper struct for a db.
+/// Opening or creating a db will give you a Result<sqlite>.
+/// You can call it's impl functions to interact with it.
 pub struct Sqlite {
     pub package_id: PackageId,
     pub db: String,
 }
 
-pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
-    let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id: package_id.clone(),
-            db: db.to_string(),
-            action: SqliteAction::Open,
-        })?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
-
-            match response {
-                SqliteResponse::Ok => Ok(Sqlite {
-                    package_id,
-                    db: db.to_string(),
-                }),
-                SqliteResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!(
-                    "sqlite: unexpected response {:?}",
-                    response
-                )),
-            }
-        }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
-    }
-}
-
-pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
-            package_id: package_id.clone(),
-            db: db.to_string(),
-            action: SqliteAction::RemoveDb,
-        })?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
-
-            match response {
-                SqliteResponse::Ok => Ok(()),
-                SqliteResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!(
-                    "sqlite: unexpected response {:?}",
-                    response
-                )),
-            }
-        }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
-    }
-}
-
 impl Sqlite {
+    /// Query database. Only allows sqlite read keywords.
     pub fn read(
         &self,
         query: String,
@@ -176,6 +123,7 @@ impl Sqlite {
         }
     }
 
+    /// Execute a statement. Only allows sqlite write keywords.
     pub fn write(
         &self,
         statement: String,
@@ -209,6 +157,7 @@ impl Sqlite {
         }
     }
 
+    /// Begin a transaction.
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "uqbar"))
@@ -236,6 +185,7 @@ impl Sqlite {
         }
     }
 
+    /// Commit a transaction.
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "uqbar"))
@@ -261,5 +211,64 @@ impl Sqlite {
             }
             _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
+    }
+}
+
+/// Open or create sqlite database.
+pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
+    let res = Request::new()
+        .target(("our", "sqlite", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&SqliteRequest {
+            package_id: package_id.clone(),
+            db: db.to_string(),
+            action: SqliteAction::Open,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+            match response {
+                SqliteResponse::Ok => Ok(Sqlite {
+                    package_id,
+                    db: db.to_string(),
+                }),
+                SqliteResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!(
+                    "sqlite: unexpected response {:?}",
+                    response
+                )),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+    }
+}
+
+/// Remove and delete sqlite database.
+pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
+    let res = Request::new()
+        .target(("our", "sqlite", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&SqliteRequest {
+            package_id: package_id.clone(),
+            db: db.to_string(),
+            action: SqliteAction::RemoveDb,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+
+            match response {
+                SqliteResponse::Ok => Ok(()),
+                SqliteResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!(
+                    "sqlite: unexpected response {:?}",
+                    response
+                )),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
     }
 }

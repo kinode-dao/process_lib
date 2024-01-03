@@ -55,58 +55,8 @@ pub struct Kv {
     pub db: String,
 }
 
-pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id: package_id.clone(),
-            db: db.to_string(),
-            action: KvAction::Open,
-        })?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
-
-            match response {
-                KvResponse::Ok => Ok(Kv {
-                    package_id,
-                    db: db.to_string(),
-                }),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
-            }
-        }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
-    }
-}
-
-pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id: package_id.clone(),
-            db: db.to_string(),
-            action: KvAction::RemoveDb,
-        })?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
-
-            match response {
-                KvResponse::Ok => Ok(()),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
-            }
-        }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
-    }
-}
-
 impl Kv {
+    /// Get a value.
     pub fn get(&self, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         let res = Request::new()
             .target(("our", "kv", "sys", "uqbar"))
@@ -137,6 +87,7 @@ impl Kv {
         }
     }
 
+    /// Set a value, optionally in a transaction.
     pub fn set(&self, key: Vec<u8>, value: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "uqbar"))
@@ -162,6 +113,7 @@ impl Kv {
         }
     }
 
+    /// Delete a value, optionally in a transaction.
     pub fn delete(&self, key: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "uqbar"))
@@ -186,6 +138,7 @@ impl Kv {
         }
     }
 
+    /// Begin a transaction.
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
             .target(("our", "kv", "sys", "uqbar"))
@@ -210,6 +163,7 @@ impl Kv {
         }
     }
 
+    /// Commit a transaction.
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "uqbar"))
@@ -232,5 +186,58 @@ impl Kv {
             }
             _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
+    }
+}
+
+/// Opens or creates a kv db.
+pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
+    let res = Request::new()
+        .target(("our", "kv", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&KvRequest {
+            package_id: package_id.clone(),
+            db: db.to_string(),
+            action: KvAction::Open,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+
+            match response {
+                KvResponse::Ok => Ok(Kv {
+                    package_id,
+                    db: db.to_string(),
+                }),
+                KvResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+    }
+}
+
+/// Removes and deletes a kv db.
+pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
+    let res = Request::new()
+        .target(("our", "kv", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&KvRequest {
+            package_id: package_id.clone(),
+            db: db.to_string(),
+            action: KvAction::RemoveDb,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+
+            match response {
+                KvResponse::Ok => Ok(()),
+                KvResponse::Err { error } => Err(error.into()),
+                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
 }
