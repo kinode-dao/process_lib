@@ -48,12 +48,20 @@ pub enum KvError {
     IOError { error: String },
 }
 
-pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
+/// Kv helper struct for a db.
+/// Opening or creating a kv will give you a Result<Kv>.
+/// You can call it's impl functions to interact with it.
+pub struct Kv {
+    pub package_id: PackageId,
+    pub db: String,
+}
+
+pub fn new(package_id: PackageId, db: String) -> anyhow::Result<Kv> {
     let res = Request::new()
         .target(("our", "kv", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
+            package_id: package_id.clone(),
+            db: db.clone(),
             action: KvAction::New,
         })?)
         .send_and_await_response(5)?;
@@ -63,7 +71,7 @@ pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
             let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
             match response {
-                KvResponse::Ok => Ok(()),
+                KvResponse::Ok => Ok(Kv { package_id, db }),
                 KvResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
@@ -72,140 +80,131 @@ pub fn new(package_id: PackageId, db: String) -> anyhow::Result<()> {
     }
 }
 
-pub fn get(package_id: PackageId, db: String, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
-            action: KvAction::Get { key },
-        })?)
-        .send_and_await_response(5)?;
+impl Kv {
+    pub fn get(&self, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+        let res = Request::new()
+            .target(("our", "kv", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Get { key },
+            })?)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
-            match response {
-                KvResponse::Get { .. } => {
-                    let bytes = match get_payload() {
-                        Some(bytes) => bytes.bytes,
-                        None => return Err(anyhow::anyhow!("kv: no payload")),
-                    };
-                    Ok(bytes)
+                match response {
+                    KvResponse::Get { .. } => {
+                        let bytes = match get_payload() {
+                            Some(bytes) => bytes.bytes,
+                            None => return Err(anyhow::anyhow!("kv: no payload")),
+                        };
+                        Ok(bytes)
+                    }
+                    KvResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
+            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
-}
 
-pub fn set(
-    package_id: PackageId,
-    db: String,
-    key: Vec<u8>,
-    value: Vec<u8>,
-    tx_id: Option<u64>,
-) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
-            action: KvAction::Set { key, tx_id },
-        })?)
-        .payload_bytes(value)
-        .send_and_await_response(5)?;
+    pub fn set(&self, key: Vec<u8>, value: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "kv", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Set { key, tx_id },
+            })?)
+            .payload_bytes(value)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
-            match response {
-                KvResponse::Ok => Ok(()),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                match response {
+                    KvResponse::Ok => Ok(()),
+                    KvResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
             }
+            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
-}
 
-pub fn delete(
-    package_id: PackageId,
-    db: String,
-    key: Vec<u8>,
-    tx_id: Option<u64>,
-) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
-            action: KvAction::Delete { key, tx_id },
-        })?)
-        .send_and_await_response(5)?;
+    pub fn delete(&self, key: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "kv", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Delete { key, tx_id },
+            })?)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
-            match response {
-                KvResponse::Ok => Ok(()),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                match response {
+                    KvResponse::Ok => Ok(()),
+                    KvResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
             }
+            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
-}
 
-pub fn begin_tx(package_id: PackageId, db: String) -> anyhow::Result<u64> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
-            action: KvAction::BeginTx,
-        })?)
-        .send_and_await_response(5)?;
+    pub fn begin_tx(&self) -> anyhow::Result<u64> {
+        let res = Request::new()
+            .target(("our", "kv", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::BeginTx,
+            })?)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
-            match response {
-                KvResponse::BeginTx { tx_id } => Ok(tx_id),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                match response {
+                    KvResponse::BeginTx { tx_id } => Ok(tx_id),
+                    KvResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
             }
+            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
-}
 
-pub fn commit_tx(package_id: PackageId, db: String, tx_id: u64) -> anyhow::Result<()> {
-    let res = Request::new()
-        .target(("our", "kv", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&KvRequest {
-            package_id,
-            db,
-            action: KvAction::Commit { tx_id },
-        })?)
-        .send_and_await_response(5)?;
+    pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "kv", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Commit { tx_id },
+            })?)
+            .send_and_await_response(5)?;
 
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        match res {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
 
-            match response {
-                KvResponse::Ok => Ok(()),
-                KvResponse::Err { error } => Err(error.into()),
-                _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                match response {
+                    KvResponse::Ok => Ok(()),
+                    KvResponse::Err { error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
             }
+            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
 }
