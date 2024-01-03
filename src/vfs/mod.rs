@@ -5,6 +5,11 @@ use thiserror::Error;
 pub mod directory;
 pub mod file;
 
+#[allow(unused_imports)]
+use directory::*;
+#[allow(unused_imports)]
+use file::*;
+
 /// IPC format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
