@@ -1,204 +1,5 @@
+use super::{FileMetadata, SeekFrom, VfsAction, VfsRequest, VfsResponse};
 use crate::{get_payload, Message, PackageId, Request};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-/// IPC format for requests sent to vfs runtime module
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VfsRequest {
-    /// path is always prepended by package_id, the capabilities of the topmost folder are checked
-    /// "/your_package:publisher.uq/drive_folder/another_folder_or_file"
-    pub path: String,
-    pub action: VfsAction,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum VfsAction {
-    CreateDrive,
-    CreateDir,
-    CreateDirAll,
-    CreateFile,
-    OpenFile { create: bool },
-    CloseFile,
-    Write,
-    WriteAt,
-    Append,
-    SyncAll,
-    Read,
-    ReadDir,
-    ReadToEnd,
-    ReadExact(u64),
-    ReadToString,
-    Seek { seek_from: SeekFrom },
-    RemoveFile,
-    RemoveDir,
-    RemoveDirAll,
-    Rename { new_path: String },
-    Metadata,
-    AddZip,
-    CopyFile { new_path: String },
-    Len,
-    SetLen(u64),
-    Hash,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum SeekFrom {
-    Start(u64),
-    End(i64),
-    Current(i64),
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum FileType {
-    File,
-    Directory,
-    Symlink,
-    Other,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FileMetadata {
-    pub file_type: FileType,
-    pub len: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DirEntry {
-    pub path: String,
-    pub file_type: FileType,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum VfsResponse {
-    Ok,
-    Err(VfsError),
-    Read,
-    SeekFrom(u64),
-    ReadDir(Vec<DirEntry>),
-    ReadToString(String),
-    Metadata(FileMetadata),
-    Len(u64),
-    Hash([u8; 32]),
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum VfsError {
-    #[error("vfs: No capability for action {action} at path {path}")]
-    NoCap { action: String, path: String },
-    #[error("vfs: Bytes payload required for {action} at path {path}")]
-    BadBytes { action: String, path: String },
-    #[error("vfs: bad request error: {error}")]
-    BadRequest { error: String },
-    #[error("vfs: error parsing path: {path}, error: {error}")]
-    ParseError { error: String, path: String },
-    #[error("vfs: IO error: {error}, at path {path}")]
-    IOError { error: String, path: String },
-    #[error("vfs: kernel capability channel error: {error}")]
-    CapChannelFail { error: String },
-    #[error("vfs: Bad JSON payload: {error}")]
-    BadJson { error: String },
-    #[error("vfs: File not found at path {path}")]
-    NotFound { path: String },
-    #[error("vfs: Creating directory failed at path: {path}: {error}")]
-    CreateDirError { path: String, error: String },
-}
-
-#[allow(dead_code)]
-impl VfsError {
-    pub fn kind(&self) -> &str {
-        match *self {
-            VfsError::NoCap { .. } => "NoCap",
-            VfsError::BadBytes { .. } => "BadBytes",
-            VfsError::BadRequest { .. } => "BadRequest",
-            VfsError::ParseError { .. } => "ParseError",
-            VfsError::IOError { .. } => "IOError",
-            VfsError::CapChannelFail { .. } => "CapChannelFail",
-            VfsError::BadJson { .. } => "NoJson",
-            VfsError::NotFound { .. } => "NotFound",
-            VfsError::CreateDirError { .. } => "CreateDirError",
-        }
-    }
-}
-
-/// Creates a drive with path "/package_id/drive", gives you read and write caps.
-/// Will only work on the same package_id as you're calling it from, unless you
-/// have root capabilities.
-pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
-    let path = format!("/{}/{}", package_id, drive);
-    let res = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&VfsRequest {
-            path: path.clone(),
-            action: VfsAction::CreateDrive,
-        })?)
-        .send_and_await_response(5)?;
-
-    match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
-            match response {
-                VfsResponse::Ok => Ok(path),
-                VfsResponse::Err(e) => Err(e.into()),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
-            }
-        }
-        _ => return Err(anyhow::anyhow!("vfs: unexpected message: {:?}", res)),
-    }
-}
-
-/// Opens a file at path, if no file at path, creates one if boolean create is true.
-pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
-    let request = VfsRequest {
-        path: path.to_string(),
-        action: VfsAction::OpenFile { create },
-    };
-
-    let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
-
-    match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
-            match response {
-                VfsResponse::Ok => Ok(File {
-                    path: path.to_string(),
-                }),
-                VfsResponse::Err(e) => Err(e.into()),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
-            }
-        }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
-    }
-}
-
-/// Creates a file at path, if file found at path, truncates it to 0.
-pub fn create_file(path: &str) -> anyhow::Result<File> {
-    let request = VfsRequest {
-        path: path.to_string(),
-        action: VfsAction::CreateFile,
-    };
-
-    let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
-
-    match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
-            match response {
-                VfsResponse::Ok => Ok(File {
-                    path: path.to_string(),
-                }),
-                VfsResponse::Err(e) => Err(e.into()),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
-            }
-        }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
-    }
-}
 
 /// Vfs helper struct for a file.
 /// Opening or creating a file will give you a Result<File>.
@@ -456,17 +257,37 @@ impl File {
     }
 }
 
-/// Opens or creates a directory at path.
-/// If trying to create an existing file, will just give you the path.
-pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
-    if !create {
-        return Ok(Directory {
-            path: path.to_string(),
-        });
+/// Creates a drive with path "/package_id/drive", gives you read and write caps.
+/// Will only work on the same package_id as you're calling it from, unless you
+/// have root capabilities.
+pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
+    let path = format!("/{}/{}", package_id, drive);
+    let res = Request::new()
+        .target(("our", "vfs", "sys", "uqbar"))
+        .ipc(serde_json::to_vec(&VfsRequest {
+            path: path.clone(),
+            action: VfsAction::CreateDrive,
+        })?)
+        .send_and_await_response(5)?;
+
+    match res {
+        Ok(Message::Response { ipc, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            match response {
+                VfsResponse::Ok => Ok(path),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+            }
+        }
+        _ => return Err(anyhow::anyhow!("vfs: unexpected message: {:?}", res)),
     }
+}
+
+/// Opens a file at path, if no file at path, creates one if boolean create is true.
+pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     let request = VfsRequest {
         path: path.to_string(),
-        action: VfsAction::CreateDir,
+        action: VfsAction::OpenFile { create },
     };
 
     let message = Request::new()
@@ -478,7 +299,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Ok => Ok(Directory {
+                VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
                 }),
                 VfsResponse::Err(e) => Err(e.into()),
@@ -489,46 +310,13 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     }
 }
 
-/// Vfs helper struct for a directory.
-/// Opening or creating a directory will give you a Result<Directory>.
-/// You can call it's impl functions to interact with it.
-pub struct Directory {
-    pub path: String,
-}
-
-impl Directory {
-    /// Iterates through children of directory, returning a vector of DirEntries.
-    /// DirEntries contain the path and file type of each child.
-    pub fn read(&self) -> anyhow::Result<Vec<DirEntry>> {
-        let request = VfsRequest {
-            path: self.path.clone(),
-            action: VfsAction::ReadDir,
-        };
-        let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
-            .ipc(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
-
-        match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
-                match response {
-                    VfsResponse::ReadDir(entries) => Ok(entries),
-                    VfsResponse::Err(e) => Err(e.into()),
-                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
-                }
-            }
-            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
-        }
-    }
-}
-
-/// Metadata of a path, returns file type and length.
-pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
+/// Creates a file at path, if file found at path, truncates it to 0.
+pub fn create_file(path: &str) -> anyhow::Result<File> {
     let request = VfsRequest {
         path: path.to_string(),
-        action: VfsAction::Metadata,
+        action: VfsAction::CreateFile,
     };
+
     let message = Request::new()
         .target(("our", "vfs", "sys", "uqbar"))
         .ipc(serde_json::to_vec(&request)?)
@@ -538,7 +326,9 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
         Ok(Message::Response { ipc, .. }) => {
             let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
             match response {
-                VfsResponse::Metadata(metadata) => Ok(metadata),
+                VfsResponse::Ok => Ok(File {
+                    path: path.to_string(),
+                }),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
