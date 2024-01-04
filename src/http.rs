@@ -236,7 +236,8 @@ impl IncomingHttpRequest {
             .path_segments()
             .ok_or(anyhow::anyhow!("url path missing process ID!"))?
             .skip(1)
-            .collect())
+            .collect::<Vec<&str>>()
+            .join("/"))
     }
 }
 
