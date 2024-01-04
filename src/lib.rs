@@ -197,27 +197,12 @@ where
     }
 }
 
-/// Attach the capability to message this process to the next message.
-pub fn attach_messaging(our: &Address) {
-    let _ = crate::attach_capabilities(&vec![Capability {
-        issuer: our.clone(),
-        params: "\"messaging\"".to_string(),
-    }]);
-}
-
 /// See if we have the capability to message a certain process.
 /// Note if you have not saved the capability, you will not be able to message the other process.
 pub fn can_message(address: &Address) -> bool {
     crate::our_capabilities()
         .iter()
         .any(|cap| cap.params == "\"messaging\"" && cap.issuer == *address)
-}
-
-/// See if the sender attached the specified capability
-pub fn has_attached_capability(our: &Address, params: &str) -> bool {
-    crate::get_capabilities()
-        .iter()
-        .any(|cap| cap.issuer == *our && cap.params == params)
 }
 
 /// Get a capability in our store

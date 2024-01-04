@@ -24,6 +24,7 @@ impl OnExit {
                         metadata: req.1.metadata,
                         payload: req.2,
                         context: None,
+                        capabilities: req.1.capabilities, // TODO double check
                     });
                 }
                 OnExit::Requests(requests)
@@ -100,6 +101,7 @@ impl OnExit {
                                 .ipc
                                 .ok_or(anyhow::anyhow!("request without ipc given"))?,
                             metadata: req.metadata,
+                            capabilities: req.capabilities, // TODO double check
                         },
                         req.payload,
                     ));

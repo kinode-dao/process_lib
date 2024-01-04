@@ -37,6 +37,7 @@ interface standard {
         ipc: list<u8>,
         metadata: option<json>,
         // to grab payload, use get_payload()
+        capabilities: list<capability>,
     }
 
     record response {
@@ -44,6 +45,7 @@ interface standard {
         ipc: list<u8>,
         metadata: option<json>,
         // to grab payload, use get_payload()
+        capabilities: list<capability>
     }
 
     // a message can be a request or a response.
@@ -122,13 +124,6 @@ interface standard {
             ) -> result<process-id, spawn-error>;
 
     // capabilities management
-
-    // attaches a list of capabilities to our next message
-    attach-capabilities: func(capabilities: list<capability>);
-
-    // gets all capabilities attached to the last message we received
-    // doesn't impact persisted state
-    get-capabilities: func() -> list<capability>;
 
     // saves the capabilities to persisted process state
     save-capabilities: func(caps: list<capability>); // TODO result<string, string> ?

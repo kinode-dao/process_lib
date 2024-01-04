@@ -11,6 +11,7 @@ pub struct Request {
     pub metadata: Option<String>,
     pub payload: Option<Payload>,
     pub context: Option<Vec<u8>>,
+    pub capabilities: Vec<Capability>,
 }
 
 #[allow(dead_code)]
@@ -27,6 +28,7 @@ impl Request {
             metadata: None,
             payload: None,
             context: None,
+            capabilities: vec![],
         }
     }
     /// Start building a new Request with the Address of the target. In order
@@ -44,6 +46,7 @@ impl Request {
             metadata: None,
             payload: None,
             context: None,
+            capabilities: vec![],
         }
     }
     /// Set the target [`Address`] that this request will go to.
@@ -220,6 +223,18 @@ impl Request {
         self.context = Some(context.try_into()?);
         Ok(self)
     }
+    /// Attach capabilities to the next request
+    pub fn capabilities(mut self, capabilities: Vec<Capability>) -> Self {
+        self.capabilities = capabilities;
+        self
+    }
+    /// Attach the capability to message this process to the next message.
+    pub fn attach_messaging(mut self, our: &Address) {
+        self.capabilities.extend(vec![Capability {
+            issuer: our.clone(),
+            params: "\"messaging\"".to_string(),
+        }]);
+    }
     /// Attempt to send the request. This will only fail if the `target` or `ipc`
     /// fields have not been set.
     pub fn send(self) -> anyhow::Result<()> {
@@ -231,6 +246,7 @@ impl Request {
                     expects_response: self.timeout,
                     ipc,
                     metadata: self.metadata,
+                    capabilities: self.capabilities,
                 },
                 self.context.as_ref(),
                 self.payload.as_ref(),
@@ -254,6 +270,7 @@ impl Request {
                     expects_response: Some(timeout),
                     ipc,
                     metadata: self.metadata,
+                    capabilities: self.capabilities,
                 },
                 self.payload.as_ref(),
             ) {
