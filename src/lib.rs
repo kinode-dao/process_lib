@@ -21,6 +21,9 @@ wit_bindgen::generate!({
     world: "lib",
 });
 
+/// Interact with the eth provider module.
+#[cfg(feature = "eth")]
+pub mod eth;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
