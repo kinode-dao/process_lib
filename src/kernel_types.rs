@@ -47,13 +47,6 @@ pub struct Capability {
     pub params: String, // JSON-string
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct SignedCapability {
-    pub issuer: Address,
-    pub params: String,     // JSON-string
-    pub signature: Vec<u8>, // signed by the kernel, so we can verify that the kernel issued it
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendError {
     pub kind: SendErrorKind,
