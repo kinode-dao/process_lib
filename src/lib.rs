@@ -37,6 +37,8 @@ pub mod kv;
 pub mod sqlite;
 /// Interact with the timer runtime module.
 pub mod timer;
+/// Interact with the virtual filesystem
+pub mod vfs;
 
 // Types
 

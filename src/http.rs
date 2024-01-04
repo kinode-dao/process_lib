@@ -1,4 +1,5 @@
-use crate::kernel_types::{FileType, Payload, VfsAction, VfsRequest, VfsResponse};
+use crate::kernel_types::Payload;
+use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
     get_payload, Address, Message, Payload as uqPayload, ProcessId, Request as uqRequest,
     Response as uqResponse,
@@ -199,6 +200,23 @@ pub struct WsRegisterResponse {
 pub struct JwtClaims {
     pub username: String,
     pub expiration: u64,
+}
+
+impl HttpServerRequest {
+    /// Parse a byte slice into an HttpServerRequest.
+    pub fn from_bytes(bytes: &[u8]) -> serde_json::Result<Self> {
+        serde_json::from_slice(bytes)
+    }
+
+    /// Filter the general-purpose [`HttpServerRequest`], which contains HTTP requests
+    /// and WebSocket messages, into just the HTTP request. Consumes the original request
+    /// and returns `None` if the request was WebSocket-related.
+    pub fn request(self) -> Option<IncomingHttpRequest> {
+        match self {
+            HttpServerRequest::Http(req) => Some(req),
+            _ => None,
+        }
+    }
 }
 
 impl IncomingHttpRequest {

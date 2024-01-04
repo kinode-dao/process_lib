@@ -120,6 +120,12 @@ impl PartialEq for Address {
     }
 }
 
+impl From<&Address> for Address {
+    fn from(input: &Address) -> Self {
+        input.clone()
+    }
+}
+
 impl<T, U, V, W> From<(T, U, V, W)> for Address
 where
     T: Into<String>,
