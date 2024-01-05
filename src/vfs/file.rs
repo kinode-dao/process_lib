@@ -107,6 +107,63 @@ impl File {
         }
     }
 
+    /// Reads until end of file from current cursor position
+    /// Returns a vector of bytes.
+    pub fn read_to_end(&self) -> anyhow::Result<Vec<u8>> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::ReadToEnd,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::Read => {
+                        let data = match get_payload() {
+                            Some(bytes) => bytes.bytes,
+                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                        };
+                        Ok(data)
+                    }
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+        }
+    }
+
+    /// Reads until end of file from current cursor position, converts to String.
+    /// Throws error if bytes aren't valid utf-8.
+    /// Returns a vector of bytes.
+    pub fn read_to_string(&self) -> anyhow::Result<String> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::ReadToString,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::ReadToString(s) => Ok(s),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+        }
+    }
+
     /// Write entire slice as the new file.
     /// Truncates anything that existed at path before.
     pub fn write(&self, buffer: &[u8]) -> anyhow::Result<()> {
