@@ -54,6 +54,8 @@ use message::wit_message_to_message;
 pub use message::{Message, SendError, SendErrorKind};
 mod on_exit;
 pub use on_exit::OnExit;
+mod capability;
+pub use capability::Capability;
 
 /// Implement the wit-bindgen specific code that the kernel uses to hook into
 /// a process. Write an `init(our: Address)` function and call it with this.
