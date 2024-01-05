@@ -36,7 +36,7 @@ impl Directory {
 }
 
 /// Opens or creates a directory at path.
-/// If trying to create an existing file, will just give you the path.
+/// If trying to create an existing directory, will just give you the path.
 pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     if !create {
         return Ok(Directory {
