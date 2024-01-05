@@ -216,6 +216,31 @@ impl File {
         }
     }
 
+    /// Write buffer to the end position of file.
+    pub fn append(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
+        let request = VfsRequest {
+            path: self.path.clone(),
+            action: VfsAction::Append,
+        };
+        let message = Request::new()
+            .target(("our", "vfs", "sys", "uqbar"))
+            .ipc(serde_json::to_vec(&request)?)
+            .payload_bytes(buffer)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { ipc, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+                match response {
+                    VfsResponse::Ok => Ok(()),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+        }
+    }
+
     /// Seek file to position.
     /// Returns the new position.
     pub fn seek(&mut self, pos: SeekFrom) -> anyhow::Result<u64> {
