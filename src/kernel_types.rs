@@ -90,9 +90,13 @@ pub enum KernelCommand {
     ///
     /// The process that sends this command will be given messaging capabilities
     /// for the new process if `public` is false.
+    ///
+    /// All capabilities passed into initial_capabilities must be held by the source
+    /// of this message, or the kernel will discard them (silently for now).
     InitializeProcess {
         id: ProcessId,
         wasm_bytes_handle: String,
+        wit_version: Option<u32>,
         on_exit: OnExit,
         initial_capabilities: HashSet<Capability>,
         public: bool,
@@ -106,6 +110,15 @@ pub enum KernelCommand {
     /// RUNTIME ONLY: notify the kernel that the runtime is shutting down and it
     /// should gracefully stop and persist the running processes.
     Shutdown,
+    /// Ask kernel to produce debugging information
+    Debug(KernelPrint),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KernelPrint {
+    ProcessMap,
+    Process(ProcessId),
+    HasCap { on: ProcessId, cap: Capability },
 }
 
 /// IPC format for all KernelCommand responses
