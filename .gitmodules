@@ -1,0 +1,3 @@
+[submodule "uqwit"]
+	path = uqwit
+	url = https://github.com/uqbar-dao/uqwit.git

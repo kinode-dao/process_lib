@@ -17,7 +17,7 @@ pub use crate::uqbar::process::standard::*;
 use serde::{Deserialize, Serialize};
 
 wit_bindgen::generate!({
-    path: "wit",
+    path: "uqwit",
     world: "lib",
 });
 
