@@ -40,7 +40,7 @@ impl SubscribeLogsRequest {
     pub fn send(mut self) -> anyhow::Result<()> {
         self.request = self
             .request
-            .ipc(serde_json::to_vec(&EthRequest::SubscribeLogs(
+            .body(serde_json::to_vec(&EthRequest::SubscribeLogs(
                 SubscribeLogs {
                     filter: self.filter.clone(),
                 },
