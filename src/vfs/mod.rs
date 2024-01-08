@@ -8,7 +8,7 @@ pub mod file;
 pub use directory::*;
 pub use file::*;
 
-/// IPC format for requests sent to vfs runtime module
+/// IPC body format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
     /// path is always prepended by package_id, the capabilities of the topmost folder are checked
@@ -91,7 +91,7 @@ pub enum VfsResponse {
 pub enum VfsError {
     #[error("vfs: No capability for action {action} at path {path}")]
     NoCap { action: String, path: String },
-    #[error("vfs: Bytes payload required for {action} at path {path}")]
+    #[error("vfs: Bytes blob required for {action} at path {path}")]
     BadBytes { action: String, path: String },
     #[error("vfs: bad request error: {error}")]
     BadRequest { error: String },
@@ -101,7 +101,7 @@ pub enum VfsError {
     IOError { error: String, path: String },
     #[error("vfs: kernel capability channel error: {error}")]
     CapChannelFail { error: String },
-    #[error("vfs: Bad JSON payload: {error}")]
+    #[error("vfs: Bad JSON blob: {error}")]
     BadJson { error: String },
     #[error("vfs: File not found at path {path}")]
     NotFound { path: String },
@@ -133,13 +133,13 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
         action: VfsAction::Metadata,
     };
     let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&request)?)
+        .target(("our", "vfs", "sys", "nectar"))
+        .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
     match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Metadata(metadata) => Ok(metadata),
                 VfsResponse::Err(e) => Err(e.into()),

@@ -27,7 +27,7 @@ impl SubscribeLogsRequest {
     pub fn new() -> Self {
         let request = uqRequest::new().target(uqAddress::new(
             "our",
-            ProcessId::new(Some("eth"), "sys", "uqbar"),
+            ProcessId::new(Some("eth"), "sys", "nectar"),
         ));
 
         SubscribeLogsRequest {

@@ -4,20 +4,20 @@ use crate::*;
 /// practice when handling a message is to do this:
 /// 1. Match on whether it's a request or a response
 /// 2. Match on who the message is from (the `source`)
-/// 3. Parse and interpret the `ipc`, `metadata`, and/or `context` based on
+/// 3. Parse and interpret the `body`, `metadata`, and/or `context` based on
 /// who the message is from and what your process expects from them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
     Request {
         source: Address,
         expects_response: Option<u64>,
-        ipc: Vec<u8>,
+        body: Vec<u8>,
         metadata: Option<String>,
         capabilities: Vec<Capability>,
     },
     Response {
         source: Address,
-        ipc: Vec<u8>,
+        body: Vec<u8>,
         metadata: Option<String>,
         context: Option<Vec<u8>>,
         capabilities: Vec<Capability>,
@@ -38,11 +38,11 @@ impl Message {
             Message::Response { source, .. } => source,
         }
     }
-    /// Get the IPC of a message.
-    pub fn ipc(&self) -> &[u8] {
+    /// Get the IPC body of a message.
+    pub fn body(&self) -> &[u8] {
         match self {
-            Message::Request { ipc, .. } => ipc,
-            Message::Response { ipc, .. } => ipc,
+            Message::Request { body, .. } => body,
+            Message::Response { body, .. } => body,
         }
     }
     /// Get the metadata of a message.
@@ -59,9 +59,9 @@ impl Message {
             Message::Response { context, .. } => context.as_ref().map(|s| s.as_slice()),
         }
     }
-    /// Get the payload of a message, if any.
-    pub fn payload(&self) -> Option<Payload> {
-        crate::get_payload()
+    /// Get the blob of a message, if any.
+    pub fn blob(&self) -> Option<LazyLoadBlob> {
+        crate::get_blob()
     }
 
     /// Get the capabilities of a message.
@@ -81,16 +81,10 @@ pub enum SendErrorKind {
 
 impl SendErrorKind {
     pub fn is_offline(&self) -> bool {
-        match self {
-            SendErrorKind::Offline => true,
-            _ => false,
-        }
+        matches!(self, SendErrorKind::Offline)
     }
     pub fn is_timeout(&self) -> bool {
-        match self {
-            SendErrorKind::Timeout => true,
-            _ => false,
-        }
+        matches!(self, SendErrorKind::Timeout)
     }
 }
 
@@ -98,7 +92,7 @@ impl SendErrorKind {
 pub struct SendError {
     pub kind: SendErrorKind,
     pub message: Message,
-    pub payload: Option<Payload>,
+    pub lazy_load_blob: Option<LazyLoadBlob>,
     pub context: Option<Vec<u8>>,
 }
 
@@ -109,11 +103,11 @@ impl SendError {
     pub fn message(&self) -> &Message {
         &self.message
     }
-    pub fn payload(&self) -> Option<&Payload> {
-        self.payload.as_ref()
+    pub fn blob(&self) -> Option<&LazyLoadBlob> {
+        self.lazy_load_blob.as_ref()
     }
     pub fn context(&self) -> Option<&[u8]> {
-        self.context.as_ref().map(|s| s.as_slice())
+        self.context.as_deref()
     }
 }
 
@@ -137,19 +131,19 @@ impl std::error::Error for SendError {
 
 pub fn wit_message_to_message(
     source: Address,
-    message: crate::uqbar::process::standard::Message,
+    message: crate::nectar::process::standard::Message,
 ) -> Message {
     match message {
-        crate::uqbar::process::standard::Message::Request(req) => Message::Request {
+        crate::nectar::process::standard::Message::Request(req) => Message::Request {
             source,
             expects_response: req.expects_response,
-            ipc: req.ipc,
+            body: req.body,
             metadata: req.metadata,
             capabilities: req.capabilities,
         },
-        crate::uqbar::process::standard::Message::Response((resp, context)) => Message::Response {
+        crate::nectar::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
-            ipc: resp.ipc,
+            body: resp.body,
             metadata: resp.metadata,
             context,
             capabilities: resp.capabilities,

@@ -1,5 +1,5 @@
 # process_lib
 
-Library of functions for more ergonomic Uqbar process development.
+Library of functions for more ergonomic Nectar process development.
 
 ## TODO

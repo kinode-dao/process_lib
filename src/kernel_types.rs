@@ -1,4 +1,4 @@
-use crate::uqbar::process::standard as wit;
+use crate::nectar::process::standard as wit;
 use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,14 +6,14 @@ use std::collections::HashSet;
 //
 // process-facing kernel types, used for process
 // management and message-passing
-// matches types in uqbar.wit
+// matches types in nectar.wit
 //
 
 pub type Context = Vec<u8>;
 pub type NodeId = String; // QNS domain name
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Payload {
+pub struct LazyLoadBlob {
     pub mime: Option<String>, // MIME type
     pub bytes: Vec<u8>,
 }
@@ -22,7 +22,7 @@ pub struct Payload {
 pub struct Request {
     pub inherit: bool,
     pub expects_response: Option<u64>, // number of seconds until timeout
-    pub ipc: Vec<u8>,
+    pub body: Vec<u8>,
     pub metadata: Option<String>, // JSON-string
     pub capabilities: Vec<Capability>,
 }
@@ -30,7 +30,7 @@ pub struct Request {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Response {
     pub inherit: bool,
-    pub ipc: Vec<u8>,
+    pub body: Vec<u8>,
     pub metadata: Option<String>, // JSON-string
     pub capabilities: Vec<Capability>,
 }
@@ -52,7 +52,7 @@ pub struct SendError {
     pub kind: SendErrorKind,
     pub target: Address,
     pub message: Message,
-    pub payload: Option<Payload>,
+    pub lazy_load_blob: Option<LazyLoadBlob>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,7 +65,7 @@ pub enum SendErrorKind {
 pub enum OnExit {
     None,
     Restart,
-    Requests(Vec<(Address, Request, Option<Payload>)>),
+    Requests(Vec<(Address, Request, Option<LazyLoadBlob>)>),
 }
 
 impl OnExit {
@@ -78,7 +78,7 @@ impl OnExit {
     }
 }
 
-/// IPC format for requests sent to kernel runtime module
+/// IPC body format for requests sent to kernel runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KernelCommand {
     /// RUNTIME ONLY: used to notify the kernel that booting is complete and
@@ -126,7 +126,7 @@ pub enum KernelPrint {
     HasCap { on: ProcessId, cap: Capability },
 }
 
-/// IPC format for all KernelCommand responses
+/// IPC body format for all KernelCommand responses
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KernelResponse {
     InitializedProcess,
@@ -223,17 +223,17 @@ impl std::fmt::Display for Message {
         match self {
             Message::Request(request) => write!(
                 f,
-                "Request(\n        inherit: {},\n        expects_response: {:?},\n        ipc: {} bytes,\n        metadata: {}\n    )",
+                "Request(\n        inherit: {},\n        expects_response: {:?},\n        body: {} bytes,\n        metadata: {}\n    )",
                 request.inherit,
                 request.expects_response,
-                request.ipc.len(),
+                request.body.len(),
                 &request.metadata.as_ref().unwrap_or(&"None".into()),
             ),
             Message::Response((response, context)) => write!(
                 f,
-                "Response(\n        inherit: {},\n        ipc: {} bytes,\n        metadata: {},\n        context: {} bytes\n    )",
+                "Response(\n        inherit: {},\n        body: {} bytes,\n        metadata: {},\n        context: {} bytes\n    )",
                 response.inherit,
-                response.ipc.len(),
+                response.body.len(),
                 &response.metadata.as_ref().unwrap_or(&"None".into()),
                 if context.is_none() {
                     0
@@ -267,7 +267,7 @@ pub fn de_wit_request(wit: wit::Request) -> Request {
     Request {
         inherit: wit.inherit,
         expects_response: wit.expects_response,
-        ipc: wit.ipc,
+        body: wit.body,
         metadata: wit.metadata,
         capabilities: wit
             .capabilities
@@ -281,7 +281,7 @@ pub fn en_wit_request(request: Request) -> wit::Request {
     wit::Request {
         inherit: request.inherit,
         expects_response: request.expects_response,
-        ipc: request.ipc,
+        body: request.body,
         metadata: request.metadata,
         capabilities: request
             .capabilities
@@ -294,7 +294,7 @@ pub fn en_wit_request(request: Request) -> wit::Request {
 pub fn de_wit_response(wit: wit::Response) -> Response {
     Response {
         inherit: wit.inherit,
-        ipc: wit.ipc,
+        body: wit.body,
         metadata: wit.metadata,
         capabilities: wit
             .capabilities
@@ -307,7 +307,7 @@ pub fn de_wit_response(wit: wit::Response) -> Response {
 pub fn en_wit_response(response: Response) -> wit::Response {
     wit::Response {
         inherit: response.inherit,
-        ipc: response.ipc,
+        body: response.body,
         metadata: response.metadata,
         capabilities: response
             .capabilities
@@ -317,20 +317,20 @@ pub fn en_wit_response(response: Response) -> wit::Response {
     }
 }
 
-pub fn de_wit_payload(wit: Option<wit::Payload>) -> Option<Payload> {
+pub fn de_wit_blob(wit: Option<wit::LazyLoadBlob>) -> Option<LazyLoadBlob> {
     match wit {
         None => None,
-        Some(wit) => Some(Payload {
+        Some(wit) => Some(LazyLoadBlob {
             mime: wit.mime,
             bytes: wit.bytes,
         }),
     }
 }
 
-pub fn en_wit_payload(load: Option<Payload>) -> Option<wit::Payload> {
+pub fn en_wit_blob(load: Option<LazyLoadBlob>) -> Option<wit::LazyLoadBlob> {
     match load {
         None => None,
-        Some(load) => Some(wit::Payload {
+        Some(load) => Some(wit::LazyLoadBlob {
             mime: load.mime,
             bytes: load.bytes,
         }),
@@ -371,7 +371,7 @@ pub fn en_wit_send_error(error: SendError) -> wit::SendError {
     wit::SendError {
         kind: en_wit_send_error_kind(error.kind),
         message: en_wit_message(error.message),
-        payload: en_wit_payload(error.payload),
+        lazy_load_blob: en_wit_blob(error.lazy_load_blob),
     }
 }
 

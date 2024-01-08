@@ -17,13 +17,13 @@ impl Directory {
             action: VfsAction::ReadDir,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .target(("our", "vfs", "sys", "nectar"))
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::ReadDir(entries) => Ok(entries),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -49,13 +49,13 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
-        .ipc(serde_json::to_vec(&request)?)
+        .target(("our", "vfs", "sys", "nectar"))
+        .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
     match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Ok => Ok(Directory {
                     path: path.to_string(),

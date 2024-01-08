@@ -1,9 +1,9 @@
-pub use crate::{Address, Capability, PackageId, ProcessId};
+pub use crate::{Address, Capability, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
 /// Capability is defined in the wit bindings, but constructors and methods here.
-/// A `Capability` is a combination of an Uqbar Address and a set of Params (a serialized
+/// A `Capability` is a combination of an Nectar Address and a set of Params (a serialized
 /// json string). Capabilities are attached to messages to either share that capability
 /// with the receiving process, or to prove that a process has authority to perform a
 /// certain action.
@@ -27,10 +27,14 @@ impl Capability {
     pub fn params(&self) -> &str {
         &self.params
     }
+}
+
+impl std::str::FromStr for Capability {
+    type Err = CapabilityParseError;
     /// Attempt to parse a `Capability` from a string. The formatting structure for
     /// a Capability is `issuer^params`.
     /// TODO not tested
-    pub fn from_str(input: &str) -> Result<Self, CapabilityParseError> {
+    fn from_str(input: &str) -> Result<Self, CapabilityParseError> {
         // split string on colons into 4 segments,
         // first one with @, next 3 with :
         let mut name_rest = input.split('@');
@@ -94,7 +98,7 @@ impl<'a> Deserialize<'a> for Capability {
         D: serde::de::Deserializer<'a>,
     {
         let s = String::deserialize(deserializer)?;
-        Capability::from_str(&s).map_err(serde::de::Error::custom)
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

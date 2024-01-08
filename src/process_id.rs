@@ -17,13 +17,32 @@ impl ProcessId {
             publisher_node: publisher_node.into(),
         }
     }
+    /// Read the process name from a `ProcessId`.
+    pub fn process(&self) -> &str {
+        &self.process_name
+    }
+    /// Read the package name from a `ProcessId`.
+    pub fn package(&self) -> &str {
+        &self.package_name
+    }
+    /// Read the publisher node ID from a `ProcessId`. Note that `ProcessId`
+    /// segments are not parsed for validity, and a node ID stored here is
+    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
+    /// to an Nectar identity at all.
+    pub fn publisher(&self) -> &str {
+        &self.publisher_node
+    }
+}
+
+impl std::str::FromStr for ProcessId {
+    type Err = ProcessIdParseError;
     /// Attempts to parse a `ProcessId` from a string. To succeed, the string must contain
     /// exactly 3 segments, separated by colons `:`. The segments must not contain colons.
     /// Please note that while any string without colons will parse successfully
     /// to create a `ProcessId`, not all strings without colons are actually
     /// valid usernames, which the `publisher_node` field of a `ProcessId` will
     /// always in practice be.
-    pub fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
+    fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
         // split string on colons into 3 segments
         let mut segments = input.split(':');
         let process_name = segments
@@ -47,21 +66,6 @@ impl ProcessId {
             publisher_node,
         })
     }
-    /// Read the process name from a `ProcessId`.
-    pub fn process(&self) -> &str {
-        &self.process_name
-    }
-    /// Read the package name from a `ProcessId`.
-    pub fn package(&self) -> &str {
-        &self.package_name
-    }
-    /// Read the publisher node ID from a `ProcessId`. Note that `ProcessId`
-    /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Uqbar name system, or be connected
-    /// to an Uqbar identity at all.
-    pub fn publisher(&self) -> &str {
-        &self.publisher_node
-    }
 }
 
 impl Serialize for ProcessId {
@@ -79,7 +83,7 @@ impl<'a> Deserialize<'a> for ProcessId {
         D: serde::de::Deserializer<'a>,
     {
         let s = String::deserialize(deserializer)?;
-        ProcessId::from_str(&s).map_err(serde::de::Error::custom)
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

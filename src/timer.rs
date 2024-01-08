@@ -9,11 +9,11 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
             Request::new()
                 .target(Address::new(
                     "our",
-                    ProcessId::new(Some("timer"), "sys", "uqbar"),
+                    ProcessId::new(Some("timer"), "sys", "nectar"),
                 ))
-                .ipc(duration.to_le_bytes())
+                .body(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
-                // safe to unwrap this call when we know we've set both target and ipc
+                // safe to unwrap this call when we know we've set both target and body
                 .send()
                 .unwrap();
         }
@@ -21,12 +21,12 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
             Request::new()
                 .target(Address::new(
                     "our",
-                    ProcessId::new(Some("timer"), "sys", "uqbar"),
+                    ProcessId::new(Some("timer"), "sys", "nectar"),
                 ))
-                .ipc(duration.to_le_bytes())
+                .body(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
                 .context(context)
-                // safe to unwrap this call when we know we've set both target and ipc
+                // safe to unwrap this call when we know we've set both target and body
                 .send()
                 .unwrap();
         }
@@ -39,10 +39,10 @@ pub fn set_and_await_timer(duration: u64) -> Result<Message, SendError> {
     Request::new()
         .target(Address::new(
             "our",
-            ProcessId::new(Some("timer"), "sys", "uqbar"),
+            ProcessId::new(Some("timer"), "sys", "nectar"),
         ))
-        .ipc(duration.to_le_bytes())
-        // safe to unwrap this call when we know we've set both target and ipc
+        .body(duration.to_le_bytes())
+        // safe to unwrap this call when we know we've set both target and body
         .send_and_await_response((duration / 1000) + 1)
         .unwrap()
 }
