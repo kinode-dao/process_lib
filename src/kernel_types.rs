@@ -1,4 +1,4 @@
-use crate::uqbar::process::standard as wit;
+use crate::nectar::process::standard as wit;
 use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,14 +6,14 @@ use std::collections::HashSet;
 //
 // process-facing kernel types, used for process
 // management and message-passing
-// matches types in uqbar.wit
+// matches types in nectar.wit
 //
 
 pub type Context = Vec<u8>;
 pub type NodeId = String; // QNS domain name
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Payload {
+pub struct Blob {
     pub mime: Option<String>, // MIME type
     pub bytes: Vec<u8>,
 }
@@ -52,7 +52,7 @@ pub struct SendError {
     pub kind: SendErrorKind,
     pub target: Address,
     pub message: Message,
-    pub payload: Option<Payload>,
+    pub lazy_load_blob: Option<Blob>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,7 +65,7 @@ pub enum SendErrorKind {
 pub enum OnExit {
     None,
     Restart,
-    Requests(Vec<(Address, Request, Option<Payload>)>),
+    Requests(Vec<(Address, Request, Option<Blob>)>),
 }
 
 impl OnExit {
@@ -317,20 +317,20 @@ pub fn en_wit_response(response: Response) -> wit::Response {
     }
 }
 
-pub fn de_wit_payload(wit: Option<wit::Payload>) -> Option<Payload> {
+pub fn de_wit_blob(wit: Option<wit::Blob>) -> Option<Blob> {
     match wit {
         None => None,
-        Some(wit) => Some(Payload {
+        Some(wit) => Some(Blob {
             mime: wit.mime,
             bytes: wit.bytes,
         }),
     }
 }
 
-pub fn en_wit_payload(load: Option<Payload>) -> Option<wit::Payload> {
+pub fn en_wit_blob(load: Option<Blob>) -> Option<wit::Blob> {
     match load {
         None => None,
-        Some(load) => Some(wit::Payload {
+        Some(load) => Some(wit::Blob {
             mime: load.mime,
             bytes: load.bytes,
         }),
@@ -371,7 +371,7 @@ pub fn en_wit_send_error(error: SendError) -> wit::SendError {
     wit::SendError {
         kind: en_wit_send_error_kind(error.kind),
         message: en_wit_message(error.message),
-        payload: en_wit_payload(error.payload),
+        blob: en_wit_blob(error.blob),
     }
 }
 

@@ -59,9 +59,9 @@ impl Message {
             Message::Response { context, .. } => context.as_ref().map(|s| s.as_slice()),
         }
     }
-    /// Get the payload of a message, if any.
-    pub fn payload(&self) -> Option<Payload> {
-        crate::get_payload()
+    /// Get the blob of a message, if any.
+    pub fn blob(&self) -> Option<Blob> {
+        crate::get_blob()
     }
 
     /// Get the capabilities of a message.
@@ -98,7 +98,7 @@ impl SendErrorKind {
 pub struct SendError {
     pub kind: SendErrorKind,
     pub message: Message,
-    pub payload: Option<Payload>,
+    pub blob: Option<Blob>,
     pub context: Option<Vec<u8>>,
 }
 
@@ -109,8 +109,8 @@ impl SendError {
     pub fn message(&self) -> &Message {
         &self.message
     }
-    pub fn payload(&self) -> Option<&Payload> {
-        self.payload.as_ref()
+    pub fn blob(&self) -> Option<&Blob> {
+        self.blob.as_ref()
     }
     pub fn context(&self) -> Option<&[u8]> {
         self.context.as_ref().map(|s| s.as_slice())
@@ -137,17 +137,17 @@ impl std::error::Error for SendError {
 
 pub fn wit_message_to_message(
     source: Address,
-    message: crate::uqbar::process::standard::Message,
+    message: crate::nectar::process::standard::Message,
 ) -> Message {
     match message {
-        crate::uqbar::process::standard::Message::Request(req) => Message::Request {
+        crate::nectar::process::standard::Message::Request(req) => Message::Request {
             source,
             expects_response: req.expects_response,
             ipc: req.ipc,
             metadata: req.metadata,
             capabilities: req.capabilities,
         },
-        crate::uqbar::process::standard::Message::Response((resp, context)) => Message::Response {
+        crate::nectar::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
             ipc: resp.ipc,
             metadata: resp.metadata,

@@ -1,7 +1,7 @@
-use crate::kernel_types::Payload;
+use crate::kernel_types::Blob;
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_payload, Address, Message, Payload as uqPayload, ProcessId, Request as uqRequest,
+    get_blob, Address, Blob as uqBlob, Message, ProcessId, Request as uqRequest,
     Response as uqResponse,
 };
 pub use http::*;
@@ -15,7 +15,7 @@ use thiserror::Error;
 //
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the `http_server:sys:uqbar` service.
+/// This is the one you receive from the `http_server:sys:nectar` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
     Http(IncomingHttpRequest),
@@ -28,7 +28,7 @@ pub enum HttpServerRequest {
     },
     /// Processes can both SEND and RECEIVE this kind of request
     /// (send as [`type@HttpServerAction::WebSocketPush`]).
-    /// When received, will contain the message bytes as payload.
+    /// When received, will contain the message bytes as lazy_load_blob.
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
@@ -45,18 +45,18 @@ pub struct IncomingHttpRequest {
     pub raw_path: String,
     pub headers: HashMap<String, String>,
     pub query_params: HashMap<String, String>,
-    // BODY is stored in the payload, as bytes
+    // BODY is stored in the lazy_load_blob, as bytes
 }
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the `http_client:sys:uqbar` service.
+/// This is the one you send to the `http_client:sys:nectar` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
     pub method: String,          // must parse to http::Method
     pub version: Option<String>, // must parse to http::Version
     pub url: String,             // must parse to url::Url
     pub headers: HashMap<String, String>,
-    // BODY is stored in the payload, as bytes
+    // BODY is stored in the lazy_load_blob, as bytes
     // TIMEOUT is stored in the message expect_response
 }
 
@@ -66,13 +66,7 @@ pub struct OutgoingHttpRequest {
 pub struct HttpResponse {
     pub status: u16,
     pub headers: HashMap<String, String>,
-    // BODY is stored in the payload, as bytes
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RpcResponseBody {
-    pub ipc: Vec<u8>,
-    pub payload: Option<Payload>,
+    // BODY is stored in the lazy_load_blob, as bytes
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -89,7 +83,7 @@ pub enum HttpClientError {
     RequestFailed { error: String },
 }
 
-/// Request type sent to `http_server:sys:uqbar` in order to configure it.
+/// Request type sent to `http_server:sys:nectar` in order to configure it.
 /// You can also send [`type@HttpServerAction::WebSocketPush`], which
 /// allows you to push messages across an existing open WebSocket connection.
 ///
@@ -97,7 +91,7 @@ pub enum HttpClientError {
 /// with the shape Result<(), HttpServerActionError> serialized to JSON.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerAction {
-    /// Bind expects a payload if and only if `cache` is TRUE. The payload should
+    /// Bind expects a lazy_load_blob if and only if `cache` is TRUE. The lazy_load_blob should
     /// be the static file to serve at this path.
     Bind {
         path: String,
@@ -106,11 +100,11 @@ pub enum HttpServerAction {
         authenticated: bool,
         /// Set whether requests can be fielded from anywhere, or only the loopback address.
         local_only: bool,
-        /// Set whether to bind the payload statically to this path. That is, take the
-        /// payload bytes and serve them as the response to any request to this path.
+        /// Set whether to bind the lazy_load_blob statically to this path. That is, take the
+        /// lazy_load_blob bytes and serve them as the response to any request to this path.
         cache: bool,
     },
-    /// SecureBind expects a payload if and only if `cache` is TRUE. The payload should
+    /// SecureBind expects a lazy_load_blob if and only if `cache` is TRUE. The lazy_load_blob should
     /// be the static file to serve at this path.
     ///
     /// SecureBind is the same as Bind, except that it forces requests to be made from
@@ -121,8 +115,8 @@ pub enum HttpServerAction {
     /// will require the user to be logged in separately to the general domain authentication.
     SecureBind {
         path: String,
-        /// Set whether to bind the payload statically to this path. That is, take the
-        /// payload bytes and serve them as the response to any request to this path.
+        /// Set whether to bind the lazy_load_blob statically to this path. That is, take the
+        /// lazy_load_blob bytes and serve them as the response to any request to this path.
         cache: bool,
     },
     /// Bind a path to receive incoming WebSocket connections.
@@ -141,7 +135,7 @@ pub enum HttpServerAction {
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
     WebSocketOpen { path: String, channel_id: u32 },
-    /// When sent, expects a payload containing the WebSocket message bytes to send.
+    /// When sent, expects a lazy_load_blob containing the WebSocket message bytes to send.
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
@@ -151,9 +145,9 @@ pub enum HttpServerAction {
 }
 
 /// The possible message types for WebSocketPush. Ping and Pong are limited to 125 bytes
-/// by the WebSockets protocol. Text will be sent as a Text frame, with the payload bytes
+/// by the WebSockets protocol. Text will be sent as a Text frame, with the lazy_load_blob bytes
 /// being the UTF-8 encoding of the string. Binary will be sent as a Binary frame containing
-/// the unmodified payload bytes.
+/// the unmodified lazy_load_blob bytes.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum WsMessageType {
     Text,
@@ -170,8 +164,8 @@ pub enum HttpServerError {
         req
     )]
     BadRequest { req: String },
-    #[error("http_server: action expected payload")]
-    NoPayload,
+    #[error("http_server: action expected lazy_load_blob")]
+    NoBlob,
     #[error("http_server: path binding error: {:?}", error)]
     PathBindError { error: String },
     #[error("http_server: WebSocket error: {:?}", error)]
@@ -249,7 +243,7 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "uqbar"))
+        .target(("our", "http_server", "sys", "nectar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
@@ -279,14 +273,14 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "uqbar"))
+        .target(("our", "http_server", "sys", "nectar"))
         .ipc(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
             local_only,
             cache: true,
         })?)
-        .payload(crate::uqbar::process::standard::Payload {
+        .blob(crate::nectar::process::standard::Blob {
             mime: content_type,
             bytes: content,
         })
@@ -307,7 +301,7 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "uqbar"))
+        .target(("our", "http_server", "sys", "nectar"))
         .ipc(serde_json::to_vec(&HttpServerAction::WebSocketBind {
             path: path.into(),
             authenticated,
@@ -334,7 +328,7 @@ pub fn send_response(
             status: status.as_u16(),
             headers: headers.unwrap_or_default(),
         })?)
-        .payload_bytes(body)
+        .blob_bytes(body)
         .send()
 }
 
@@ -348,14 +342,14 @@ pub fn send_request(
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
     let req = uqRequest::new()
-        .target(("our", "http_client", "sys", "uqbar"))
+        .target(("our", "http_client", "sys", "nectar"))
         .ipc(serde_json::to_vec(&OutgoingHttpRequest {
             method: method.to_string(),
             version: None,
             url: url.to_string(),
             headers: headers.unwrap_or_default(),
         })?)
-        .payload_bytes(body);
+        .blob_bytes(body);
     if let Some(timeout) = timeout {
         req.expects_response(timeout).send()
     } else {
@@ -372,7 +366,7 @@ pub fn send_request_await_response(
     body: Vec<u8>,
 ) -> std::result::Result<HttpResponse, HttpClientError> {
     let res = uqRequest::new()
-        .target(("our", "http_client", "sys", "uqbar"))
+        .target(("our", "http_client", "sys", "nectar"))
         .ipc(
             serde_json::to_vec(&OutgoingHttpRequest {
                 method: method.to_string(),
@@ -384,7 +378,7 @@ pub fn send_request_await_response(
                 req: format!("{e:?}"),
             })?,
         )
-        .payload_bytes(body)
+        .blob_bytes(body)
         .send_and_await_response(timeout)
         .map_err(|e| HttpClientError::RequestFailed {
             error: e.to_string(),
@@ -417,18 +411,18 @@ pub fn get_mime_type(filename: &str) -> String {
 // Serve index.html
 pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
     let _ = uqRequest::new()
-        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .target(Address::from_str("our@vfs:sys:nectar")?)
         .ipc(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
         })?)
         .send_and_await_response(5)?;
 
-    let Some(payload) = get_payload() else {
-        return Err(anyhow::anyhow!("serve_index_html: no index.html payload"));
+    let Some(blob) = get_blob() else {
+        return Err(anyhow::anyhow!("serve_index_html: no index.html blob"));
     };
 
-    let index = String::from_utf8(payload.bytes)?;
+    let index = String::from_utf8(blob.bytes)?;
 
     // index.html will be served from the root path of your app
     bind_http_static_path(
@@ -453,7 +447,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
     while let Some(path) = queue.pop_front() {
         let directory_response = uqRequest::new()
-            .target(Address::from_str("our@vfs:sys:uqbar")?)
+            .target(Address::from_str("our@vfs:sys:nectar")?)
             .ipc(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
@@ -480,16 +474,16 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                             }
 
                             let _ = uqRequest::new()
-                                .target(Address::from_str("our@vfs:sys:uqbar")?)
+                                .target(Address::from_str("our@vfs:sys:nectar")?)
                                 .ipc(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
                                 })?)
                                 .send_and_await_response(5)?;
 
-                            let Some(payload) = get_payload() else {
+                            let Some(blob) = get_blob() else {
                                 return Err(anyhow::anyhow!(
-                                    "serve_ui: no payload for {}",
+                                    "serve_ui: no blob for {}",
                                     entry.path
                                 ));
                             };
@@ -501,7 +495,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                                 true,  // Must be authenticated
                                 false, // Is not local-only
                                 Some(content_type),
-                                payload.bytes,
+                                blob.bytes,
                             )?;
                         }
                         FileType::Directory => {
@@ -535,7 +529,7 @@ pub fn handle_ui_asset_request(
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
     let _ = uqRequest::new()
-        .target(Address::from_str("our@vfs:sys:uqbar")?)
+        .target(Address::from_str("our@vfs:sys:nectar")?)
         .ipc(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
@@ -566,12 +560,12 @@ pub fn send_ws_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    payload: uqPayload,
+    blob: uqBlob,
 ) -> anyhow::Result<()> {
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_server:sys:uqbar").unwrap(),
+            ProcessId::from_str("http_server:sys:nectar").unwrap(),
         ))
         .ipc(
             serde_json::json!(HttpServerRequest::WebSocketPush {
@@ -582,7 +576,7 @@ pub fn send_ws_push(
             .as_bytes()
             .to_vec(),
         )
-        .payload(payload)
+        .blob(blob)
         .send()?;
 
     Ok(())

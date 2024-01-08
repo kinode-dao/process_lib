@@ -1,4 +1,4 @@
-use crate::{get_payload, Message, PackageId, Request};
+use crate::{get_blob, Message, PackageId, Request};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -89,13 +89,13 @@ impl Sqlite {
         params: Vec<SqlValue>,
     ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "uqbar"))
+            .target(("our", "sqlite", "sys", "nectar"))
             .ipc(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::Read { query },
             })?)
-            .payload_bytes(serde_json::to_vec(&params)?)
+            .blob_bytes(serde_json::to_vec(&params)?)
             .send_and_await_response(5)?;
 
         match res {
@@ -104,12 +104,12 @@ impl Sqlite {
 
                 match response {
                     SqliteResponse::Read => {
-                        let payload = get_payload().ok_or_else(|| SqliteError::InputError {
-                            error: "sqlite: no payload".to_string(),
+                        let blob = get_blob().ok_or_else(|| SqliteError::InputError {
+                            error: "sqlite: no blob".to_string(),
                         })?;
                         let values = serde_json::from_slice::<
                             Vec<HashMap<String, serde_json::Value>>,
-                        >(&payload.bytes)
+                        >(&blob.bytes)
                         .map_err(|e| SqliteError::InputError {
                             error: format!("sqlite: gave unparsable response: {}", e),
                         })?;
@@ -134,13 +134,13 @@ impl Sqlite {
         tx_id: Option<u64>,
     ) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "uqbar"))
+            .target(("our", "sqlite", "sys", "nectar"))
             .ipc(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::Write { statement, tx_id },
             })?)
-            .payload_bytes(serde_json::to_vec(&params)?)
+            .blob_bytes(serde_json::to_vec(&params)?)
             .send_and_await_response(5)?;
 
         match res {
@@ -163,7 +163,7 @@ impl Sqlite {
     /// Begin a transaction.
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "uqbar"))
+            .target(("our", "sqlite", "sys", "nectar"))
             .ipc(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -191,7 +191,7 @@ impl Sqlite {
     /// Commit a transaction.
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "uqbar"))
+            .target(("our", "sqlite", "sys", "nectar"))
             .ipc(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -220,7 +220,7 @@ impl Sqlite {
 /// Open or create sqlite database.
 pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
     let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
+        .target(("our", "sqlite", "sys", "nectar"))
         .ipc(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
@@ -251,7 +251,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
 /// Remove and delete sqlite database.
 pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
-        .target(("our", "sqlite", "sys", "uqbar"))
+        .target(("our", "sqlite", "sys", "nectar"))
         .ipc(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),

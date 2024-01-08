@@ -10,10 +10,10 @@ pub enum OnExit {
 impl OnExit {
     /// Call the kernel to get the current set OnExit behavior
     pub fn get() -> Self {
-        match crate::uqbar::process::standard::get_on_exit() {
-            crate::uqbar::process::standard::OnExit::None => OnExit::None,
-            crate::uqbar::process::standard::OnExit::Restart => OnExit::Restart,
-            crate::uqbar::process::standard::OnExit::Requests(reqs) => {
+        match crate::nectar::process::standard::get_on_exit() {
+            crate::nectar::process::standard::OnExit::None => OnExit::None,
+            crate::nectar::process::standard::OnExit::Restart => OnExit::Restart,
+            crate::nectar::process::standard::OnExit::Requests(reqs) => {
                 let mut requests: Vec<Request> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     requests.push(Request {
@@ -22,7 +22,7 @@ impl OnExit {
                         timeout: req.1.expects_response,
                         ipc: Some(req.1.ipc),
                         metadata: req.1.metadata,
-                        payload: req.2,
+                        blob: req.2,
                         context: None,
                         capabilities: req.1.capabilities, // TODO double check
                     });
@@ -76,25 +76,25 @@ impl OnExit {
     }
     /// Set the OnExit behavior for this process
     pub fn set(self) -> anyhow::Result<()> {
-        crate::uqbar::process::standard::set_on_exit(&self._to_standard()?);
+        crate::nectar::process::standard::set_on_exit(&self._to_standard()?);
         Ok(())
     }
     /// Convert this OnExit to the kernel's OnExit type
-    pub fn _to_standard(self) -> anyhow::Result<crate::uqbar::process::standard::OnExit> {
+    pub fn _to_standard(self) -> anyhow::Result<crate::nectar::process::standard::OnExit> {
         match self {
-            OnExit::None => Ok(crate::uqbar::process::standard::OnExit::None),
-            OnExit::Restart => Ok(crate::uqbar::process::standard::OnExit::Restart),
+            OnExit::None => Ok(crate::nectar::process::standard::OnExit::None),
+            OnExit::Restart => Ok(crate::nectar::process::standard::OnExit::Restart),
             OnExit::Requests(reqs) => {
                 let mut kernel_reqs: Vec<(
                     Address,
-                    uqbar::process::standard::Request,
-                    Option<Payload>,
+                    nectar::process::standard::Request,
+                    Option<Blob>,
                 )> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     kernel_reqs.push((
                         req.target
                             .ok_or(anyhow::anyhow!("request without target given"))?,
-                        uqbar::process::standard::Request {
+                        nectar::process::standard::Request {
                             inherit: req.inherit,
                             expects_response: None,
                             ipc: req
@@ -103,10 +103,10 @@ impl OnExit {
                             metadata: req.metadata,
                             capabilities: req.capabilities, // TODO double check
                         },
-                        req.payload,
+                        req.blob,
                     ));
                 }
-                Ok(crate::uqbar::process::standard::OnExit::Requests(
+                Ok(crate::nectar::process::standard::OnExit::Requests(
                     kernel_reqs,
                 ))
             }

@@ -57,8 +57,8 @@ impl ProcessId {
     }
     /// Read the publisher node ID from a `ProcessId`. Note that `ProcessId`
     /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Uqbar name system, or be connected
-    /// to an Uqbar identity at all.
+    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
+    /// to an Nectar identity at all.
     pub fn publisher(&self) -> &str {
         &self.publisher_node
     }

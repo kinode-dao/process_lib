@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
 /// Capability is defined in the wit bindings, but constructors and methods here.
-/// A `Capability` is a combination of an Uqbar Address and a set of Params (a serialized
+/// A `Capability` is a combination of an Nectar Address and a set of Params (a serialized
 /// json string). Capabilities are attached to messages to either share that capability
 /// with the receiving process, or to prove that a process has authority to perform a
 /// certain action.

@@ -17,7 +17,7 @@ impl Directory {
             action: VfsAction::ReadDir,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -49,7 +49,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
+        .target(("our", "vfs", "sys", "nectar"))
         .ipc(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 

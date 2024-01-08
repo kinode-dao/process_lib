@@ -1,5 +1,5 @@
 use super::{FileMetadata, SeekFrom, VfsAction, VfsRequest, VfsResponse};
-use crate::{get_payload, Message, PackageId, Request};
+use crate::{get_blob, Message, PackageId, Request};
 
 /// Vfs helper struct for a file.
 /// Opening or creating a file will give you a Result<File>.
@@ -17,7 +17,7 @@ impl File {
             action: VfsAction::Read,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -26,9 +26,9 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Read => {
-                        let data = match get_payload() {
+                        let data = match get_blob() {
                             Some(bytes) => bytes.bytes,
-                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                            None => return Err(anyhow::anyhow!("vfs: no read blob")),
                         };
                         Ok(data)
                     }
@@ -48,7 +48,7 @@ impl File {
             action: VfsAction::Read,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -57,9 +57,9 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Read => {
-                        let data = match get_payload() {
+                        let data = match get_blob() {
                             Some(bytes) => bytes.bytes,
-                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                            None => return Err(anyhow::anyhow!("vfs: no read blob")),
                         };
                         let len = std::cmp::min(data.len(), buffer.len());
                         buffer[..len].copy_from_slice(&data[..len]);
@@ -82,7 +82,7 @@ impl File {
             action: VfsAction::ReadExact(length as u64),
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -91,9 +91,9 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Read => {
-                        let data = match get_payload() {
+                        let data = match get_blob() {
                             Some(bytes) => bytes.bytes,
-                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                            None => return Err(anyhow::anyhow!("vfs: no read blob")),
                         };
                         let len = std::cmp::min(data.len(), buffer.len());
                         buffer[..len].copy_from_slice(&data[..len]);
@@ -115,7 +115,7 @@ impl File {
             action: VfsAction::ReadToEnd,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -124,9 +124,9 @@ impl File {
                 let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
                 match response {
                     VfsResponse::Read => {
-                        let data = match get_payload() {
+                        let data = match get_blob() {
                             Some(bytes) => bytes.bytes,
-                            None => return Err(anyhow::anyhow!("vfs: no read payload")),
+                            None => return Err(anyhow::anyhow!("vfs: no read blob")),
                         };
                         Ok(data)
                     }
@@ -147,7 +147,7 @@ impl File {
             action: VfsAction::ReadToString,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -173,9 +173,9 @@ impl File {
         };
 
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
-            .payload_bytes(buffer)
+            .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
@@ -198,9 +198,9 @@ impl File {
             action: VfsAction::WriteAt,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
-            .payload_bytes(buffer)
+            .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
@@ -223,9 +223,9 @@ impl File {
             action: VfsAction::Append,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
-            .payload_bytes(buffer)
+            .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
@@ -249,7 +249,7 @@ impl File {
             action: VfsAction::Seek { seek_from: pos },
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -273,7 +273,7 @@ impl File {
             action: VfsAction::SetLen(size),
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -297,7 +297,7 @@ impl File {
             action: VfsAction::Metadata,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -321,7 +321,7 @@ impl File {
             action: VfsAction::SyncAll,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "uqbar"))
+            .target(("our", "vfs", "sys", "nectar"))
             .ipc(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -345,7 +345,7 @@ impl File {
 pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
     let path = format!("/{}/{}", package_id, drive);
     let res = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
+        .target(("our", "vfs", "sys", "nectar"))
         .ipc(serde_json::to_vec(&VfsRequest {
             path: path.clone(),
             action: VfsAction::CreateDrive,
@@ -373,7 +373,7 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
+        .target(("our", "vfs", "sys", "nectar"))
         .ipc(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
@@ -400,7 +400,7 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "uqbar"))
+        .target(("our", "vfs", "sys", "nectar"))
         .ipc(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
