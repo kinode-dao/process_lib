@@ -68,7 +68,7 @@ macro_rules! call_init {
         struct Component;
         impl Guest for Component {
             fn init(our: String) {
-                let our = Address::from_str(&our).unwrap();
+                let our: Address = our.parse().unwrap();
                 $init_func(our);
             }
         }
