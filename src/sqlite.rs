@@ -90,7 +90,7 @@ impl Sqlite {
     ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&SqliteRequest {
+            .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::Read { query },
@@ -99,8 +99,8 @@ impl Sqlite {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
                 match response {
                     SqliteResponse::Read => {
@@ -135,7 +135,7 @@ impl Sqlite {
     ) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&SqliteRequest {
+            .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::Write { statement, tx_id },
@@ -144,8 +144,8 @@ impl Sqlite {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
                 match response {
                     SqliteResponse::Ok => Ok(()),
@@ -164,7 +164,7 @@ impl Sqlite {
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&SqliteRequest {
+            .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::BeginTx,
@@ -172,8 +172,8 @@ impl Sqlite {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
                 match response {
                     SqliteResponse::BeginTx { tx_id } => Ok(tx_id),
@@ -192,7 +192,7 @@ impl Sqlite {
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "sqlite", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&SqliteRequest {
+            .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: SqliteAction::Commit { tx_id },
@@ -200,8 +200,8 @@ impl Sqlite {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
                 match response {
                     SqliteResponse::Ok => Ok(()),
@@ -221,7 +221,7 @@ impl Sqlite {
 pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
     let res = Request::new()
         .target(("our", "sqlite", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
+        .body(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
             action: SqliteAction::Open,
@@ -229,8 +229,8 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
         .send_and_await_response(5)?;
 
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
             match response {
                 SqliteResponse::Ok => Ok(Sqlite {
@@ -252,7 +252,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
 pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "sqlite", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&SqliteRequest {
+        .body(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
             action: SqliteAction::RemoveDb,
@@ -260,8 +260,8 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
         .send_and_await_response(5)?;
 
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<SqliteResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<SqliteResponse>(&body)?;
 
             match response {
                 SqliteResponse::Ok => Ok(()),

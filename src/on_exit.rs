@@ -20,7 +20,7 @@ impl OnExit {
                         target: Some(req.0),
                         inherit: req.1.inherit,
                         timeout: req.1.expects_response,
-                        ipc: Some(req.1.ipc),
+                        body: Some(req.1.body),
                         metadata: req.1.metadata,
                         blob: req.2,
                         context: None,
@@ -88,7 +88,7 @@ impl OnExit {
                 let mut kernel_reqs: Vec<(
                     Address,
                     nectar::process::standard::Request,
-                    Option<Blob>,
+                    Option<LazyLoadBlob>,
                 )> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     kernel_reqs.push((
@@ -97,9 +97,9 @@ impl OnExit {
                         nectar::process::standard::Request {
                             inherit: req.inherit,
                             expects_response: None,
-                            ipc: req
-                                .ipc
-                                .ok_or(anyhow::anyhow!("request without ipc given"))?,
+                            body: req
+                                .body
+                                .ok_or(anyhow::anyhow!("request without body given"))?,
                             metadata: req.metadata,
                             capabilities: req.capabilities, // TODO double check
                         },

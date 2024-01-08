@@ -4,20 +4,20 @@ use crate::*;
 /// practice when handling a message is to do this:
 /// 1. Match on whether it's a request or a response
 /// 2. Match on who the message is from (the `source`)
-/// 3. Parse and interpret the `ipc`, `metadata`, and/or `context` based on
+/// 3. Parse and interpret the `body`, `metadata`, and/or `context` based on
 /// who the message is from and what your process expects from them.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
     Request {
         source: Address,
         expects_response: Option<u64>,
-        ipc: Vec<u8>,
+        body: Vec<u8>,
         metadata: Option<String>,
         capabilities: Vec<Capability>,
     },
     Response {
         source: Address,
-        ipc: Vec<u8>,
+        body: Vec<u8>,
         metadata: Option<String>,
         context: Option<Vec<u8>>,
         capabilities: Vec<Capability>,
@@ -38,11 +38,11 @@ impl Message {
             Message::Response { source, .. } => source,
         }
     }
-    /// Get the IPC of a message.
-    pub fn ipc(&self) -> &[u8] {
+    /// Get the IPC body of a message.
+    pub fn body(&self) -> &[u8] {
         match self {
-            Message::Request { ipc, .. } => ipc,
-            Message::Response { ipc, .. } => ipc,
+            Message::Request { body, .. } => body,
+            Message::Response { body, .. } => body,
         }
     }
     /// Get the metadata of a message.
@@ -60,7 +60,7 @@ impl Message {
         }
     }
     /// Get the blob of a message, if any.
-    pub fn blob(&self) -> Option<Blob> {
+    pub fn blob(&self) -> Option<LazyLoadBlob> {
         crate::get_blob()
     }
 
@@ -98,7 +98,7 @@ impl SendErrorKind {
 pub struct SendError {
     pub kind: SendErrorKind,
     pub message: Message,
-    pub blob: Option<Blob>,
+    pub lazy_load_blob: Option<LazyLoadBlob>,
     pub context: Option<Vec<u8>>,
 }
 
@@ -109,8 +109,8 @@ impl SendError {
     pub fn message(&self) -> &Message {
         &self.message
     }
-    pub fn blob(&self) -> Option<&Blob> {
-        self.blob.as_ref()
+    pub fn blob(&self) -> Option<&LazyLoadBlob> {
+        self.lazy_load_blob.as_ref()
     }
     pub fn context(&self) -> Option<&[u8]> {
         self.context.as_ref().map(|s| s.as_slice())
@@ -143,13 +143,13 @@ pub fn wit_message_to_message(
         crate::nectar::process::standard::Message::Request(req) => Message::Request {
             source,
             expects_response: req.expects_response,
-            ipc: req.ipc,
+            body: req.body,
             metadata: req.metadata,
             capabilities: req.capabilities,
         },
         crate::nectar::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
-            ipc: resp.ipc,
+            body: resp.body,
             metadata: resp.metadata,
             context,
             capabilities: resp.capabilities,

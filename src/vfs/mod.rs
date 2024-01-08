@@ -8,7 +8,7 @@ pub mod file;
 pub use directory::*;
 pub use file::*;
 
-/// IPC format for requests sent to vfs runtime module
+/// IPC body format for requests sent to vfs runtime module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
     /// path is always prepended by package_id, the capabilities of the topmost folder are checked
@@ -134,12 +134,12 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
     };
     let message = Request::new()
         .target(("our", "vfs", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&request)?)
+        .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
     match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Metadata(metadata) => Ok(metadata),
                 VfsResponse::Err(e) => Err(e.into()),

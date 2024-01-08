@@ -63,7 +63,7 @@ impl Kv {
     pub fn get(&self, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         let res = Request::new()
             .target(("our", "kv", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&KvRequest {
+            .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: KvAction::Get { key },
@@ -71,8 +71,8 @@ impl Kv {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
 
                 match response {
                     KvResponse::Get { .. } => {
@@ -94,7 +94,7 @@ impl Kv {
     pub fn set(&self, key: Vec<u8>, value: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&KvRequest {
+            .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: KvAction::Set { key, tx_id },
@@ -103,8 +103,8 @@ impl Kv {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
 
                 match response {
                     KvResponse::Ok => Ok(()),
@@ -120,7 +120,7 @@ impl Kv {
     pub fn delete(&self, key: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&KvRequest {
+            .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: KvAction::Delete { key, tx_id },
@@ -128,8 +128,8 @@ impl Kv {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
 
                 match response {
                     KvResponse::Ok => Ok(()),
@@ -145,7 +145,7 @@ impl Kv {
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
             .target(("our", "kv", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&KvRequest {
+            .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: KvAction::BeginTx,
@@ -153,8 +153,8 @@ impl Kv {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
 
                 match response {
                     KvResponse::BeginTx { tx_id } => Ok(tx_id),
@@ -170,7 +170,7 @@ impl Kv {
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
             .target(("our", "kv", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&KvRequest {
+            .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
                 action: KvAction::Commit { tx_id },
@@ -178,8 +178,8 @@ impl Kv {
             .send_and_await_response(5)?;
 
         match res {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
 
                 match response {
                     KvResponse::Ok => Ok(()),
@@ -196,7 +196,7 @@ impl Kv {
 pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
     let res = Request::new()
         .target(("our", "kv", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&KvRequest {
+        .body(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
             action: KvAction::Open,
@@ -204,8 +204,8 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
         .send_and_await_response(5)?;
 
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<KvResponse>(&body)?;
 
             match response {
                 KvResponse::Ok => Ok(Kv {
@@ -224,7 +224,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
 pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
         .target(("our", "kv", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&KvRequest {
+        .body(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
             action: KvAction::RemoveDb,
@@ -232,8 +232,8 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
         .send_and_await_response(5)?;
 
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<KvResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<KvResponse>(&body)?;
 
             match response {
                 KvResponse::Ok => Ok(()),

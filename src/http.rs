@@ -1,7 +1,6 @@
-use crate::kernel_types::Blob;
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, Blob as uqBlob, Message, ProcessId, Request as uqRequest,
+    get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
     Response as uqResponse,
 };
 pub use http::*;
@@ -244,7 +243,7 @@ where
 {
     let res = uqRequest::new()
         .target(("our", "http_server", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&HttpServerAction::Bind {
+        .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
             local_only,
@@ -252,8 +251,8 @@ where
         })?)
         .send_and_await_response(5)?;
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
             resp.map_err(|e| anyhow::anyhow!(e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
@@ -274,20 +273,20 @@ where
 {
     let res = uqRequest::new()
         .target(("our", "http_server", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&HttpServerAction::Bind {
+        .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
             local_only,
             cache: true,
         })?)
-        .blob(crate::nectar::process::standard::Blob {
+        .blob(crate::nectar::process::standard::LazyLoadBlob {
             mime: content_type,
             bytes: content,
         })
         .send_and_await_response(5)?;
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
             resp.map_err(|e| anyhow::anyhow!(e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
@@ -302,15 +301,15 @@ where
 {
     let res = uqRequest::new()
         .target(("our", "http_server", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&HttpServerAction::WebSocketBind {
+        .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
             path: path.into(),
             authenticated,
             encrypted,
         })?)
         .send_and_await_response(5)?;
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
             resp.map_err(|e| anyhow::anyhow!(e))
         }
         _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
@@ -324,7 +323,7 @@ pub fn send_response(
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
     uqResponse::new()
-        .ipc(serde_json::to_vec(&HttpResponse {
+        .body(serde_json::to_vec(&HttpResponse {
             status: status.as_u16(),
             headers: headers.unwrap_or_default(),
         })?)
@@ -343,7 +342,7 @@ pub fn send_request(
 ) -> anyhow::Result<()> {
     let req = uqRequest::new()
         .target(("our", "http_client", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&OutgoingHttpRequest {
+        .body(serde_json::to_vec(&OutgoingHttpRequest {
             method: method.to_string(),
             version: None,
             url: url.to_string(),
@@ -367,7 +366,7 @@ pub fn send_request_await_response(
 ) -> std::result::Result<HttpResponse, HttpClientError> {
     let res = uqRequest::new()
         .target(("our", "http_client", "sys", "nectar"))
-        .ipc(
+        .body(
             serde_json::to_vec(&OutgoingHttpRequest {
                 method: method.to_string(),
                 version: None,
@@ -384,8 +383,8 @@ pub fn send_request_await_response(
             error: e.to_string(),
         })?;
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            serde_json::from_slice(&ipc).map_err(|e| HttpClientError::RequestFailed {
+        Ok(Message::Response { body, .. }) => {
+            serde_json::from_slice(&body).map_err(|e| HttpClientError::RequestFailed {
                 error: format!("http_client gave unparsable response: {e}"),
             })
         }
@@ -412,7 +411,7 @@ pub fn get_mime_type(filename: &str) -> String {
 pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
     let _ = uqRequest::new()
         .target(Address::from_str("our@vfs:sys:nectar")?)
-        .ipc(serde_json::to_vec(&VfsRequest {
+        .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
         })?)
@@ -448,7 +447,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
     while let Some(path) = queue.pop_front() {
         let directory_response = uqRequest::new()
             .target(Address::from_str("our@vfs:sys:nectar")?)
-            .ipc(serde_json::to_vec(&VfsRequest {
+            .body(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
             })?)
@@ -458,10 +457,10 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
             return Err(anyhow::anyhow!("serve_ui: no response for path"));
         };
 
-        let directory_ipc = serde_json::from_slice::<VfsResponse>(directory_response.ipc())?;
+        let directory_body = serde_json::from_slice::<VfsResponse>(directory_response.body())?;
 
         // Determine if it's a file or a directory and handle appropriately
-        match directory_ipc {
+        match directory_body {
             VfsResponse::ReadDir(directory_info) => {
                 for entry in directory_info {
                     match entry.file_type {
@@ -475,7 +474,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
                             let _ = uqRequest::new()
                                 .target(Address::from_str("our@vfs:sys:nectar")?)
-                                .ipc(serde_json::to_vec(&VfsRequest {
+                                .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
                                 })?)
@@ -509,7 +508,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
             _ => {
                 return Err(anyhow::anyhow!(
                     "serve_ui: unexpected response for path: {:?}",
-                    directory_ipc
+                    directory_body
                 ))
             }
         };
@@ -530,7 +529,7 @@ pub fn handle_ui_asset_request(
 
     let _ = uqRequest::new()
         .target(Address::from_str("our@vfs:sys:nectar")?)
-        .ipc(serde_json::to_vec(&VfsRequest {
+        .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
         })?)
@@ -541,7 +540,7 @@ pub fn handle_ui_asset_request(
     headers.insert("Content-Type".to_string(), content_type);
 
     uqResponse::new()
-        .ipc(
+        .body(
             serde_json::json!(HttpResponse {
                 status: 200,
                 headers,
@@ -567,7 +566,7 @@ pub fn send_ws_push(
             node,
             ProcessId::from_str("http_server:sys:nectar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,

@@ -8,7 +8,7 @@
 //! will be via this library.
 //!
 //! We define wrappers over the wit bindings to make them easier to use.
-//! This library encourages the use of IPC and metadata types serialized and
+//! This library encourages the use of IPC body and metadata types serialized and
 //! deserialized to JSON, which is not optimal for performance, but useful
 //! for applications that want to maximize composability and introspectability.
 //! For blobs, we recommend bincode to serialize and deserialize to bytes.
@@ -115,7 +115,7 @@ pub fn await_message() -> Result<Message, SendError> {
                 },
                 send_err.message,
             ),
-            blob: send_err.blob,
+            lazy_load_blob: send_err.lazy_load_blob,
             context,
         }),
     }
@@ -144,11 +144,11 @@ pub fn spawn(
 /// function that turns that type into bytes.
 ///
 /// Example: TODO
-pub fn make_blob<T, F>(blob: &T, serializer: F) -> anyhow::Result<Blob>
+pub fn make_blob<T, F>(blob: &T, serializer: F) -> anyhow::Result<LazyLoadBlob>
 where
     F: Fn(&T) -> anyhow::Result<Vec<u8>>,
 {
-    Ok(Blob {
+    Ok(LazyLoadBlob {
         mime: None,
         bytes: serializer(blob)?,
     })

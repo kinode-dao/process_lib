@@ -18,12 +18,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Read => {
                         let data = match get_blob() {
@@ -49,12 +49,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Read => {
                         let data = match get_blob() {
@@ -83,12 +83,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Read => {
                         let data = match get_blob() {
@@ -116,12 +116,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Read => {
                         let data = match get_blob() {
@@ -148,12 +148,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::ReadToString(s) => Ok(s),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -174,13 +174,13 @@ impl File {
 
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -199,13 +199,13 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -224,13 +224,13 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -250,12 +250,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::SeekFrom(new_pos) => Ok(new_pos),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -274,12 +274,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -298,12 +298,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Metadata(metadata) => Ok(metadata),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -322,12 +322,12 @@ impl File {
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
-            .ipc(serde_json::to_vec(&request)?)
+            .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
         match message {
-            Ok(Message::Response { ipc, .. }) => {
-                let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
                 match response {
                     VfsResponse::Ok => Ok(()),
                     VfsResponse::Err(e) => Err(e.into()),
@@ -346,15 +346,15 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
     let path = format!("/{}/{}", package_id, drive);
     let res = Request::new()
         .target(("our", "vfs", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&VfsRequest {
+        .body(serde_json::to_vec(&VfsRequest {
             path: path.clone(),
             action: VfsAction::CreateDrive,
         })?)
         .send_and_await_response(5)?;
 
     match res {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Ok => Ok(path),
                 VfsResponse::Err(e) => Err(e.into()),
@@ -374,12 +374,12 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
 
     let message = Request::new()
         .target(("our", "vfs", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&request)?)
+        .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
     match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
@@ -401,12 +401,12 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
 
     let message = Request::new()
         .target(("our", "vfs", "sys", "nectar"))
-        .ipc(serde_json::to_vec(&request)?)
+        .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
     match message {
-        Ok(Message::Response { ipc, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&ipc)?;
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
             match response {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
