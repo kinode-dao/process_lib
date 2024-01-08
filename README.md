@@ -2,4 +2,9 @@
 
 Library of functions for more ergonomic Nectar process development.
 
-## TODO
+To develop/build:
+```
+git submodule add https://github.com/uqbar-dao/nectar-wit.git
+```
+
+Docs: (TODO link)
