@@ -17,7 +17,7 @@ pub use crate::nectar::process::standard::*;
 use serde::{Deserialize, Serialize};
 
 wit_bindgen::generate!({
-    path: "uqwit",
+    path: "nectar-wit",
     world: "lib",
 });
 
