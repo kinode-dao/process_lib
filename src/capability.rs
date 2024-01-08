@@ -27,10 +27,14 @@ impl Capability {
     pub fn params(&self) -> &str {
         &self.params
     }
+}
+
+impl std::str::FromStr for Capability {
+    type Err = CapabilityParseError;
     /// Attempt to parse a `Capability` from a string. The formatting structure for
     /// a Capability is `issuer^params`.
     /// TODO not tested
-    pub fn from_str(input: &str) -> Result<Self, CapabilityParseError> {
+    fn from_str(input: &str) -> Result<Self, CapabilityParseError> {
         // split string on colons into 4 segments,
         // first one with @, next 3 with :
         let mut name_rest = input.split('@');
@@ -94,7 +98,7 @@ impl<'a> Deserialize<'a> for Capability {
         D: serde::de::Deserializer<'a>,
     {
         let s = String::deserialize(deserializer)?;
-        Capability::from_str(&s).map_err(serde::de::Error::custom)
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

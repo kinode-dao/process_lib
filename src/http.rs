@@ -410,7 +410,7 @@ pub fn get_mime_type(filename: &str) -> String {
 // Serve index.html
 pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
     let _ = uqRequest::new()
-        .target(Address::from_str("our@vfs:sys:nectar")?)
+        .target("our@vfs:sys:nectar".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
@@ -446,7 +446,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
     while let Some(path) = queue.pop_front() {
         let directory_response = uqRequest::new()
-            .target(Address::from_str("our@vfs:sys:nectar")?)
+            .target("our@vfs:sys:nectar".parse::<Address>()?)
             .body(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
@@ -473,7 +473,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                             }
 
                             let _ = uqRequest::new()
-                                .target(Address::from_str("our@vfs:sys:nectar")?)
+                                .target("our@vfs:sys:nectar".parse::<Address>()?)
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
@@ -528,7 +528,7 @@ pub fn handle_ui_asset_request(
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
     let _ = uqRequest::new()
-        .target(Address::from_str("our@vfs:sys:nectar")?)
+        .target("our@vfs:sys:nectar".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
@@ -564,7 +564,7 @@ pub fn send_ws_push(
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_server:sys:nectar").unwrap(),
+            "http_server:sys:nectar".parse::<ProcessId>().unwrap(),
         ))
         .body(
             serde_json::json!(HttpServerRequest::WebSocketPush {

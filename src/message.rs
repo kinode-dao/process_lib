@@ -81,16 +81,10 @@ pub enum SendErrorKind {
 
 impl SendErrorKind {
     pub fn is_offline(&self) -> bool {
-        match self {
-            SendErrorKind::Offline => true,
-            _ => false,
-        }
+        matches!(self, SendErrorKind::Offline)
     }
     pub fn is_timeout(&self) -> bool {
-        match self {
-            SendErrorKind::Timeout => true,
-            _ => false,
-        }
+        matches!(self, SendErrorKind::Timeout)
     }
 }
 
@@ -113,7 +107,7 @@ impl SendError {
         self.lazy_load_blob.as_ref()
     }
     pub fn context(&self) -> Option<&[u8]> {
-        self.context.as_ref().map(|s| s.as_slice())
+        self.context.as_deref()
     }
 }
 

@@ -304,3 +304,9 @@ impl Request {
         }
     }
 }
+
+impl Default for Request {
+    fn default() -> Self {
+        Request::new()
+    }
+}

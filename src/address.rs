@@ -19,13 +19,40 @@ impl Address {
             process: process.into(),
         }
     }
+    /// Read the node ID from an `Address`.
+    pub fn node(&self) -> &str {
+        &self.node
+    }
+    /// Read the process name from an `Address`.
+    pub fn process(&self) -> &str {
+        &self.process.process_name
+    }
+    /// Read the package name from an `Address`.
+    pub fn package(&self) -> &str {
+        &self.process.package_name
+    }
+    /// Read the publisher node ID from an `Address`. Note that `Address`
+    /// segments are not parsed for validity, and a node ID stored here is
+    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
+    /// to an Nectar identity at all.
+    pub fn publisher(&self) -> &str {
+        &self.process.publisher_node
+    }
+    /// Read the package_id (package + publisher) from an `Address`.
+    pub fn package_id(&self) -> PackageId {
+        PackageId::new(self.package(), self.publisher())
+    }
+}
+
+impl std::str::FromStr for Address {
+    type Err = AddressParseError;
     /// Attempt to parse an `Address` from a string. The formatting structure for
     /// an Address is `node@process_name:package_name:publisher_node`.
     ///
     /// TODO: clarify if `@` can be present in process name / package name / publisher name
     ///
     /// TODO: ensure `:` cannot sneak into first segment
-    pub fn from_str(input: &str) -> Result<Self, AddressParseError> {
+    fn from_str(input: &str) -> Result<Self, AddressParseError> {
         // split string on colons into 4 segments,
         // first one with @, next 3 with :
         let mut name_rest = input.split('@');
@@ -61,29 +88,6 @@ impl Address {
             },
         })
     }
-    /// Read the node ID from an `Address`.
-    pub fn node(&self) -> &str {
-        &self.node
-    }
-    /// Read the process name from an `Address`.
-    pub fn process(&self) -> &str {
-        &self.process.process_name
-    }
-    /// Read the package name from an `Address`.
-    pub fn package(&self) -> &str {
-        &self.process.package_name
-    }
-    /// Read the publisher node ID from an `Address`. Note that `Address`
-    /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
-    /// to an Nectar identity at all.
-    pub fn publisher(&self) -> &str {
-        &self.process.publisher_node
-    }
-    /// Read the package_id (package + publisher) from an `Address`.
-    pub fn package_id(&self) -> PackageId {
-        PackageId::new(self.package(), self.publisher())
-    }
 }
 
 impl Serialize for Address {
@@ -101,7 +105,7 @@ impl<'a> Deserialize<'a> for Address {
         D: serde::de::Deserializer<'a>,
     {
         let s = String::deserialize(deserializer)?;
-        Address::from_str(&s).map_err(serde::de::Error::custom)
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

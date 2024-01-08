@@ -18,6 +18,21 @@ impl PackageId {
             publisher_node: publisher_node.into(),
         }
     }
+    /// Read the package name from a `PackageId`.
+    pub fn package(&self) -> &str {
+        &self.package_name
+    }
+    /// Read the publisher node ID from a `PackageId`. Note that `PackageId`
+    /// segments are not parsed for validity, and a node ID stored here is
+    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
+    /// to an Nectar identity at all.
+    pub fn publisher(&self) -> &str {
+        &self.publisher_node
+    }
+}
+
+impl std::str::FromStr for PackageId {
+    type Err = ProcessIdParseError;
     /// Attempt to parse a `PackageId` from a string. The string must
     /// contain exactly two segments, where segments are strings separated
     /// by a colon `:`. The segments cannot themselves contain colons.
@@ -25,7 +40,7 @@ impl PackageId {
     /// to create a `PackageId`, not all strings without colons are actually
     /// valid usernames, which the `publisher_node` field of a `PackageId` will
     /// always in practice be.
-    pub fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         // split string on colons into 2 segments
         let mut segments = input.split(':');
         let package_name = segments
@@ -43,17 +58,6 @@ impl PackageId {
             package_name,
             publisher_node,
         })
-    }
-    /// Read the package name from a `PackageId`.
-    pub fn package(&self) -> &str {
-        &self.package_name
-    }
-    /// Read the publisher node ID from a `PackageId`. Note that `PackageId`
-    /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
-    /// to an Nectar identity at all.
-    pub fn publisher(&self) -> &str {
-        &self.publisher_node
     }
 }
 
