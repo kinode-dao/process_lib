@@ -13,12 +13,14 @@ pub enum Message {
         expects_response: Option<u64>,
         ipc: Vec<u8>,
         metadata: Option<String>,
+        capabilities: Vec<Capability>,
     },
     Response {
         source: Address,
         ipc: Vec<u8>,
         metadata: Option<String>,
         context: Option<Vec<u8>>,
+        capabilities: Vec<Capability>,
     },
 }
 
@@ -60,6 +62,14 @@ impl Message {
     /// Get the payload of a message, if any.
     pub fn payload(&self) -> Option<Payload> {
         crate::get_payload()
+    }
+
+    /// Get the capabilities of a message.
+    pub fn capabilities(&self) -> &Vec<Capability> {
+        match self {
+            Message::Request { capabilities, .. } => capabilities,
+            Message::Response { capabilities, .. } => capabilities,
+        }
     }
 }
 
@@ -135,12 +145,14 @@ pub fn wit_message_to_message(
             expects_response: req.expects_response,
             ipc: req.ipc,
             metadata: req.metadata,
+            capabilities: req.capabilities,
         },
         crate::uqbar::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
             ipc: resp.ipc,
             metadata: resp.metadata,
             context,
+            capabilities: resp.capabilities,
         },
     }
 }

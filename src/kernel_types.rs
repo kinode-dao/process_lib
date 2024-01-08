@@ -24,6 +24,7 @@ pub struct Request {
     pub expects_response: Option<u64>, // number of seconds until timeout
     pub ipc: Vec<u8>,
     pub metadata: Option<String>, // JSON-string
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ pub struct Response {
     pub inherit: bool,
     pub ipc: Vec<u8>,
     pub metadata: Option<String>, // JSON-string
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -43,13 +45,6 @@ pub enum Message {
 pub struct Capability {
     pub issuer: Address,
     pub params: String, // JSON-string
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct SignedCapability {
-    pub issuer: Address,
-    pub params: String,     // JSON-string
-    pub signature: Vec<u8>, // signed by the kernel, so we can verify that the kernel issued it
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,12 +90,21 @@ pub enum KernelCommand {
     ///
     /// The process that sends this command will be given messaging capabilities
     /// for the new process if `public` is false.
+    ///
+    /// All capabilities passed into initial_capabilities must be held by the source
+    /// of this message, or the kernel will discard them (silently for now).
     InitializeProcess {
         id: ProcessId,
         wasm_bytes_handle: String,
+        wit_version: Option<u32>,
         on_exit: OnExit,
-        initial_capabilities: HashSet<SignedCapability>,
+        initial_capabilities: HashSet<Capability>,
         public: bool,
+    },
+    /// Create an arbitrary capability and grant it to a process.
+    GrantCapabilities {
+        target: ProcessId,
+        capabilities: Vec<Capability>,
     },
     /// Tell the kernel to run a process that has already been installed.
     /// TODO: in the future, this command could be extended to allow for
@@ -111,6 +115,15 @@ pub enum KernelCommand {
     /// RUNTIME ONLY: notify the kernel that the runtime is shutting down and it
     /// should gracefully stop and persist the running processes.
     Shutdown,
+    /// Ask kernel to produce debugging information
+    Debug(KernelPrint),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KernelPrint {
+    ProcessMap,
+    Process(ProcessId),
+    HasCap { on: ProcessId, cap: Capability },
 }
 
 /// IPC format for all KernelCommand responses
@@ -200,8 +213,8 @@ pub struct PackageManifestEntry {
     pub process_wasm_path: String,
     pub on_exit: OnExit,
     pub request_networking: bool,
-    pub request_messaging: Option<Vec<serde_json::Value>>,
-    pub grant_messaging: Option<Vec<serde_json::Value>>,
+    pub request_capabilities: Option<Vec<serde_json::Value>>,
+    pub grant_capabilities: Option<Vec<serde_json::Value>>,
     pub public: bool,
 }
 
@@ -256,6 +269,11 @@ pub fn de_wit_request(wit: wit::Request) -> Request {
         expects_response: wit.expects_response,
         ipc: wit.ipc,
         metadata: wit.metadata,
+        capabilities: wit
+            .capabilities
+            .into_iter()
+            .map(de_wit_capability)
+            .collect(),
     }
 }
 
@@ -265,6 +283,11 @@ pub fn en_wit_request(request: Request) -> wit::Request {
         expects_response: request.expects_response,
         ipc: request.ipc,
         metadata: request.metadata,
+        capabilities: request
+            .capabilities
+            .into_iter()
+            .map(en_wit_capability)
+            .collect(),
     }
 }
 
@@ -273,6 +296,11 @@ pub fn de_wit_response(wit: wit::Response) -> Response {
         inherit: wit.inherit,
         ipc: wit.ipc,
         metadata: wit.metadata,
+        capabilities: wit
+            .capabilities
+            .into_iter()
+            .map(de_wit_capability)
+            .collect(),
     }
 }
 
@@ -281,6 +309,11 @@ pub fn en_wit_response(response: Response) -> wit::Response {
         inherit: response.inherit,
         ipc: response.ipc,
         metadata: response.metadata,
+        capabilities: response
+            .capabilities
+            .into_iter()
+            .map(en_wit_capability)
+            .collect(),
     }
 }
 
@@ -304,8 +337,8 @@ pub fn en_wit_payload(load: Option<Payload>) -> Option<wit::Payload> {
     }
 }
 
-pub fn de_wit_signed_capability(wit: wit::SignedCapability) -> SignedCapability {
-    SignedCapability {
+pub fn de_wit_capability(wit: wit::Capability) -> Capability {
+    Capability {
         issuer: Address {
             node: wit.issuer.node,
             process: ProcessId {
@@ -315,15 +348,13 @@ pub fn de_wit_signed_capability(wit: wit::SignedCapability) -> SignedCapability 
             },
         },
         params: wit.params,
-        signature: wit.signature,
     }
 }
 
-pub fn en_wit_signed_capability(cap: SignedCapability) -> wit::SignedCapability {
-    wit::SignedCapability {
+pub fn en_wit_capability(cap: Capability) -> wit::Capability {
+    wit::Capability {
         issuer: en_wit_address(cap.issuer),
         params: cap.params,
-        signature: cap.signature,
     }
 }
 

@@ -7,6 +7,7 @@ pub struct Response {
     ipc: Option<Vec<u8>>,
     metadata: Option<String>,
     payload: Option<Payload>,
+    capabilities: Vec<Capability>,
 }
 
 #[allow(dead_code)]
@@ -19,6 +20,7 @@ impl Response {
             ipc: None,
             metadata: None,
             payload: None,
+            capabilities: vec![],
         }
     }
     /// Set whether this response will "inherit" the payload of the request
@@ -142,6 +144,11 @@ impl Response {
             Ok(self)
         }
     }
+    /// Add capabilities to this response. Capabilities are a way to pass
+    pub fn capabilities(mut self, capabilities: Vec<Capability>) -> Self {
+        self.capabilities = capabilities;
+        self
+    }
     /// Attempt to send the response. This will only fail if the IPC field of
     /// the response has not yet been set using `ipc()` or `try_ipc()`.
     pub fn send(self) -> anyhow::Result<()> {
@@ -151,6 +158,7 @@ impl Response {
                     inherit: self.inherit,
                     ipc,
                     metadata: self.metadata,
+                    capabilities: self.capabilities,
                 },
                 self.payload.as_ref(),
             );

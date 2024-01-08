@@ -17,7 +17,7 @@ pub use crate::uqbar::process::standard::*;
 use serde::{Deserialize, Serialize};
 
 wit_bindgen::generate!({
-    path: "wit",
+    path: "uqwit",
     world: "lib",
 });
 
@@ -57,6 +57,8 @@ use message::wit_message_to_message;
 pub use message::{Message, SendError, SendErrorKind};
 mod on_exit;
 pub use on_exit::OnExit;
+mod capability;
+pub use capability::Capability;
 
 /// Implement the wit-bindgen specific code that the kernel uses to hook into
 /// a process. Write an `init(our: Address)` function and call it with this.
@@ -124,14 +126,16 @@ pub fn spawn(
     name: Option<&str>,
     wasm_path: &str,
     on_exit: OnExit,
-    capabilities: &Capabilities,
+    request_capabilities: Vec<Capability>,
+    grant_capabilities: Vec<ProcessId>,
     public: bool,
 ) -> Result<ProcessId, SpawnError> {
     crate::uqbar::process::standard::spawn(
         name,
         wasm_path,
         &on_exit._to_standard().map_err(|_e| SpawnError::NameTaken)?,
-        capabilities,
+        &request_capabilities,
+        &grant_capabilities,
         public,
     )
 }
@@ -198,27 +202,19 @@ where
     }
 }
 
-/// Send the capability to message this process to other process(es). This takes an iterator
-/// of [`ProcessId`] since capabilities shared this way are only shared locally. To share
-/// a capability remotely, first acquire its signed form using [`get_capability`] then
-/// attach it to a request/response using [`attach_capability`]. (This will be streamlined
-/// in the future!)
-///
-/// If `our` is not the `Address` of this process, this function will panic, unless you also
-/// hold the messaging capability for the given `Address`!
-pub fn grant_messaging<I, T>(our: &Address, grant_to: I)
-where
-    I: IntoIterator<Item = T>,
-    T: Into<ProcessId>,
-{
-    // the kernel will always give us this capability, so this should never ever fail
-    let our_messaging_cap = crate::get_capability(our, &"\"messaging\"".into()).unwrap();
-    grant_to.into_iter().for_each(|process| {
-        crate::share_capability(&process.into(), &our_messaging_cap);
-    });
+/// See if we have the capability to message a certain process.
+/// Note if you have not saved the capability, you will not be able to message the other process.
+pub fn can_message(address: &Address) -> bool {
+    crate::our_capabilities()
+        .iter()
+        .any(|cap| cap.params == "\"messaging\"" && cap.issuer == *address)
 }
 
-/// See if we have the capability to message a certain process.
-pub fn can_message(address: &Address) -> bool {
-    crate::get_capability(address, &"\"messaging\"".into()).is_some()
+/// Get a capability in our store
+/// NOTE unfortunatly this is O(n), not sure if wit let's us do any better
+pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
+    crate::our_capabilities()
+        .iter()
+        .find(|cap| cap.issuer == *our && cap.params == params)
+        .cloned()
 }
