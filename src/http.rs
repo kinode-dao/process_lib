@@ -396,7 +396,7 @@ pub fn send_request_await_response(
             })
         }
         _ => Err(HttpClientError::RequestFailed {
-            error: format!("http_client timed out"),
+            error: "http_client timed out".to_string(),
         }),
     }
 }
@@ -419,11 +419,7 @@ pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), an
     let _ = uqRequest::new()
         .target(Address::from_str("our@vfs:sys:uqbar")?)
         .ipc(serde_json::to_vec(&VfsRequest {
-            path: format!(
-                "/{}/pkg/{}/index.html",
-                our.package_id().to_string(),
-                directory
-            ),
+            path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
         })?)
         .send_and_await_response(5)?;
@@ -450,7 +446,7 @@ pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), an
 pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
     serve_index_html(our, directory)?;
 
-    let initial_path = format!("{}/pkg/{}", our.package_id().to_string(), directory);
+    let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
     let mut queue = VecDeque::new();
     queue.push_back(initial_path.clone());
@@ -468,7 +464,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
             return Err(anyhow::anyhow!("serve_ui: no response for path"));
         };
 
-        let directory_ipc = serde_json::from_slice::<VfsResponse>(&directory_response.ipc())?;
+        let directory_ipc = serde_json::from_slice::<VfsResponse>(directory_response.ipc())?;
 
         // Determine if it's a file or a directory and handle appropriately
         match directory_ipc {
@@ -477,7 +473,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                     match entry.file_type {
                         // If it's a file, serve it statically
                         FileType::File => {
-                            if format!("{}/index.html", initial_path.trim_start_matches("/"))
+                            if format!("{}/index.html", initial_path.trim_start_matches('/'))
                                 == entry.path
                             {
                                 continue;
@@ -541,13 +537,13 @@ pub fn handle_ui_asset_request(
     let _ = uqRequest::new()
         .target(Address::from_str("our@vfs:sys:uqbar")?)
         .ipc(serde_json::to_vec(&VfsRequest {
-            path: format!("{}/pkg/{}", our.package_id().to_string(), target_path),
+            path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
         })?)
         .send_and_await_response(5)?;
 
     let mut headers = HashMap::new();
-    let content_type = get_mime_type(&path);
+    let content_type = get_mime_type(path);
     headers.insert("Content-Type".to_string(), content_type);
 
     uqResponse::new()

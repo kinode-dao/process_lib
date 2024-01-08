@@ -105,7 +105,7 @@ impl Sqlite {
                 match response {
                     SqliteResponse::Read => {
                         let payload = get_payload().ok_or_else(|| SqliteError::InputError {
-                            error: format!("sqlite: no payload"),
+                            error: "sqlite: no payload".to_string(),
                         })?;
                         let values = serde_json::from_slice::<
                             Vec<HashMap<String, serde_json::Value>>,
@@ -122,7 +122,7 @@ impl Sqlite {
                     )),
                 }
             }
-            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
     }
 
@@ -156,7 +156,7 @@ impl Sqlite {
                     )),
                 }
             }
-            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
     }
 
@@ -184,7 +184,7 @@ impl Sqlite {
                     )),
                 }
             }
-            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
     }
 
@@ -212,7 +212,7 @@ impl Sqlite {
                     )),
                 }
             }
-            _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
         }
     }
 }
@@ -244,7 +244,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
                 )),
             }
         }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+        _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
     }
 }
 
@@ -272,6 +272,6 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
                 )),
             }
         }
-        _ => return Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
+        _ => Err(anyhow::anyhow!("sqlite: unexpected message: {:?}", res)),
     }
 }

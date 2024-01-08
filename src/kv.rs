@@ -86,7 +86,7 @@ impl Kv {
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
-            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
 
@@ -112,7 +112,7 @@ impl Kv {
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
-            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
 
@@ -137,7 +137,7 @@ impl Kv {
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
-            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
 
@@ -162,7 +162,7 @@ impl Kv {
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
-            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
 
@@ -187,7 +187,7 @@ impl Kv {
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
-            _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
 }
@@ -216,7 +216,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+        _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
 }
 
@@ -241,6 +241,6 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
         }
-        _ => return Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+        _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
     }
 }

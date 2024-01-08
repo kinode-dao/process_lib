@@ -279,7 +279,7 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
         }
-        _ => return Err(anyhow::anyhow!("vfs: unexpected message: {:?}", res)),
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", res)),
     }
 }
 
