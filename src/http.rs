@@ -694,22 +694,17 @@ pub fn send_ws_client_push(
     Ok(())
 }
 
-pub fn close_ws_connection(
-    node: String,
-    channel_id: u32,
-) -> anyhow::Result<()> {
+pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> {
     uqRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
         .ipc(
-            serde_json::json!(WebSocketClientAction::Close {
-                channel_id,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            serde_json::json!(WebSocketClientAction::Close { channel_id })
+                .to_string()
+                .as_bytes()
+                .to_vec(),
         )
         .send()?;
 
@@ -726,12 +721,10 @@ pub fn close_ws_connection_and_await(
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
         .ipc(
-            serde_json::json!(WebSocketClientAction::Close {
-                channel_id,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            serde_json::json!(WebSocketClientAction::Close { channel_id })
+                .to_string()
+                .as_bytes()
+                .to_vec(),
         )
         .send_and_await_response(5)
 }
