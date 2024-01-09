@@ -3,6 +3,7 @@ use crate::{
     get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
     Response as uqResponse,
 };
+use anyhow::Result;
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -80,6 +81,42 @@ pub enum HttpClientError {
     BadVersion { version: String },
     #[error("http_client: failed to execute request {}", error)]
     RequestFailed { error: String },
+}
+
+/// WebSocket Client Request type that can be shared over WASM boundary to apps.
+/// This is the one you send to the `http_client:sys:uqbar` service.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum WebSocketClientAction {
+    Open {
+        url: String,
+        headers: HashMap<String, String>,
+        channel_id: u32,
+    },
+    Push {
+        channel_id: u32,
+        message_type: WsMessageType,
+    },
+    Close {
+        channel_id: u32,
+    },
+    Response {
+        channel_id: u32,
+        result: Result<(), WebSocketClientError>,
+    },
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum WebSocketClientError {
+    #[error("websocket_client: request format incorrect: {}.", req)]
+    BadRequest { req: String },
+    #[error("websocket_client: url could not be parsed: {}", url)]
+    BadUrl { url: String },
+    #[error("websocket_client: failed to open connection {}", url)]
+    OpenFailed { url: String },
+    #[error("websocket_client: failed to send message {}", channel_id)]
+    PushFailed { channel_id: u32 },
+    #[error("websocket_client: failed to close connection {}", channel_id)]
+    CloseFailed { channel_id: u32 },
 }
 
 /// Request type sent to `http_server:sys:nectar` in order to configure it.
@@ -579,4 +616,122 @@ pub fn send_ws_push(
         .send()?;
 
     Ok(())
+}
+
+pub fn open_ws_connection(
+    node: String,
+    url: String,
+    headers: Option<HashMap<String, String>>,
+    channel_id: u32,
+) -> anyhow::Result<()> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_client:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(WebSocketClientAction::Open {
+                url,
+                headers: headers.unwrap_or(HashMap::new()),
+                channel_id,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .send()?;
+
+    Ok(())
+}
+
+pub fn open_ws_connection_and_await(
+    node: String,
+    url: String,
+    headers: Option<HashMap<String, String>>,
+    channel_id: u32,
+) -> anyhow::Result<Result<Message, SendError>> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_client:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(WebSocketClientAction::Open {
+                url,
+                headers: headers.unwrap_or(HashMap::new()),
+                channel_id,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .send_and_await_response(5)
+}
+
+pub fn send_ws_client_push(
+    node: String,
+    channel_id: u32,
+    message_type: WsMessageType,
+    payload: uqPayload,
+) -> anyhow::Result<()> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_client:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(WebSocketClientAction::Push {
+                channel_id,
+                message_type,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .payload(payload)
+        .send()?;
+
+    Ok(())
+}
+
+pub fn close_ws_connection(
+    node: String,
+    channel_id: u32,
+) -> anyhow::Result<()> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_client:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(WebSocketClientAction::Close {
+                channel_id,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .send()?;
+
+    Ok(())
+}
+
+pub fn close_ws_connection_and_await(
+    node: String,
+    channel_id: u32,
+) -> anyhow::Result<Result<Message, SendError>> {
+    uqRequest::new()
+        .target(Address::new(
+            node,
+            ProcessId::from_str("http_client:sys:uqbar").unwrap(),
+        ))
+        .ipc(
+            serde_json::json!(WebSocketClientAction::Close {
+                channel_id,
+            })
+            .to_string()
+            .as_bytes()
+            .to_vec(),
+        )
+        .send_and_await_response(5)
 }
