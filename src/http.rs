@@ -1,7 +1,7 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
     get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
-    Response as uqResponse, SendError,
+    Response as uqResponse,
 };
 pub use http::*;
 use serde::{Deserialize, Serialize};
