@@ -1,9 +1,8 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
     get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
-    Response as uqResponse,
+    Response as uqResponse, SendError,
 };
-use anyhow::Result;
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -629,7 +628,7 @@ pub fn open_ws_connection(
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(WebSocketClientAction::Open {
                 url,
                 headers: headers.unwrap_or(HashMap::new()),
@@ -649,13 +648,13 @@ pub fn open_ws_connection_and_await(
     url: String,
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
-) -> anyhow::Result<Result<Message, SendError>> {
+) -> anyhow::Result<Result<Message>> {
     uqRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(WebSocketClientAction::Open {
                 url,
                 headers: headers.unwrap_or(HashMap::new()),
@@ -672,14 +671,14 @@ pub fn send_ws_client_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    payload: uqPayload,
-) -> anyhow::Result<()> {
+    blob: uqBlob,
+) -> Result<()> {
     uqRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(WebSocketClientAction::Push {
                 channel_id,
                 message_type,
@@ -688,7 +687,7 @@ pub fn send_ws_client_push(
             .as_bytes()
             .to_vec(),
         )
-        .payload(payload)
+        .blob(blob)
         .send()?;
 
     Ok(())
@@ -700,7 +699,7 @@ pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> 
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(WebSocketClientAction::Close { channel_id })
                 .to_string()
                 .as_bytes()
@@ -714,13 +713,13 @@ pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> 
 pub fn close_ws_connection_and_await(
     node: String,
     channel_id: u32,
-) -> anyhow::Result<Result<Message, SendError>> {
+) -> anyhow::Result<Result<Message>> {
     uqRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:sys:uqbar").unwrap(),
         ))
-        .ipc(
+        .body(
             serde_json::json!(WebSocketClientAction::Close { channel_id })
                 .to_string()
                 .as_bytes()
