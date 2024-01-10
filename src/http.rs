@@ -209,7 +209,6 @@ impl IncomingHttpRequest {
     }
 }
 
-
 /// Request type that can be shared over WASM boundary to apps.
 /// This is the one you send to the `http_client:sys:nectar` service.
 #[derive(Debug, Serialize, Deserialize)]
@@ -284,8 +283,6 @@ pub enum HttpClientError {
     #[error("websocket_client: failed to close connection {}", channel_id)]
     WsCloseFailed { channel_id: u32 },
 }
-
-
 
 /// Register a new path with the HTTP server. This will cause the HTTP server to
 /// forward any requests on this path to the calling process. Requests will be
