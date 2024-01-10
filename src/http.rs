@@ -392,12 +392,12 @@ pub fn send_request(
 ) -> anyhow::Result<()> {
     let req = uqRequest::new()
         .target(("our", "http_client", "sys", "nectar"))
-        .body(serde_json::to_vec(&OutgoingHttpRequest {
+        .body(serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
             method: method.to_string(),
             version: None,
             url: url.to_string(),
             headers: headers.unwrap_or_default(),
-        })?)
+        }))?)
         .blob_bytes(body);
     if let Some(timeout) = timeout {
         req.expects_response(timeout).send()
@@ -413,16 +413,16 @@ pub fn send_request_await_response(
     headers: Option<HashMap<String, String>>,
     timeout: u64,
     body: Vec<u8>,
-) -> std::result::Result<HttpResponse, HttpClientError> {
+) -> std::result::Result<HttpClientResponse, HttpClientError> {
     let res = uqRequest::new()
         .target(("our", "http_client", "sys", "nectar"))
         .body(
-            serde_json::to_vec(&OutgoingHttpRequest {
+            serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
                 version: None,
                 url: url.to_string(),
                 headers: headers.unwrap_or_default(),
-            })
+            }))
             .map_err(|e| HttpClientError::BadRequest {
                 req: format!("{e:?}"),
             })?,
@@ -434,9 +434,12 @@ pub fn send_request_await_response(
         })?;
     match res {
         Ok(Message::Response { body, .. }) => {
-            serde_json::from_slice(&body).map_err(|e| HttpClientError::RequestFailed {
-                error: format!("http_client gave unparsable response: {e}"),
-            })
+            match serde_json::from_slice(&body) {
+                Ok(resp) => resp,
+                Err(e) => Err(HttpClientError::RequestFailed {
+                    error: format!("http_client gave unparsable response: {e}"),
+                }),
+            }
         }
         _ => Err(HttpClientError::RequestFailed {
             error: "http_client timed out".to_string(),
