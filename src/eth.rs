@@ -46,15 +46,15 @@ pub enum EthSubEvent {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EthLog {
-    address: String,
-    block_hash: String,
-    block_number: String,
-    data: String,
-    log_index: String,
-    removed: bool,
-    topics: Vec<String>,
-    transaction_hash: String,
-    transaction_index: String,
+    pub address: String,
+    pub block_hash: String,
+    pub block_number: String,
+    pub data: String,
+    pub log_index: String,
+    pub removed: bool,
+    pub topics: Vec<String>,
+    pub transaction_hash: String,
+    pub transaction_index: String,
 }
 
 #[derive(Debug)]
