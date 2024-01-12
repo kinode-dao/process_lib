@@ -1,30 +1,57 @@
 use crate::*;
 use crate::{Address as uqAddress, Request as uqRequest};
-use serde::{Deserialize, Serialize};
-
+use alloy_rpc_types::Log;
 pub use ethers_core::types::{
     Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
 };
+use serde::{Deserialize, Serialize};
 
+/// The Request type that can be made to eth:sys:nectar. Currently primitive, this
+/// enum will expand to support more actions in the future.
+///
+/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum EthRequest {
-    SubscribeLogs(SubscribeLogs),
+pub enum EthAction {
+    /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
+    SubscribeLogs { sub_id: u64, filter: Filter },
+    /// Kill a SubscribeLogs subscription of a given ID, to stop getting updates.
+    UnsubscribeLogs(u64),
 }
 
+/// The Response type which a process will get from requesting with an [`EthAction`] will be
+/// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
+/// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SubscribeLogs {
-    pub filter: Filter,
+pub enum EthError {
+    /// The subscription ID already existed
+    SubscriptionIdCollision,
+    /// The ethers provider threw an error when trying to subscribe
+    /// (contains ProviderError serialized to debug string)
+    ProviderError(String),
+    SubscriptionClosed,
+    /// The subscription ID was not found, so we couldn't unsubscribe.
+    SubscriptionNotFound,
+}
+
+/// The Request type which a process will get from using SubscribeLogs to subscribe
+/// to a log.
+///
+/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthSubEvent {
+    Log(Log),
 }
 
 #[derive(Debug)]
 pub struct SubscribeLogsRequest {
     pub request: uqRequest,
+    pub id: u64,
     pub filter: Filter,
 }
 
 impl SubscribeLogsRequest {
     /// Start building a new `SubscribeLogsRequest`.
-    pub fn new() -> Self {
+    pub fn new(id: u64) -> Self {
         let request = uqRequest::new().target(uqAddress::new(
             "our",
             ProcessId::new(Some("eth"), "sys", "nectar"),
@@ -32,20 +59,19 @@ impl SubscribeLogsRequest {
 
         SubscribeLogsRequest {
             request,
+            id,
             filter: Filter::new(),
         }
     }
 
     /// Attempt to send the request.
-    pub fn send(mut self) -> anyhow::Result<()> {
-        self.request = self
-            .request
-            .body(serde_json::to_vec(&EthRequest::SubscribeLogs(
-                SubscribeLogs {
-                    filter: self.filter.clone(),
-                },
-            ))?);
-        self.request.send()
+    pub fn send(self) -> anyhow::Result<()> {
+        self.request
+            .body(serde_json::to_vec(&EthAction::SubscribeLogs {
+                sub_id: self.id,
+                filter: self.filter,
+            })?)
+            .send()
     }
 
     /// Sets the inner filter object
