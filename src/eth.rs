@@ -1,11 +1,10 @@
 use crate::*;
 use crate::{Address as uqAddress, Request as uqRequest};
-use serde::{Deserialize, Serialize};
-
+use alloy_rpc_types::Log;
 pub use ethers_core::types::{
-    Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray, H256,
-    U64,
+    Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
 };
+use serde::{Deserialize, Serialize};
 
 /// The Request type that can be made to eth:sys:nectar. Currently primitive, this
 /// enum will expand to support more actions in the future.
@@ -40,21 +39,7 @@ pub enum EthError {
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthSubEvent {
-    Log(EthLog),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct EthLog {
-    pub address: String,
-    pub block_hash: String,
-    pub block_number: String,
-    pub data: String,
-    pub log_index: String,
-    pub removed: bool,
-    pub topics: Vec<String>,
-    pub transaction_hash: String,
-    pub transaction_index: String,
+    Log(Log),
 }
 
 #[derive(Debug)]
