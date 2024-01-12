@@ -192,10 +192,10 @@ impl File {
     }
 
     /// Write buffer to file at current position, overwriting any existing data.
-    pub fn write_at(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
+    pub fn write_all(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::WriteAt,
+            action: VfsAction::WriteAll,
         };
         let message = Request::new()
             .target(("our", "vfs", "sys", "nectar"))
