@@ -40,7 +40,21 @@ pub enum EthError {
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthSubEvent {
-    Log(Log),
+    Log(EthLog),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EthLog {
+    address: String,
+    block_hash: String,
+    block_number: String,
+    data: String,
+    log_index: String,
+    removed: bool,
+    topics: Vec<String>,
+    transaction_hash: String,
+    transaction_index: String,
 }
 
 #[derive(Debug)]
