@@ -15,7 +15,7 @@ use thiserror::Error;
 //
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the `http_server:sys:nectar` service.
+/// This is the one you receive from the `http_server:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
     Http(IncomingHttpRequest),
@@ -57,7 +57,7 @@ pub struct HttpResponse {
     // BODY is stored in the lazy_load_blob, as bytes
 }
 
-/// Request type sent to `http_server:sys:nectar` in order to configure it.
+/// Request type sent to `http_server:distro:sys` in order to configure it.
 /// You can also send [`type@HttpServerAction::WebSocketPush`], which
 /// allows you to push messages across an existing open WebSocket connection.
 ///
@@ -210,7 +210,7 @@ impl IncomingHttpRequest {
 }
 
 /// Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the `http_client:sys:nectar` service.
+/// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientAction {
     Http(OutgoingHttpRequest),
@@ -229,7 +229,7 @@ pub enum HttpClientAction {
 }
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the `http_client:sys:nectar` service.
+/// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
     pub method: String,          // must parse to http::Method
@@ -241,7 +241,7 @@ pub struct OutgoingHttpRequest {
 }
 
 /// WebSocket Client Request type that can be shared over WASM boundary to apps.
-/// This comes from an open websocket client connection in the `http_client:sys:nectar` service.
+/// This comes from an open websocket client connection in the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientRequest {
     WebSocketPush {
@@ -254,7 +254,7 @@ pub enum HttpClientRequest {
 }
 
 /// HTTP Client Response type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the `http_client:sys:nectar` service.
+/// This is the one you receive from the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {
     Http(HttpResponse),
@@ -292,7 +292,7 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
@@ -322,7 +322,7 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
@@ -350,7 +350,7 @@ where
     T: Into<String>,
 {
     let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
             path: path.into(),
             authenticated,
@@ -391,7 +391,7 @@ pub fn send_request(
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
     let req = uqRequest::new()
-        .target(("our", "http_client", "sys", "nectar"))
+        .target(("our", "http_client", "distro", "sys"))
         .body(serde_json::to_vec(&HttpClientAction::Http(
             OutgoingHttpRequest {
                 method: method.to_string(),
@@ -417,7 +417,7 @@ pub fn send_request_await_response(
     body: Vec<u8>,
 ) -> std::result::Result<HttpClientResponse, HttpClientError> {
     let res = uqRequest::new()
-        .target(("our", "http_client", "sys", "nectar"))
+        .target(("our", "http_client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
@@ -463,7 +463,7 @@ pub fn get_mime_type(filename: &str) -> String {
 // Serve index.html
 pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
     let _ = uqRequest::new()
-        .target("our@vfs:sys:nectar".parse::<Address>()?)
+        .target("our@vfs:distro:sys".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
@@ -499,7 +499,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
     while let Some(path) = queue.pop_front() {
         let directory_response = uqRequest::new()
-            .target("our@vfs:sys:nectar".parse::<Address>()?)
+            .target("our@vfs:distro:sys".parse::<Address>()?)
             .body(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
@@ -526,7 +526,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                             }
 
                             let _ = uqRequest::new()
-                                .target("our@vfs:sys:nectar".parse::<Address>()?)
+                                .target("our@vfs:distro:sys".parse::<Address>()?)
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
@@ -581,7 +581,7 @@ pub fn handle_ui_asset_request(
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
     let _ = uqRequest::new()
-        .target("our@vfs:sys:nectar".parse::<Address>()?)
+        .target("our@vfs:distro:sys".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
@@ -617,7 +617,7 @@ pub fn send_ws_push(
     uqRequest::new()
         .target(Address::new(
             node,
-            "http_server:sys:nectar".parse::<ProcessId>().unwrap(),
+            "http_server:distro:sys".parse::<ProcessId>().unwrap(),
         ))
         .body(
             serde_json::json!(HttpServerRequest::WebSocketPush {
@@ -643,7 +643,7 @@ pub fn open_ws_connection(
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
@@ -669,7 +669,7 @@ pub fn open_ws_connection_and_await(
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
@@ -693,7 +693,7 @@ pub fn send_ws_client_push(
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketPush {
@@ -712,7 +712,7 @@ pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> 
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
@@ -732,7 +732,7 @@ pub fn close_ws_connection_and_await(
     uqRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })

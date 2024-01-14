@@ -133,7 +133,7 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
         action: VfsAction::Metadata,
     };
     let message = Request::new()
-        .target(("our", "vfs", "sys", "nectar"))
+        .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 

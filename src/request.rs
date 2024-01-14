@@ -285,14 +285,7 @@ impl Request {
                         }
                     },
                     message: wit_message_to_message(
-                        Address {
-                            node: "our".to_string(),
-                            process: ProcessId {
-                                process_name: "net".to_string(),
-                                package_name: "sys".to_string(),
-                                publisher_node: "nectar".to_string(),
-                            },
-                        },
+                        Address::new("our", ProcessId::new(Some("net"), "distro", "sys")),
                         send_err.message,
                     ),
                     lazy_load_blob: send_err.lazy_load_blob,
