@@ -10,10 +10,10 @@ pub enum OnExit {
 impl OnExit {
     /// Call the kernel to get the current set OnExit behavior
     pub fn get() -> Self {
-        match crate::nectar::process::standard::get_on_exit() {
-            crate::nectar::process::standard::OnExit::None => OnExit::None,
-            crate::nectar::process::standard::OnExit::Restart => OnExit::Restart,
-            crate::nectar::process::standard::OnExit::Requests(reqs) => {
+        match crate::kinode::process::standard::get_on_exit() {
+            crate::kinode::process::standard::OnExit::None => OnExit::None,
+            crate::kinode::process::standard::OnExit::Restart => OnExit::Restart,
+            crate::kinode::process::standard::OnExit::Requests(reqs) => {
                 let mut requests: Vec<Request> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     requests.push(Request {
@@ -76,25 +76,25 @@ impl OnExit {
     }
     /// Set the OnExit behavior for this process
     pub fn set(self) -> anyhow::Result<()> {
-        crate::nectar::process::standard::set_on_exit(&self._to_standard()?);
+        crate::kinode::process::standard::set_on_exit(&self._to_standard()?);
         Ok(())
     }
     /// Convert this OnExit to the kernel's OnExit type
-    pub fn _to_standard(self) -> anyhow::Result<crate::nectar::process::standard::OnExit> {
+    pub fn _to_standard(self) -> anyhow::Result<crate::kinode::process::standard::OnExit> {
         match self {
-            OnExit::None => Ok(crate::nectar::process::standard::OnExit::None),
-            OnExit::Restart => Ok(crate::nectar::process::standard::OnExit::Restart),
+            OnExit::None => Ok(crate::kinode::process::standard::OnExit::None),
+            OnExit::Restart => Ok(crate::kinode::process::standard::OnExit::Restart),
             OnExit::Requests(reqs) => {
                 let mut kernel_reqs: Vec<(
                     Address,
-                    nectar::process::standard::Request,
+                    kinode::process::standard::Request,
                     Option<LazyLoadBlob>,
                 )> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     kernel_reqs.push((
                         req.target
                             .ok_or(anyhow::anyhow!("request without target given"))?,
-                        nectar::process::standard::Request {
+                        kinode::process::standard::Request {
                             inherit: req.inherit,
                             expects_response: None,
                             body: req
@@ -106,7 +106,7 @@ impl OnExit {
                         req.blob,
                     ));
                 }
-                Ok(crate::nectar::process::standard::OnExit::Requests(
+                Ok(crate::kinode::process::standard::OnExit::Requests(
                     kernel_reqs,
                 ))
             }

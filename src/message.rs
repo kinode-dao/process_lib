@@ -131,17 +131,17 @@ impl std::error::Error for SendError {
 
 pub fn wit_message_to_message(
     source: Address,
-    message: crate::nectar::process::standard::Message,
+    message: crate::kinode::process::standard::Message,
 ) -> Message {
     match message {
-        crate::nectar::process::standard::Message::Request(req) => Message::Request {
+        crate::kinode::process::standard::Message::Request(req) => Message::Request {
             source,
             expects_response: req.expects_response,
             body: req.body,
             metadata: req.metadata,
             capabilities: req.capabilities,
         },
-        crate::nectar::process::standard::Message::Response((resp, context)) => Message::Response {
+        crate::kinode::process::standard::Message::Response((resp, context)) => Message::Response {
             source,
             body: resp.body,
             metadata: resp.metadata,

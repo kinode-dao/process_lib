@@ -329,7 +329,7 @@ where
             local_only,
             cache: true,
         })?)
-        .blob(crate::nectar::process::standard::LazyLoadBlob {
+        .blob(crate::kinode::process::standard::LazyLoadBlob {
             mime: content_type,
             bytes: content,
         })

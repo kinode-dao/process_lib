@@ -1,10 +1,10 @@
 # process_lib
 
-Library of functions for more ergonomic Nectar process development.
+Library of functions for more ergonomic kinode process development.
 
 To develop/build:
 ```
-git submodule add https://github.com/uqbar-dao/nectar-wit.git
+git submodule add https://github.com/uqbar-dao/kinode-wit.git
 ```
 
 Docs: (TODO link)
