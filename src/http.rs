@@ -196,17 +196,6 @@ impl IncomingHttpRequest {
         http::Method::from_bytes(self.method.as_bytes())
             .map_err(|e| anyhow::anyhow!("couldn't parse method: {:?}", e))
     }
-
-    pub fn path(&self) -> anyhow::Result<String> {
-        let url = url::Url::parse(&self.raw_path)?;
-        // skip the first path segment, which is the process ID.
-        Ok(url
-            .path_segments()
-            .ok_or(anyhow::anyhow!("url path missing process ID!"))?
-            .skip(1)
-            .collect::<Vec<&str>>()
-            .join("/"))
-    }
 }
 
 /// Request type that can be shared over WASM boundary to apps.
