@@ -68,7 +68,7 @@ pub struct FileMetadata {
     pub len: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DirEntry {
     pub path: String,
     pub file_type: FileType,
