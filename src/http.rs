@@ -40,11 +40,11 @@ pub enum HttpServerRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IncomingHttpRequest {
-    pub source_socket_addr: Option<String>, // will parse to SocketAddr
-    pub method: String,                     // will parse to http::Method
-    pub raw_path: String,
-    pub headers: HashMap<String, String>,
-    pub query_params: HashMap<String, String>,
+    source_socket_addr: Option<String>, // will parse to SocketAddr
+    method: String,                     // will parse to http::Method
+    url: String,                        // will parse to url::Url
+    headers: HashMap<String, String>,   // will parse to http::HeaderMap
+    query_params: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
 }
 
@@ -189,12 +189,52 @@ impl HttpServerRequest {
 
 impl IncomingHttpRequest {
     pub fn url(&self) -> anyhow::Result<url::Url> {
-        url::Url::parse(&self.raw_path).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
+        url::Url::parse(&self.url).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
     }
 
     pub fn method(&self) -> anyhow::Result<http::Method> {
         http::Method::from_bytes(self.method.as_bytes())
             .map_err(|e| anyhow::anyhow!("couldn't parse method: {:?}", e))
+    }
+
+    pub fn source_socket_addr(&self) -> anyhow::Result<std::net::SocketAddr> {
+        match &self.source_socket_addr {
+            Some(addr) => addr
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid format for socket address: {}", addr)),
+            None => Err(anyhow::anyhow!("No source socket address provided")),
+        }
+    }
+
+    pub fn path(&self) -> anyhow::Result<String> {
+        let url = url::Url::parse(&self.url)?;
+        // skip the first path segment, which is the process ID.
+        let path = url
+            .path_segments()
+            .ok_or(anyhow::anyhow!("url path missing process ID!"))?
+            .skip(1)
+            .collect::<Vec<&str>>()
+            .join("/");
+        Ok(format!("/{}", path))
+    }
+
+    pub fn headers(&self) -> HeaderMap {
+        let mut header_map = HeaderMap::new();
+        for (key, value) in self.headers.iter() {
+            let key_bytes = key.as_bytes();
+            let Ok(key_name) = HeaderName::from_bytes(key_bytes) else {
+                continue;
+            };
+            let Ok(value_header) = HeaderValue::from_str(&value) else {
+                continue;
+            };
+            header_map.insert(key_name, value_header);
+        }
+        header_map
+    }
+
+    pub fn query_params(&self) -> HashMap<String, String> {
+        self.query_params.clone()
     }
 }
 
