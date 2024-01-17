@@ -154,7 +154,7 @@ impl Response {
     pub fn send(self) -> anyhow::Result<()> {
         if let Some(body) = self.body {
             crate::send_response(
-                &crate::nectar::process::standard::Response {
+                &crate::kinode::process::standard::Response {
                     inherit: self.inherit,
                     body,
                     metadata: self.metadata,

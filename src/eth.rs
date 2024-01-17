@@ -6,7 +6,7 @@ pub use ethers_core::types::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The Request type that can be made to eth:sys:nectar. Currently primitive, this
+/// The Request type that can be made to eth:distro:sys. Currently primitive, this
 /// enum will expand to support more actions in the future.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
@@ -54,7 +54,7 @@ impl SubscribeLogsRequest {
     pub fn new(id: u64) -> Self {
         let request = uqRequest::new().target(uqAddress::new(
             "our",
-            ProcessId::new(Some("eth"), "sys", "nectar"),
+            ProcessId::new(Some("eth"), "distro", "sys"),
         ));
 
         SubscribeLogsRequest {

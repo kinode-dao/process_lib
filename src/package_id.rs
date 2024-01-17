@@ -24,8 +24,8 @@ impl PackageId {
     }
     /// Read the publisher node ID from a `PackageId`. Note that `PackageId`
     /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
-    /// to an Nectar identity at all.
+    /// not guaranteed to be a valid ID in the name system, or be connected
+    /// to an identity at all.
     pub fn publisher(&self) -> &str {
         &self.publisher_node
     }

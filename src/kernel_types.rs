@@ -1,4 +1,4 @@
-use crate::nectar::process::standard as wit;
+use crate::kinode::process::standard as wit;
 use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,7 +6,7 @@ use std::collections::HashSet;
 //
 // process-facing kernel types, used for process
 // management and message-passing
-// matches types in nectar.wit
+// matches types in kinode.wit
 //
 
 pub type Context = Vec<u8>;

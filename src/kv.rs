@@ -62,7 +62,7 @@ impl Kv {
     /// Get a value.
     pub fn get(&self, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         let res = Request::new()
-            .target(("our", "kv", "sys", "nectar"))
+            .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -93,7 +93,7 @@ impl Kv {
     /// Set a value, optionally in a transaction.
     pub fn set(&self, key: Vec<u8>, value: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "kv", "sys", "nectar"))
+            .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -119,7 +119,7 @@ impl Kv {
     /// Delete a value, optionally in a transaction.
     pub fn delete(&self, key: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "kv", "sys", "nectar"))
+            .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -144,7 +144,7 @@ impl Kv {
     /// Begin a transaction.
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
-            .target(("our", "kv", "sys", "nectar"))
+            .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -169,7 +169,7 @@ impl Kv {
     /// Commit a transaction.
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "kv", "sys", "nectar"))
+            .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -195,7 +195,7 @@ impl Kv {
 /// Opens or creates a kv db.
 pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
     let res = Request::new()
-        .target(("our", "kv", "sys", "nectar"))
+        .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
@@ -223,7 +223,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
 /// Removes and deletes a kv db.
 pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
-        .target(("our", "kv", "sys", "nectar"))
+        .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
             package_id: package_id.clone(),
             db: db.to_string(),

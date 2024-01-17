@@ -1,4 +1,4 @@
-[submodule "nectar-wit"]
-	path = nectar-wit
-	url = https://github.com/uqbar-dao/nectar-wit.git
+[submodule "kinode-wit"]
+	path = kinode-wit
+	url = https://github.com/uqbar-dao/kinode-wit.git
 	branch = master

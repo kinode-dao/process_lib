@@ -241,7 +241,7 @@ impl Request {
         if let (Some(target), Some(body)) = (self.target, self.body) {
             crate::send_request(
                 &target,
-                &crate::nectar::process::standard::Request {
+                &crate::kinode::process::standard::Request {
                     inherit: self.inherit,
                     expects_response: self.timeout,
                     body,
@@ -265,7 +265,7 @@ impl Request {
         if let (Some(target), Some(body)) = (self.target, self.body) {
             match crate::send_and_await_response(
                 &target,
-                &crate::nectar::process::standard::Request {
+                &crate::kinode::process::standard::Request {
                     inherit: self.inherit,
                     expects_response: Some(timeout),
                     body,
@@ -277,22 +277,15 @@ impl Request {
                 Ok((source, message)) => Ok(Ok(wit_message_to_message(source, message))),
                 Err(send_err) => Ok(Err(SendError {
                     kind: match send_err.kind {
-                        crate::nectar::process::standard::SendErrorKind::Offline => {
+                        crate::kinode::process::standard::SendErrorKind::Offline => {
                             SendErrorKind::Offline
                         }
-                        crate::nectar::process::standard::SendErrorKind::Timeout => {
+                        crate::kinode::process::standard::SendErrorKind::Timeout => {
                             SendErrorKind::Timeout
                         }
                     },
                     message: wit_message_to_message(
-                        Address {
-                            node: "our".to_string(),
-                            process: ProcessId {
-                                process_name: "net".to_string(),
-                                package_name: "sys".to_string(),
-                                publisher_node: "nectar".to_string(),
-                            },
-                        },
+                        Address::new("our", ProcessId::new(Some("net"), "distro", "sys")),
                         send_err.message,
                     ),
                     lazy_load_blob: send_err.lazy_load_blob,
