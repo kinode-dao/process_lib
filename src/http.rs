@@ -233,8 +233,8 @@ impl IncomingHttpRequest {
         header_map
     }
 
-    pub fn query_params(&self) -> HashMap<String, String> {
-        self.query_params.clone()
+    pub fn query_params(&self) -> &HashMap<String, String> {
+        &self.query_params
     }
 }
 
