@@ -239,4 +239,3 @@ fn are_equal_json_values(val1: &Value, val2: &Value) -> bool {
         _ => val1 == val2,
     }
 }
-
