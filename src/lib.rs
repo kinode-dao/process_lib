@@ -205,37 +205,13 @@ pub fn can_message(address: &Address) -> bool {
 }
 
 /// Get a capability in our store
-/// NOTE unfortunatly this is O(n), not sure if wit let's us do any better
 pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
     let params = serde_json::from_str::<Value>(params).unwrap_or_default();
     crate::our_capabilities()
         .iter()
         .find(|cap| {
             let cap_params = serde_json::from_str::<Value>(&cap.params).unwrap_or_default();
-            cap.issuer == *our && are_equal_json_values(&params, &cap_params)
+            cap.issuer == *our && params == cap_params
         })
         .cloned()
-}
-
-fn are_equal_json_objects(obj1: &Value, obj2: &Value) -> bool {
-    match (obj1.as_object(), obj2.as_object()) {
-        (Some(map1), Some(map2)) => {
-            if map1.len() != map2.len() {
-                return false;
-            }
-
-            map1.iter().all(|(key, val1)| {
-                map2.get(key)
-                    .map_or(false, |val2| are_equal_json_values(val1, val2))
-            })
-        }
-        _ => false,
-    }
-}
-
-fn are_equal_json_values(val1: &Value, val2: &Value) -> bool {
-    match (val1, val2) {
-        (Value::Object(_), Value::Object(_)) => are_equal_json_objects(val1, val2),
-        _ => val1 == val2,
-    }
 }
