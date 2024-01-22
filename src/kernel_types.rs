@@ -218,6 +218,17 @@ pub struct PackageManifestEntry {
     pub public: bool,
 }
 
+/// the type that gets deserialized from a `scripts.json` object
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotScriptsEntry {
+    pub root: bool,
+    pub public: bool,
+    pub request_networking: bool,
+    pub request_capabilities: Option<Vec<serde_json::Value>>,
+    pub grant_capabilities: Option<Vec<serde_json::Value>>,
+}
+
 impl std::fmt::Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
