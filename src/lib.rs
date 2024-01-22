@@ -216,9 +216,9 @@ pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
         .cloned()
 }
 
-pub fn get_args() -> anyhow::Result<Vec<u8>> {
+pub fn await_next_request_body() -> anyhow::Result<Vec<u8>> {
     let Ok(Message::Request { body, .. }) = await_message() else {
-        return Err(anyhow::anyhow!("failed to get args, bailing out"));
+        return Err(anyhow::anyhow!("failed to get request body, bailing out"));
     };
     Ok(body)
 }
