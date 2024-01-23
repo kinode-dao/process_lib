@@ -86,7 +86,7 @@ impl Sqlite {
     pub fn read(
         &self,
         query: String,
-        params: Vec<SqlValue>,
+        params: Vec<serde_json::Value>,
     ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
         let res = Request::new()
             .target(("our", "sqlite", "distro", "sys"))
