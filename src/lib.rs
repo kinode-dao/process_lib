@@ -21,6 +21,9 @@ wit_bindgen::generate!({
     world: "lib",
 });
 
+#[cfg(feature = "eth")]
+pub mod eth_alloy;
+
 /// Interact with the eth provider module.
 #[cfg(feature = "eth")]
 pub mod eth;

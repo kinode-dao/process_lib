@@ -1,0 +1,233 @@
+use crate::*;
+use crate::{Address as uqAddress, Request as uqRequest};
+use alloy_primitives::{keccak256, Address, B256};
+use alloy_rpc_types::{ 
+    BlockNumberOrTag,
+    Filter,
+    FilterBlockOption,
+    FilterSet,
+    Log as AlloyLog, 
+    Topic,
+    ValueOrArray,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct AlloySubscribeLogsRequest {
+    pub filter: Filter,
+    pub id: u64,
+}
+
+impl AlloySubscribeLogsRequest {
+    /// Creates a new, empty filter
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the inner filter object
+    ///
+    /// *NOTE:* ranges are always inclusive
+    ///
+    /// # Examples
+    ///
+    /// Match only a specific block
+    ///
+    /// ```rust
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// 
+    /// let filter = Filter::new().select(69u64);
+    /// # }
+    /// ```
+    /// This is the same as `Filter::new().from_block(1337u64).to_block(1337u64)`
+    ///
+    /// Match the latest block only
+    ///
+    /// ```rust
+    /// # use alloy_rpc_types::BlockNumberOrTag;
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new().select(BlockNumberOrTag::Latest);
+    /// # }
+    /// ```
+    ///
+    /// Match a block by its hash
+    ///
+    /// ```rust
+    /// # use alloy_primitives::B256;
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new().select(B256::ZERO);
+    /// # }
+    /// ```
+    /// This is the same as `at_block_hash`
+    ///
+    /// Match a range of blocks
+    ///
+    /// ```rust
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new().select(0u64..100u64);
+    /// # }
+    /// ```
+    ///
+    /// Match all blocks in range `(1337..BlockNumberOrTag::Latest)`
+    ///
+    /// ```rust
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new().select(1337u64..);
+    /// # }
+    /// ```
+    ///
+    /// Match all blocks in range `(BlockNumberOrTag::Earliest..1337)`
+    ///
+    /// ```rust
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new().select(..1337u64);
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn select(mut self, filter: impl Into<FilterBlockOption>) -> Self {
+        self.filter.block_option = filter.into();
+        self
+    }
+
+    /// Sets the from block number
+    #[allow(clippy::wrong_self_convention)]
+    #[must_use]
+    pub fn from_block<T: Into<BlockNumberOrTag>>(mut self, block: T) -> Self {
+        self.filter.block_option = self.filter.block_option.set_from_block(block.into());
+        self
+    }
+
+    /// Sets the to block number
+    #[allow(clippy::wrong_self_convention)]
+    #[must_use]
+    pub fn to_block<T: Into<BlockNumberOrTag>>(mut self, block: T) -> Self {
+        self.filter.block_option = self.filter.block_option.set_to_block(block.into());
+        self
+    }
+
+    /// Pins the block hash for the filter
+    #[must_use]
+    pub fn at_block_hash<T: Into<B256>>(mut self, hash: T) -> Self {
+        self.filter.block_option = self.filter.block_option.set_hash(hash.into());
+        self
+    }
+    /// Sets the inner filter object
+    ///
+    /// *NOTE:* ranges are always inclusive
+    ///
+    /// # Examples
+    ///
+    /// Match only a specific address `("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF")`
+    ///
+    /// ```rust
+    /// # use alloy_primitives::Address;
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let filter = Filter::new()
+    ///     .address("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<Address>().unwrap());
+    /// # }
+    /// ```
+    ///
+    /// Match all addresses in array `(vec!["0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF",
+    /// "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8"])`
+    ///
+    /// ```rust
+    /// # use alloy_primitives::Address;
+    /// # use alloy_rpc_types::Filter;
+    /// # fn main() {
+    /// let addresses = vec![
+    ///     "0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<Address>().unwrap(),
+    ///     "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8".parse::<Address>().unwrap(),
+    /// ];
+    /// let filter = Filter::new().address(addresses);
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn address<T: Into<ValueOrArray<Address>>>(mut self, address: T) -> Self {
+        self.filter.address = address.into().into();
+        self
+    }
+
+    /// Given the event signature in string form, it hashes it and adds it to the topics to monitor
+    #[must_use]
+    pub fn event(self, event_name: &str) -> Self {
+        let hash = keccak256(event_name.as_bytes());
+        self.event_signature(hash)
+    }
+
+    /// Hashes all event signatures and sets them as array to event_signature(topic0)
+    #[must_use]
+    pub fn events(self, events: impl IntoIterator<Item = impl AsRef<[u8]>>) -> Self {
+        let events = events.into_iter().map(|e| keccak256(e.as_ref())).collect::<Vec<_>>();
+        self.event_signature(events)
+    }
+
+    /// Sets event_signature(topic0) (the event name for non-anonymous events)
+    #[must_use]
+    pub fn event_signature<T: Into<Topic>>(mut self, topic: T) -> Self {
+        self.filter.topics[0] = topic.into();
+        self
+    }
+
+    /// Sets topic0 (the event name for non-anonymous events)
+    #[must_use]
+    #[deprecated(note = "use `event_signature` instead")]
+    pub fn topic0<T: Into<Topic>>(mut self, topic: T) -> Self {
+        self.filter.topics[0] = topic.into();
+        self
+    }
+
+    /// Sets the 1st indexed topic
+    #[must_use]
+    pub fn topic1<T: Into<Topic>>(mut self, topic: T) -> Self {
+        self.filter.topics[1] = topic.into();
+        self
+    }
+
+    /// Sets the 2nd indexed topic
+    #[must_use]
+    pub fn topic2<T: Into<Topic>>(mut self, topic: T) -> Self {
+        self.filter.topics[2] = topic.into();
+        self
+    }
+
+    /// Sets the 3rd indexed topic
+    #[must_use]
+    pub fn topic3<T: Into<Topic>>(mut self, topic: T) -> Self {
+        self.filter.topics[3] = topic.into();
+        self
+    }
+
+    /// Returns true if this is a range filter and has a from block
+    pub fn is_paginatable(&self) -> bool {
+        self.filter.get_from_block().is_some()
+    }
+
+    /// Returns the numeric value of the `toBlock` field
+    pub fn get_to_block(&self) -> Option<u64> {
+        self.filter.block_option.get_to_block().and_then(|b| b.as_number())
+    }
+
+    /// Returns the numeric value of the `fromBlock` field
+    pub fn get_from_block(&self) -> Option<u64> {
+        self.filter.block_option.get_from_block().and_then(|b| b.as_number())
+    }
+
+    /// Returns the numeric value of the `fromBlock` field
+    pub fn get_block_hash(&self) -> Option<B256> {
+        match self.filter.block_option {
+            FilterBlockOption::AtBlockHash(hash) => Some(hash),
+            FilterBlockOption::Range { .. } => None,
+        }
+    }
+
+    /// Returns true if at least one topic is set
+    pub fn has_topics(&self) -> bool {
+        self.filter.topics.iter().any(|t| !t.is_empty())
+    }
+}
