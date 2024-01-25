@@ -18,7 +18,7 @@ pub enum EthProviderRequests {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
-pub struct RpcRequest<T: Serialize + Deserialize> {
+pub struct RpcRequest {
     pub method: String,
     pub params: String,
 }
