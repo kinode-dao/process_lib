@@ -1,7 +1,7 @@
 use crate::*;
 use crate::{Address as uqAddress, Request as uqRequest};
-use alloy_primitives::{keccak256, Address, B256};
-use alloy_rpc_types::{ 
+pub use alloy_primitives::{keccak256, Address, B256};
+pub use alloy_rpc_types::{ 
     BlockNumberOrTag,
     Filter,
     FilterBlockOption,
@@ -12,13 +12,44 @@ use alloy_rpc_types::{
 };
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthProviderRequests {
+    RpcRequest(RpcRequest)
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct RpcRequest<T: Serialize + Deserialize> {
+    pub method: String,
+    pub params: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AlloySubscribeLogsRequest {
     pub filter: Filter,
-    pub id: u64,
 }
 
 impl AlloySubscribeLogsRequest {
+
+    pub fn send(self) -> anyhow::Result<()> {
+
+        uqRequest::new()
+            .target(("our", "eth_provider", "eth_provider", "sys"))
+            .body(self.getProviderRequestBody())
+            .send()
+
+    }
+
+    pub fn getProviderRequestBody(self) -> Vec<u8> {
+        serde_json::to_vec(
+            &EthProviderRequests::RpcRequest(
+                RpcRequest {
+                    method: "eth_subscribe".to_string(),
+                    params: serde_json::json!(["logs", &self.filter]).to_string(),
+                }
+            )
+        ).expect("Could not serialize request body")
+    }
+
     /// Creates a new, empty filter
     pub fn new() -> Self {
         Self::default()

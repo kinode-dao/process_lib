@@ -4,9 +4,10 @@ version = "0.5.0"
 edition = "2021"
 
 [features]
-eth = [ "ethers-core", "alloy-rpc-types" ]
+eth = [ "ethers-core", "alloy-rpc-types", "alloy-json-rpc" ]
 
 [dependencies]
+alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy.git", rev = "51a8253", optional = true }
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy.git", rev = "51a8253", optional = true }
 alloy-primitives = { version = "0.6", default-features = false, features = ["std"] }
 anyhow = "1.0"
