@@ -523,7 +523,7 @@ pub fn serve_index_html(
     Ok(())
 }
 
-// Serve static files by binding all of them statically, including index.html
+/// Serve static files by binding all of them statically, including index.html
 pub fn serve_ui(
     our: &Address,
     directory: &str,
