@@ -461,7 +461,12 @@ pub fn get_mime_type(filename: &str) -> String {
 }
 
 // Serve index.html
-pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
+pub fn serve_index_html(
+    our: &Address,
+    directory: &str,
+    authenticated: bool,
+    local_only: bool,
+) -> anyhow::Result<(), anyhow::Error> {
     let _ = uqRequest::new()
         .target("our@vfs:sys:nectar".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
@@ -479,8 +484,8 @@ pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), an
     // index.html will be served from the root path of your app
     bind_http_static_path(
         "/",
-        true,
-        false,
+        authenticated,
+        local_only,
         Some("text/html".to_string()),
         index.to_string().as_bytes().to_vec(),
     )?;
@@ -489,8 +494,13 @@ pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), an
 }
 
 // Serve static files by binding all of them statically, including index.html
-pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
-    serve_index_html(our, directory)?;
+pub fn serve_ui(
+    our: &Address,
+    directory: &str,
+    authenticated: bool,
+    local_only: bool,
+) -> anyhow::Result<(), anyhow::Error> {
+    serve_index_html(our, directory, authenticated, local_only)?;
 
     let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
@@ -544,8 +554,8 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
                             bind_http_static_path(
                                 entry.path.replace(&initial_path, ""),
-                                true,  // Must be authenticated
-                                false, // Is not local-only
+                                authenticated, // Must be authenticated
+                                local_only,    // Is not local-only
                                 Some(content_type),
                                 blob.bytes,
                             )?;
