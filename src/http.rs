@@ -1,7 +1,7 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
-    Response as uqResponse, SendError,
+    get_blob, Address, LazyLoadBlob as KiBlob, Message, ProcessId, Request as KiRequest,
+    Response as KiResponse, SendError,
 };
 pub use http::*;
 use serde::{Deserialize, Serialize};
@@ -321,7 +321,7 @@ pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyh
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
+    let res = KiRequest::new()
         .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -351,7 +351,7 @@ pub fn bind_http_static_path<T>(
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
+    let res = KiRequest::new()
         .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
@@ -379,7 +379,7 @@ pub fn bind_ws_path<T>(path: T, authenticated: bool, encrypted: bool) -> anyhow:
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
+    let res = KiRequest::new()
         .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
             path: path.into(),
@@ -402,7 +402,7 @@ pub fn send_response(
     headers: Option<HashMap<String, String>>,
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
-    uqResponse::new()
+    KiResponse::new()
         .body(serde_json::to_vec(&HttpResponse {
             status: status.as_u16(),
             headers: headers.unwrap_or_default(),
@@ -420,7 +420,7 @@ pub fn send_request(
     timeout: Option<u64>,
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
-    let req = uqRequest::new()
+    let req = KiRequest::new()
         .target(("our", "http_client", "distro", "sys"))
         .body(serde_json::to_vec(&HttpClientAction::Http(
             OutgoingHttpRequest {
@@ -446,7 +446,7 @@ pub fn send_request_await_response(
     timeout: u64,
     body: Vec<u8>,
 ) -> std::result::Result<HttpClientResponse, HttpClientError> {
-    let res = uqRequest::new()
+    let res = KiRequest::new()
         .target(("our", "http_client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
@@ -492,7 +492,7 @@ pub fn get_mime_type(filename: &str) -> String {
 
 // Serve index.html
 pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
-    let _ = uqRequest::new()
+    let _ = KiRequest::new()
         .target("our@vfs:distro:sys".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
@@ -528,7 +528,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
     queue.push_back(initial_path.clone());
 
     while let Some(path) = queue.pop_front() {
-        let directory_response = uqRequest::new()
+        let directory_response = KiRequest::new()
             .target("our@vfs:distro:sys".parse::<Address>()?)
             .body(serde_json::to_vec(&VfsRequest {
                 path,
@@ -555,7 +555,7 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                                 continue;
                             }
 
-                            let _ = uqRequest::new()
+                            let _ = KiRequest::new()
                                 .target("our@vfs:distro:sys".parse::<Address>()?)
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
@@ -610,7 +610,7 @@ pub fn handle_ui_asset_request(
 
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
-    let _ = uqRequest::new()
+    let _ = KiRequest::new()
         .target("our@vfs:distro:sys".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
@@ -622,7 +622,7 @@ pub fn handle_ui_asset_request(
     let content_type = get_mime_type(path);
     headers.insert("Content-Type".to_string(), content_type);
 
-    uqResponse::new()
+    KiResponse::new()
         .body(
             serde_json::json!(HttpResponse {
                 status: 200,
@@ -642,9 +642,9 @@ pub fn send_ws_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    blob: uqBlob,
+    blob: KiBlob,
 ) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             "http_server:distro:sys".parse::<ProcessId>().unwrap(),
@@ -670,7 +670,7 @@ pub fn open_ws_connection(
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:distro:sys").unwrap(),
@@ -696,7 +696,7 @@ pub fn open_ws_connection_and_await(
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:distro:sys").unwrap(),
@@ -718,9 +718,9 @@ pub fn send_ws_client_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    blob: uqBlob,
+    blob: KiBlob,
 ) -> std::result::Result<(), anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:distro:sys").unwrap(),
@@ -739,7 +739,7 @@ pub fn send_ws_client_push(
 }
 
 pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:distro:sys").unwrap(),
@@ -759,7 +759,7 @@ pub fn close_ws_connection_and_await(
     node: String,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
             ProcessId::from_str("http_client:distro:sys").unwrap(),

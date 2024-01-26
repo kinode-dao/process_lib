@@ -1,5 +1,5 @@
 use crate::*;
-use crate::{Address as uqAddress, Request as uqRequest};
+use crate::{Address as KiAddress, Request as KiRequest};
 use alloy_rpc_types::Log;
 pub use ethers_core::types::{
     Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
@@ -44,7 +44,7 @@ pub enum EthSubEvent {
 
 #[derive(Debug)]
 pub struct SubscribeLogsRequest {
-    pub request: uqRequest,
+    pub request: KiRequest,
     pub id: u64,
     pub filter: Filter,
 }
@@ -52,7 +52,7 @@ pub struct SubscribeLogsRequest {
 impl SubscribeLogsRequest {
     /// Start building a new `SubscribeLogsRequest`.
     pub fn new(id: u64) -> Self {
-        let request = uqRequest::new().target(uqAddress::new(
+        let request = KiRequest::new().target(KiAddress::new(
             "our",
             ProcessId::new(Some("eth"), "distro", "sys"),
         ));
