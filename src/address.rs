@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
 /// Address is defined in the wit bindings, but constructors and methods here.
-/// An `Address` is a combination of an Nectar node ID and a [`ProcessId`]. It is
+/// An `Address` is a combination of a node ID (string) and a [`ProcessId`]. It is
 /// used in the Request/Response pattern to indicate which process on a given node
-/// in the Nectar Network to direct the message to. The formatting structure for
+/// in the network to direct the message to. The formatting structure for
 /// an Address is `node@process_name:package_name:publisher_node`
 impl Address {
     /// Create a new `Address`. Takes a node ID and a process ID.
@@ -33,8 +33,8 @@ impl Address {
     }
     /// Read the publisher node ID from an `Address`. Note that `Address`
     /// segments are not parsed for validity, and a node ID stored here is
-    /// not guaranteed to be a valid ID in the Nectar name system, or be connected
-    /// to an Nectar identity at all.
+    /// not guaranteed to be a valid ID in the name system, or be connected
+    /// to an identity at all.
     pub fn publisher(&self) -> &str {
         &self.process.publisher_node
     }

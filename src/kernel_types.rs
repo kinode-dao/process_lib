@@ -1,4 +1,4 @@
-use crate::nectar::process::standard as wit;
+use crate::kinode::process::standard as wit;
 use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,7 +6,7 @@ use std::collections::HashSet;
 //
 // process-facing kernel types, used for process
 // management and message-passing
-// matches types in nectar.wit
+// matches types in kinode.wit
 //
 
 pub type Context = Vec<u8>;
@@ -213,9 +213,20 @@ pub struct PackageManifestEntry {
     pub process_wasm_path: String,
     pub on_exit: OnExit,
     pub request_networking: bool,
+    pub request_capabilities: Vec<serde_json::Value>,
+    pub grant_capabilities: Vec<serde_json::Value>,
+    pub public: bool,
+}
+
+/// the type that gets deserialized from a `scripts.json` object
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotScriptsEntry {
+    pub root: bool,
+    pub public: bool,
+    pub request_networking: bool,
     pub request_capabilities: Option<Vec<serde_json::Value>>,
     pub grant_capabilities: Option<Vec<serde_json::Value>>,
-    pub public: bool,
 }
 
 impl std::fmt::Display for Message {

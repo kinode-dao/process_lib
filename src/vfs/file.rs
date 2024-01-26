@@ -17,7 +17,7 @@ impl File {
             action: VfsAction::Read,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -48,7 +48,7 @@ impl File {
             action: VfsAction::Read,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -82,7 +82,7 @@ impl File {
             action: VfsAction::ReadExact(length as u64),
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -115,7 +115,7 @@ impl File {
             action: VfsAction::ReadToEnd,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -147,7 +147,7 @@ impl File {
             action: VfsAction::ReadToString,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -173,7 +173,7 @@ impl File {
         };
 
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
@@ -192,13 +192,13 @@ impl File {
     }
 
     /// Write buffer to file at current position, overwriting any existing data.
-    pub fn write_at(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
+    pub fn write_all(&mut self, buffer: &[u8]) -> anyhow::Result<()> {
         let request = VfsRequest {
             path: self.path.clone(),
-            action: VfsAction::WriteAt,
+            action: VfsAction::WriteAll,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
@@ -223,7 +223,7 @@ impl File {
             action: VfsAction::Append,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
             .send_and_await_response(5)?;
@@ -249,7 +249,7 @@ impl File {
             action: VfsAction::Seek { seek_from: pos },
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -273,7 +273,7 @@ impl File {
             action: VfsAction::SetLen(size),
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -297,7 +297,7 @@ impl File {
             action: VfsAction::Metadata,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -321,7 +321,7 @@ impl File {
             action: VfsAction::SyncAll,
         };
         let message = Request::new()
-            .target(("our", "vfs", "sys", "nectar"))
+            .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .send_and_await_response(5)?;
 
@@ -345,7 +345,7 @@ impl File {
 pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
     let path = format!("/{}/{}", package_id, drive);
     let res = Request::new()
-        .target(("our", "vfs", "sys", "nectar"))
+        .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
             path: path.clone(),
             action: VfsAction::CreateDrive,
@@ -373,7 +373,7 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "nectar"))
+        .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
@@ -400,7 +400,7 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
     };
 
     let message = Request::new()
-        .target(("our", "vfs", "sys", "nectar"))
+        .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 

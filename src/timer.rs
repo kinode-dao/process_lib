@@ -9,7 +9,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
             Request::new()
                 .target(Address::new(
                     "our",
-                    ProcessId::new(Some("timer"), "sys", "nectar"),
+                    ProcessId::new(Some("timer"), "distro", "sys"),
                 ))
                 .body(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
@@ -21,7 +21,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
             Request::new()
                 .target(Address::new(
                     "our",
-                    ProcessId::new(Some("timer"), "sys", "nectar"),
+                    ProcessId::new(Some("timer"), "distro", "sys"),
                 ))
                 .body(duration.to_le_bytes())
                 .expects_response((duration / 1000) + 1)
@@ -39,7 +39,7 @@ pub fn set_and_await_timer(duration: u64) -> Result<Message, SendError> {
     Request::new()
         .target(Address::new(
             "our",
-            ProcessId::new(Some("timer"), "sys", "nectar"),
+            ProcessId::new(Some("timer"), "distro", "sys"),
         ))
         .body(duration.to_le_bytes())
         // safe to unwrap this call when we know we've set both target and body

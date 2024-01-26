@@ -1,7 +1,7 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
-    Response as uqResponse, SendError,
+    get_blob, Address, LazyLoadBlob as KiBlob, Message, ProcessId, Request as KiRequest,
+    Response as KiResponse, SendError,
 };
 pub use http::*;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use thiserror::Error;
 //
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the `http_server:sys:nectar` service.
+/// This is the one you receive from the `http_server:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
     Http(IncomingHttpRequest),
@@ -40,11 +40,11 @@ pub enum HttpServerRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IncomingHttpRequest {
-    pub source_socket_addr: Option<String>, // will parse to SocketAddr
-    pub method: String,                     // will parse to http::Method
-    pub raw_path: String,
-    pub headers: HashMap<String, String>,
-    pub query_params: HashMap<String, String>,
+    source_socket_addr: Option<String>, // will parse to SocketAddr
+    method: String,                     // will parse to http::Method
+    url: String,                        // will parse to url::Url
+    headers: HashMap<String, String>,   // will parse to http::HeaderMap
+    query_params: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
 }
 
@@ -57,7 +57,7 @@ pub struct HttpResponse {
     // BODY is stored in the lazy_load_blob, as bytes
 }
 
-/// Request type sent to `http_server:sys:nectar` in order to configure it.
+/// Request type sent to `http_server:distro:sys` in order to configure it.
 /// You can also send [`type@HttpServerAction::WebSocketPush`], which
 /// allows you to push messages across an existing open WebSocket connection.
 ///
@@ -128,6 +128,7 @@ pub enum WsMessageType {
     Binary,
     Ping,
     Pong,
+    Close,
 }
 
 /// Part of the Response type issued by http_server
@@ -189,7 +190,7 @@ impl HttpServerRequest {
 
 impl IncomingHttpRequest {
     pub fn url(&self) -> anyhow::Result<url::Url> {
-        url::Url::parse(&self.raw_path).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
+        url::Url::parse(&self.url).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
     }
 
     pub fn method(&self) -> anyhow::Result<http::Method> {
@@ -197,20 +198,49 @@ impl IncomingHttpRequest {
             .map_err(|e| anyhow::anyhow!("couldn't parse method: {:?}", e))
     }
 
+    pub fn source_socket_addr(&self) -> anyhow::Result<std::net::SocketAddr> {
+        match &self.source_socket_addr {
+            Some(addr) => addr
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid format for socket address: {}", addr)),
+            None => Err(anyhow::anyhow!("No source socket address provided")),
+        }
+    }
+
     pub fn path(&self) -> anyhow::Result<String> {
-        let url = url::Url::parse(&self.raw_path)?;
+        let url = url::Url::parse(&self.url)?;
         // skip the first path segment, which is the process ID.
-        Ok(url
+        let path = url
             .path_segments()
             .ok_or(anyhow::anyhow!("url path missing process ID!"))?
             .skip(1)
             .collect::<Vec<&str>>()
-            .join("/"))
+            .join("/");
+        Ok(format!("/{}", path))
+    }
+
+    pub fn headers(&self) -> HeaderMap {
+        let mut header_map = HeaderMap::new();
+        for (key, value) in self.headers.iter() {
+            let key_bytes = key.as_bytes();
+            let Ok(key_name) = HeaderName::from_bytes(key_bytes) else {
+                continue;
+            };
+            let Ok(value_header) = HeaderValue::from_str(&value) else {
+                continue;
+            };
+            header_map.insert(key_name, value_header);
+        }
+        header_map
+    }
+
+    pub fn query_params(&self) -> &HashMap<String, String> {
+        &self.query_params
     }
 }
 
 /// Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the `http_client:sys:nectar` service.
+/// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientAction {
     Http(OutgoingHttpRequest),
@@ -229,7 +259,7 @@ pub enum HttpClientAction {
 }
 
 /// HTTP Request type that can be shared over WASM boundary to apps.
-/// This is the one you send to the `http_client:sys:nectar` service.
+/// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
     pub method: String,          // must parse to http::Method
@@ -241,7 +271,7 @@ pub struct OutgoingHttpRequest {
 }
 
 /// WebSocket Client Request type that can be shared over WASM boundary to apps.
-/// This comes from an open websocket client connection in the `http_client:sys:nectar` service.
+/// This comes from an open websocket client connection in the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientRequest {
     WebSocketPush {
@@ -254,7 +284,7 @@ pub enum HttpClientRequest {
 }
 
 /// HTTP Client Response type that can be shared over WASM boundary to apps.
-/// This is the one you receive from the `http_client:sys:nectar` service.
+/// This is the one you receive from the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {
     Http(HttpResponse),
@@ -291,8 +321,8 @@ pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyh
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+    let res = KiRequest::new()
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
@@ -321,15 +351,15 @@ pub fn bind_http_static_path<T>(
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+    let res = KiRequest::new()
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::Bind {
             path: path.into(),
             authenticated,
             local_only,
             cache: true,
         })?)
-        .blob(crate::nectar::process::standard::LazyLoadBlob {
+        .blob(crate::kinode::process::standard::LazyLoadBlob {
             mime: content_type,
             bytes: content,
         })
@@ -349,8 +379,8 @@ pub fn bind_ws_path<T>(path: T, authenticated: bool, encrypted: bool) -> anyhow:
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "sys", "nectar"))
+    let res = KiRequest::new()
+        .target(("our", "http_server", "distro", "sys"))
         .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
             path: path.into(),
             authenticated,
@@ -372,7 +402,7 @@ pub fn send_response(
     headers: Option<HashMap<String, String>>,
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
-    uqResponse::new()
+    KiResponse::new()
         .body(serde_json::to_vec(&HttpResponse {
             status: status.as_u16(),
             headers: headers.unwrap_or_default(),
@@ -390,8 +420,8 @@ pub fn send_request(
     timeout: Option<u64>,
     body: Vec<u8>,
 ) -> anyhow::Result<()> {
-    let req = uqRequest::new()
-        .target(("our", "http_client", "sys", "nectar"))
+    let req = KiRequest::new()
+        .target(("our", "http_client", "distro", "sys"))
         .body(serde_json::to_vec(&HttpClientAction::Http(
             OutgoingHttpRequest {
                 method: method.to_string(),
@@ -416,8 +446,8 @@ pub fn send_request_await_response(
     timeout: u64,
     body: Vec<u8>,
 ) -> std::result::Result<HttpClientResponse, HttpClientError> {
-    let res = uqRequest::new()
-        .target(("our", "http_client", "sys", "nectar"))
+    let res = KiRequest::new()
+        .target(("our", "http_client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
@@ -460,14 +490,14 @@ pub fn get_mime_type(filename: &str) -> String {
         .to_string()
 }
 
-// Serve index.html
+/// Serve index.html
 pub fn serve_index_html(
     our: &Address,
     directory: &str,
     authenticated: bool,
     local_only: bool,
 ) -> anyhow::Result<(), anyhow::Error> {
-    let _ = uqRequest::new()
+    let _ = KiRequest::new()
         .target("our@vfs:sys:nectar".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
@@ -508,8 +538,8 @@ pub fn serve_ui(
     queue.push_back(initial_path.clone());
 
     while let Some(path) = queue.pop_front() {
-        let directory_response = uqRequest::new()
-            .target("our@vfs:sys:nectar".parse::<Address>()?)
+        let directory_response = KiRequest::new()
+            .target("our@vfs:distro:sys".parse::<Address>()?)
             .body(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
@@ -535,8 +565,8 @@ pub fn serve_ui(
                                 continue;
                             }
 
-                            let _ = uqRequest::new()
-                                .target("our@vfs:sys:nectar".parse::<Address>()?)
+                            let _ = KiRequest::new()
+                                .target("our@vfs:distro:sys".parse::<Address>()?)
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
@@ -590,8 +620,8 @@ pub fn handle_ui_asset_request(
 
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
-    let _ = uqRequest::new()
-        .target("our@vfs:sys:nectar".parse::<Address>()?)
+    let _ = KiRequest::new()
+        .target("our@vfs:distro:sys".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
@@ -602,7 +632,7 @@ pub fn handle_ui_asset_request(
     let content_type = get_mime_type(path);
     headers.insert("Content-Type".to_string(), content_type);
 
-    uqResponse::new()
+    KiResponse::new()
         .body(
             serde_json::json!(HttpResponse {
                 status: 200,
@@ -622,12 +652,12 @@ pub fn send_ws_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    blob: uqBlob,
+    blob: KiBlob,
 ) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            "http_server:sys:nectar".parse::<ProcessId>().unwrap(),
+            "http_server:distro:sys".parse::<ProcessId>().unwrap(),
         ))
         .body(
             serde_json::json!(HttpServerRequest::WebSocketPush {
@@ -650,10 +680,10 @@ pub fn open_ws_connection(
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
@@ -676,10 +706,10 @@ pub fn open_ws_connection_and_await(
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
@@ -698,12 +728,12 @@ pub fn send_ws_client_push(
     node: String,
     channel_id: u32,
     message_type: WsMessageType,
-    blob: uqBlob,
+    blob: KiBlob,
 ) -> std::result::Result<(), anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketPush {
@@ -719,10 +749,10 @@ pub fn send_ws_client_push(
 }
 
 pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
@@ -739,10 +769,10 @@ pub fn close_ws_connection_and_await(
     node: String,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
+    KiRequest::new()
         .target(Address::new(
             node,
-            ProcessId::from_str("http_client:sys:nectar").unwrap(),
+            ProcessId::from_str("http_client:distro:sys").unwrap(),
         ))
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })

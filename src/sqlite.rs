@@ -86,10 +86,10 @@ impl Sqlite {
     pub fn read(
         &self,
         query: String,
-        params: Vec<SqlValue>,
+        params: Vec<serde_json::Value>,
     ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "nectar"))
+            .target(("our", "sqlite", "distro", "sys"))
             .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -134,7 +134,7 @@ impl Sqlite {
         tx_id: Option<u64>,
     ) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "nectar"))
+            .target(("our", "sqlite", "distro", "sys"))
             .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -163,7 +163,7 @@ impl Sqlite {
     /// Begin a transaction.
     pub fn begin_tx(&self) -> anyhow::Result<u64> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "nectar"))
+            .target(("our", "sqlite", "distro", "sys"))
             .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -191,7 +191,7 @@ impl Sqlite {
     /// Commit a transaction.
     pub fn commit_tx(&self, tx_id: u64) -> anyhow::Result<()> {
         let res = Request::new()
-            .target(("our", "sqlite", "sys", "nectar"))
+            .target(("our", "sqlite", "distro", "sys"))
             .body(serde_json::to_vec(&SqliteRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
@@ -220,7 +220,7 @@ impl Sqlite {
 /// Open or create sqlite database.
 pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
     let res = Request::new()
-        .target(("our", "sqlite", "sys", "nectar"))
+        .target(("our", "sqlite", "distro", "sys"))
         .body(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),
@@ -251,7 +251,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
 /// Remove and delete sqlite database.
 pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
     let res = Request::new()
-        .target(("our", "sqlite", "sys", "nectar"))
+        .target(("our", "sqlite", "distro", "sys"))
         .body(serde_json::to_vec(&SqliteRequest {
             package_id: package_id.clone(),
             db: db.to_string(),

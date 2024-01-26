@@ -12,7 +12,7 @@ pub use file::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
     /// path is always prepended by package_id, the capabilities of the topmost folder are checked
-    /// "/your_package:publisher.uq/drive_folder/another_folder_or_file"
+    /// "/your_package:publisher.os/drive_folder/another_folder_or_file"
     pub path: String,
     pub action: VfsAction,
 }
@@ -26,7 +26,7 @@ pub enum VfsAction {
     OpenFile { create: bool },
     CloseFile,
     Write,
-    WriteAt,
+    WriteAll,
     Append,
     SyncAll,
     Read,
@@ -68,7 +68,7 @@ pub struct FileMetadata {
     pub len: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DirEntry {
     pub path: String,
     pub file_type: FileType,
@@ -133,7 +133,7 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
         action: VfsAction::Metadata,
     };
     let message = Request::new()
-        .target(("our", "vfs", "sys", "nectar"))
+        .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
         .send_and_await_response(5)?;
 
