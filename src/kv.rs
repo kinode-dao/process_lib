@@ -53,6 +53,7 @@ pub enum KvError {
 /// Kv helper struct for a db.
 /// Opening or creating a kv will give you a Result<Kv>.
 /// You can call it's impl functions to interact with it.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Kv {
     pub package_id: PackageId,
     pub db: String,
