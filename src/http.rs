@@ -610,11 +610,7 @@ pub fn serve_ui(
     Ok(())
 }
 
-pub fn handle_ui_asset_request(
-    our: &Address,
-    directory: &str,
-    path: &str,
-) -> anyhow::Result<()> {
+pub fn handle_ui_asset_request(our: &Address, directory: &str, path: &str) -> anyhow::Result<()> {
     let parts: Vec<&str> = path.split(&our.process.to_string()).collect();
     let after_process = parts.get(1).unwrap_or(&"");
 
