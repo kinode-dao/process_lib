@@ -43,7 +43,7 @@ impl Provider {
         self.send(id, method)
     }
 
-    fn receive (
+    pub fn receive (
         &mut self,
         id: u64,
         body: Vec<u8>
@@ -90,6 +90,7 @@ impl ProviderMethodTrait for ProviderMethod {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthProviderRequests {
     RpcRequest(RpcRequest),
+    RpcResponse(RpcResponse),
     Test
 }
 
@@ -101,7 +102,6 @@ pub struct RpcRequest {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RpcResponse {
-    pub method: String,
     pub result: String,
 }
 
