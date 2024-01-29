@@ -11,16 +11,98 @@ pub use alloy_rpc_types::{
     ValueOrArray,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+pub struct Provider {
+    pub closures: HashMap<u64, Box<dyn FnMut(Vec<u8>) + Send>>,
+    pub count: u64,
+}
+
+impl Provider {
+
+    pub fn new() -> Self {
+        Provider {
+            closures: HashMap::new(),
+            count: 0,
+        }
+    }
+
+    pub fn count(&mut self) -> u64 {
+        let num = self.count;
+        self.count += 1;
+        num
+    }
+
+    pub fn subscribe_logs(
+        &mut self, 
+        method: ProviderMethod,
+        closure: Box<dyn FnMut(Vec<u8>) + Send>
+    ) {
+        let id = self.count();
+        self.closures.insert(id, closure);
+        self.send(id, method)
+    }
+
+    fn receive (
+        &mut self,
+        id: u64,
+        body: Vec<u8>
+    ) {
+
+        let closure: &mut Box<dyn FnMut(Vec<u8>) + Send> = self.closures.get_mut(&id).unwrap();
+        closure(body);
+
+    }
+
+    fn send (
+        &mut self,
+        id: u64,
+        method: ProviderMethod
+    ) {
+
+        let _ = uqRequest::new()
+            .target(("our", "eth_provider", "eth_provider", "sys"))
+            .body(method.get_provider_request_body())
+            .metadata(&id.to_string())
+            .send();
+
+    }
+
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ProviderMethod {
+    SubscribeLogs(AlloySubscribeLogsRequest),
+}
+
+trait ProviderMethodTrait {
+    fn get_provider_request_body(&self) -> Vec<u8>;
+}
+
+impl ProviderMethodTrait for ProviderMethod {
+    fn get_provider_request_body(&self) -> Vec<u8> {
+        match self {
+            ProviderMethod::SubscribeLogs(method) => method.get_provider_request_body(),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthProviderRequests {
-    RpcRequest(RpcRequest)
+    RpcRequest(RpcRequest),
+    Test
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RpcRequest {
     pub method: String,
     pub params: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct RpcResponse {
+    pub method: String,
+    pub result: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -34,17 +116,17 @@ impl AlloySubscribeLogsRequest {
 
         uqRequest::new()
             .target(("our", "eth_provider", "eth_provider", "sys"))
-            .body(self.getProviderRequestBody())
+            .body(self.get_provider_request_body())
             .send()
 
     }
 
-    pub fn getProviderRequestBody(self) -> Vec<u8> {
+    pub fn get_provider_request_body(&self) -> Vec<u8> {
         serde_json::to_vec(
             &EthProviderRequests::RpcRequest(
                 RpcRequest {
                     method: "eth_subscribe".to_string(),
-                    params: serde_json::json!(["logs", &self.filter]).to_string(),
+                    params: serde_json::json!(["logs", self.filter]).to_string(),
                 }
             )
         ).expect("Could not serialize request body")
