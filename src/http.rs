@@ -1,7 +1,7 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
     get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
-    Response as KiResponse, SendError,
+    Response as KiResponse,
 };
 pub use http::*;
 use serde::{Deserialize, Serialize};
@@ -578,8 +578,6 @@ pub fn serve_ui(
     authenticated: bool,
     local_only: bool,
 ) -> anyhow::Result<()> {
-    serve_index_html(our, directory, authenticated, local_only)?;
-
     let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
     let mut queue = VecDeque::new();
@@ -605,19 +603,12 @@ pub fn serve_ui(
                     match entry.file_type {
                         // If it's a file, serve it statically
                         FileType::File => {
-                            if format!("{}/index.html", initial_path.trim_start_matches('/'))
-                                == entry.path
-                            {
-                                continue;
-                            }
-
-                            let _ = KiRequest::new()
-                                .target("our@vfs:distro:sys".parse::<Address>()?)
+                            KiRequest::to(("our", "vfs", "distro", "sys"))
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
                                 })?)
-                                .send_and_await_response(5)?;
+                                .send_and_await_response(5)??;
 
                             let Some(blob) = get_blob() else {
                                 return Err(anyhow::anyhow!(
@@ -662,13 +653,12 @@ pub fn handle_ui_asset_request(our: &Address, directory: &str, path: &str) -> an
 
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
-    let _ = KiRequest::new()
-        .target("our@vfs:distro:sys".parse::<Address>()?)
+    KiRequest::to(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(5)??;
 
     let mut headers = HashMap::new();
     let content_type = get_mime_type(path);
@@ -693,13 +683,11 @@ pub fn handle_ui_asset_request(our: &Address, directory: &str, path: &str) -> an
 pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
     KiRequest::to(("our", "http_server", "distro", "sys"))
         .body(
-            serde_json::json!(HttpServerRequest::WebSocketPush {
+            serde_json::to_vec(&HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,
             })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            .unwrap(),
         )
         .blob(blob)
         .send()
@@ -710,88 +698,54 @@ pub fn open_ws_connection(
     url: String,
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
-) -> anyhow::Result<()> {
-    KiRequest::new()
-        .target("our@http_client:distro:sys".parse::<Address>()?)
+) -> std::result::Result<(), HttpClientError> {
+    let Ok(Ok(Message::Response { body, .. })) = KiRequest::to(("our", "http_client", "distro", "sys"))
         .body(
-            serde_json::json!(HttpClientAction::WebSocketOpen {
-                url,
+            serde_json::to_vec(&HttpClientAction::WebSocketOpen {
+                url: url.clone(),
                 headers: headers.unwrap_or(HashMap::new()),
                 channel_id,
             })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            .unwrap(),
         )
-        .send()?;
-
-    Ok(())
+        .send_and_await_response(5) else {
+            return Err(HttpClientError::WsOpenFailed { url });
+        };
+    match serde_json::from_slice(&body) {
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        _ => Err(HttpClientError::WsOpenFailed { url }),
+    }
 }
 
-pub fn open_ws_connection_and_await(
-    url: String,
-    headers: Option<HashMap<String, String>>,
-    channel_id: u32,
-) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    KiRequest::new()
-        .target("our@http_client:distro:sys".parse::<Address>()?)
+pub fn send_ws_client_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
+    KiRequest::to(("our", "http_client", "distro", "sys"))
         .body(
-            serde_json::json!(HttpClientAction::WebSocketOpen {
-                url,
-                headers: headers.unwrap_or(HashMap::new()),
-                channel_id,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
-        )
-        .send_and_await_response(5)
-}
-
-pub fn send_ws_client_push(
-    channel_id: u32,
-    message_type: WsMessageType,
-    blob: KiBlob,
-) -> std::result::Result<(), anyhow::Error> {
-    KiRequest::new()
-        .target("our@http_client:distro:sys".parse::<Address>()?)
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketPush {
+            serde_json::to_vec(&HttpClientAction::WebSocketPush {
                 channel_id,
                 message_type,
             })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            .unwrap(),
         )
         .blob(blob)
         .send()
+        .unwrap()
 }
 
-pub fn close_ws_connection(channel_id: u32) -> anyhow::Result<()> {
-    KiRequest::new()
-        .target("our@http_client:distro:sys".parse::<Address>()?)
+pub fn close_ws_connection(channel_id: u32) -> std::result::Result<(), HttpClientError> {
+    let Ok(Ok(Message::Response { body, .. })) = KiRequest::to(("our", "http_client", "distro", "sys"))
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
                 .to_string()
                 .as_bytes()
                 .to_vec(),
         )
-        .send()?;
-
-    Ok(())
-}
-
-pub fn close_ws_connection_and_await(
-    channel_id: u32,
-) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    KiRequest::new()
-        .target("our@http_client:distro:sys".parse::<Address>()?)
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
-                .to_string()
-                .as_bytes()
-                .to_vec(),
-        )
-        .send_and_await_response(5)
+        .send_and_await_response(5) else {
+            return Err(HttpClientError::WsCloseFailed { channel_id });
+        };
+    match serde_json::from_slice(&body) {
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        _ => Err(HttpClientError::WsCloseFailed { channel_id }),
+    }
 }
