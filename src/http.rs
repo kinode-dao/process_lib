@@ -496,7 +496,7 @@ pub fn serve_index_html(
     directory: &str,
     authenticated: bool,
     local_only: bool,
-) -> anyhow::Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     let _ = KiRequest::new()
         .target("our@vfs:sys:nectar".parse::<Address>()?)
         .body(serde_json::to_vec(&VfsRequest {
@@ -529,7 +529,7 @@ pub fn serve_ui(
     directory: &str,
     authenticated: bool,
     local_only: bool,
-) -> anyhow::Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     serve_index_html(our, directory, authenticated, local_only)?;
 
     let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
@@ -610,11 +610,7 @@ pub fn serve_ui(
     Ok(())
 }
 
-pub fn handle_ui_asset_request(
-    our: &Address,
-    directory: &str,
-    path: &str,
-) -> anyhow::Result<(), anyhow::Error> {
+pub fn handle_ui_asset_request(our: &Address, directory: &str, path: &str) -> anyhow::Result<()> {
     let parts: Vec<&str> = path.split(&our.process.to_string()).collect();
     let after_process = parts.get(1).unwrap_or(&"");
 
@@ -649,16 +645,12 @@ pub fn handle_ui_asset_request(
 }
 
 pub fn send_ws_push(
-    node: String,
     channel_id: u32,
     message_type: WsMessageType,
     blob: KiBlob,
 ) -> anyhow::Result<()> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            "http_server:distro:sys".parse::<ProcessId>().unwrap(),
-        ))
+        .target("our@http_server:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpServerRequest::WebSocketPush {
                 channel_id,
@@ -675,16 +667,12 @@ pub fn send_ws_push(
 }
 
 pub fn open_ws_connection(
-    node: String,
     url: String,
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> anyhow::Result<()> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+        .target("our@http_client:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
                 url,
@@ -701,16 +689,12 @@ pub fn open_ws_connection(
 }
 
 pub fn open_ws_connection_and_await(
-    node: String,
     url: String,
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+        .target("our@http_client:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpClientAction::WebSocketOpen {
                 url,
@@ -725,16 +709,12 @@ pub fn open_ws_connection_and_await(
 }
 
 pub fn send_ws_client_push(
-    node: String,
     channel_id: u32,
     message_type: WsMessageType,
     blob: KiBlob,
 ) -> std::result::Result<(), anyhow::Error> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+        .target("our@http_client:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpClientAction::WebSocketPush {
                 channel_id,
@@ -748,12 +728,9 @@ pub fn send_ws_client_push(
         .send()
 }
 
-pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> {
+pub fn close_ws_connection(channel_id: u32) -> anyhow::Result<()> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+        .target("our@http_client:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
                 .to_string()
@@ -766,14 +743,10 @@ pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> 
 }
 
 pub fn close_ws_connection_and_await(
-    node: String,
     channel_id: u32,
 ) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
     KiRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+        .target("our@http_client:distro:sys".parse::<Address>()?)
         .body(
             serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
                 .to_string()
