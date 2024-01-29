@@ -500,7 +500,8 @@ pub fn send_request_await_response(
             error: "http_client timed out".to_string(),
         });
     };
-    let Ok(HttpClientResponse::Http(resp)) = serde_json::from_slice::<HttpClientResponse>(&body) else {
+    let Ok(HttpClientResponse::Http(resp)) = serde_json::from_slice::<HttpClientResponse>(&body)
+    else {
         return Err(HttpClientError::RequestFailed {
             error: "http_client gave unexpected response".to_string(),
         });
@@ -591,9 +592,10 @@ pub fn serve_ui(
                 path,
                 action: VfsAction::ReadDir,
             })?)
-            .send_and_await_response(5)? else {
-                return Err(anyhow::anyhow!("serve_ui: no response for path"));
-            };
+            .send_and_await_response(5)?
+        else {
+            return Err(anyhow::anyhow!("serve_ui: no response for path"));
+        };
 
         let directory_body = serde_json::from_slice::<VfsResponse>(directory_response.body())?;
 
