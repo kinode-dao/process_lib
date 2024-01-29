@@ -699,18 +699,20 @@ pub fn open_ws_connection(
     headers: Option<HashMap<String, String>>,
     channel_id: u32,
 ) -> std::result::Result<(), HttpClientError> {
-    let Ok(Ok(Message::Response { body, .. })) = KiRequest::to(("our", "http_client", "distro", "sys"))
-        .body(
-            serde_json::to_vec(&HttpClientAction::WebSocketOpen {
-                url: url.clone(),
-                headers: headers.unwrap_or(HashMap::new()),
-                channel_id,
-            })
-            .unwrap(),
-        )
-        .send_and_await_response(5) else {
-            return Err(HttpClientError::WsOpenFailed { url });
-        };
+    let Ok(Ok(Message::Response { body, .. })) =
+        KiRequest::to(("our", "http_client", "distro", "sys"))
+            .body(
+                serde_json::to_vec(&HttpClientAction::WebSocketOpen {
+                    url: url.clone(),
+                    headers: headers.unwrap_or(HashMap::new()),
+                    channel_id,
+                })
+                .unwrap(),
+            )
+            .send_and_await_response(5)
+    else {
+        return Err(HttpClientError::WsOpenFailed { url });
+    };
     match serde_json::from_slice(&body) {
         Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
         Ok(Err(e)) => Err(e),
@@ -733,16 +735,18 @@ pub fn send_ws_client_push(channel_id: u32, message_type: WsMessageType, blob: K
 }
 
 pub fn close_ws_connection(channel_id: u32) -> std::result::Result<(), HttpClientError> {
-    let Ok(Ok(Message::Response { body, .. })) = KiRequest::to(("our", "http_client", "distro", "sys"))
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
-                .to_string()
-                .as_bytes()
-                .to_vec(),
-        )
-        .send_and_await_response(5) else {
-            return Err(HttpClientError::WsCloseFailed { channel_id });
-        };
+    let Ok(Ok(Message::Response { body, .. })) =
+        KiRequest::to(("our", "http_client", "distro", "sys"))
+            .body(
+                serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
+                    .to_string()
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .send_and_await_response(5)
+    else {
+        return Err(HttpClientError::WsCloseFailed { channel_id });
+    };
     match serde_json::from_slice(&body) {
         Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
         Ok(Err(e)) => Err(e),
