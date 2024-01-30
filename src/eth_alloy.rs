@@ -1,8 +1,11 @@
 use crate::*;
 use crate::{Address as uqAddress, Request as uqRequest};
-pub use alloy_primitives::{keccak256, Address, B256};
+pub use alloy_primitives::{keccak256, Address, B256, U8, U64, U256};
 pub use alloy_rpc_types::{ 
+    AccessList,
     BlockNumberOrTag,
+    CallInput,
+    CallRequest,
     Filter,
     FilterBlockOption,
     FilterSet,
@@ -43,6 +46,16 @@ impl Provider {
         self.send(id, method)
     }
 
+    pub fn call(
+        &mut self, 
+        method: ProviderMethod,
+        closure: Box<dyn FnMut(Vec<u8>) + Send>
+    ) {
+        let id = self.count();
+        self.closures.insert(id, closure);
+        self.send(id, method)
+    }
+
     pub fn receive (
         &mut self,
         id: u64,
@@ -73,6 +86,7 @@ impl Provider {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ProviderMethod {
     SubscribeLogs(AlloySubscribeLogsRequest),
+    Call(AlloyCallRequest),
 }
 
 trait ProviderMethodTrait {
@@ -83,6 +97,7 @@ impl ProviderMethodTrait for ProviderMethod {
     fn get_provider_request_body(&self) -> Vec<u8> {
         match self {
             ProviderMethod::SubscribeLogs(method) => method.get_provider_request_body(),
+            ProviderMethod::Call(method) => method.get_provider_request_body(),
         }
     }
 }
@@ -103,6 +118,100 @@ pub struct RpcRequest {
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RpcResponse {
     pub result: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct AlloyCallRequest {
+    pub call_request: CallRequest,
+}
+
+impl AlloyCallRequest {
+
+    pub fn new () -> Self {
+        Self::default()
+    }
+
+    pub fn get_provider_request_body(&self) -> Vec<u8> {
+        serde_json::to_vec(
+            &EthProviderRequests::RpcRequest(
+                RpcRequest {
+                    method: "eth_call".to_string(),
+                    params: serde_json::json!(self.call_request).to_string(),
+                }
+            )
+        ).expect("Could not serialize request body")
+    }
+
+    pub fn from(mut self, addr: Address) -> Self {
+        self.call_request.from = Some(addr);
+        self
+    }
+
+    pub fn to(mut self, addr: Address) -> Self {
+        self.call_request.to = Some(addr);
+        self
+    }
+
+    pub fn gas_price(mut self, gas_price: U256) -> Self {
+        self.call_request.gas_price = Some(gas_price);
+        self
+    }
+
+    pub fn max_fee_per_gas(mut self, max_fee_per_gas: U256) -> Self {
+        self.call_request.max_fee_per_gas = Some(max_fee_per_gas);
+        self
+    }
+
+    pub fn max_priority_fee_per_gas(mut self, max_priority_fee_per_gas: U256) -> Self {
+        self.call_request.max_priority_fee_per_gas = Some(max_priority_fee_per_gas);
+        self
+    }
+
+    pub fn gas(mut self, gas: U256) -> Self {
+        self.call_request.gas = Some(gas);
+        self
+    }
+
+    pub fn value(mut self, value: U256) -> Self {
+        self.call_request.value = Some(value);
+        self
+    }
+
+    pub fn input(mut self, input: CallInput) -> Self {
+        self.call_request.input = input;
+        self
+    }
+
+    pub fn nonce(mut self, nonce: U64) -> Self {
+        self.call_request.nonce = Some(nonce);
+        self
+    }
+
+    pub fn chain_id(mut self, chain_id: U64) -> Self {
+        self.call_request.chain_id = Some(chain_id);
+        self
+    }
+
+    pub fn access_list(mut self, access_list: AccessList) -> Self {
+        self.call_request.access_list = Some(access_list);
+        self
+    }
+
+    pub fn max_fee_per_blob_gas(mut self, max_fee_per_blob_gas: U256) -> Self {
+        self.call_request.max_fee_per_blob_gas = Some(max_fee_per_blob_gas);
+        self
+    }
+
+    pub fn blob_versioned_hashes(mut self, blob_versioned_hashes: Vec<B256>) -> Self {
+        self.call_request.blob_versioned_hashes = Some(blob_versioned_hashes);
+        self
+    }
+
+    pub fn transaction_type(mut self, transaction_type: U8) -> Self {
+        self.call_request.transaction_type = Some(transaction_type);
+        self
+    }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
