@@ -546,7 +546,7 @@ pub fn serve_index_html(
     directory: &str,
     authenticated: bool,
     local_only: bool,
-    paths: Option<Vec<&str>>,
+    paths: Vec<&str>,
 ) -> anyhow::Result<()> {
     KiRequest::to(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
@@ -560,12 +560,6 @@ pub fn serve_index_html(
     };
 
     let index = String::from_utf8(blob.bytes)?;
-
-    // Paths defaults to the root path
-    let paths = match paths {
-        Some(paths) => paths,
-        None => vec!["/"],
-    };
 
     for path in paths {
         bind_http_static_path(
@@ -587,7 +581,7 @@ pub fn serve_ui(
     directory: &str,
     authenticated: bool,
     local_only: bool,
-    paths: Option<Vec<&str>>,
+    paths: Vec<&str>,
 ) -> anyhow::Result<()> {
     serve_index_html(our, directory, authenticated, local_only, paths)?;
 
