@@ -546,6 +546,7 @@ pub fn serve_index_html(
     directory: &str,
     authenticated: bool,
     local_only: bool,
+    paths: Option<Vec<&str>>,
 ) -> anyhow::Result<()> {
     KiRequest::to(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
@@ -560,14 +561,23 @@ pub fn serve_index_html(
 
     let index = String::from_utf8(blob.bytes)?;
 
-    // index.html will be served from the root path of your app
-    Ok(bind_http_static_path(
-        "/",
-        authenticated,
-        local_only,
-        Some("text/html".to_string()),
-        index.to_string().as_bytes().to_vec(),
-    )?)
+    // Paths defaults to the root path
+    let paths = match paths {
+        Some(paths) => paths,
+        None => vec!["/"],
+    };
+
+    for path in paths {
+        bind_http_static_path(
+            path,
+            authenticated,
+            local_only,
+            Some("text/html".to_string()),
+            index.to_string().as_bytes().to_vec(),
+        )?;
+    }
+
+    Ok(())
 }
 
 /// Serve static files from a given directory by binding all of them
@@ -577,7 +587,10 @@ pub fn serve_ui(
     directory: &str,
     authenticated: bool,
     local_only: bool,
+    paths: Option<Vec<&str>>,
 ) -> anyhow::Result<()> {
+    serve_index_html(our, directory, authenticated, local_only, paths)?;
+
     let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
     let mut queue = VecDeque::new();
