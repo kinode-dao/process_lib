@@ -105,7 +105,11 @@ pub enum HttpServerAction {
     /// from the unique subdomain of the process that bound the path. These are *always*
     /// authenticated. Since the subdomain is unique, it will require the user to be
     /// logged in separately to the general domain authentication.
-    WebSocketSecureBind { path: String, encrypted: bool, extension: bool },
+    WebSocketSecureBind {
+        path: String,
+        encrypted: bool,
+        extension: bool,
+    },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
@@ -376,7 +380,12 @@ where
 
 /// Register a WebSockets path with the HTTP server. Your app must do this
 /// in order to receive incoming WebSocket connections.
-pub fn bind_ws_path<T>(path: T, authenticated: bool, encrypted: bool, extension: bool) -> anyhow::Result<()>
+pub fn bind_ws_path<T>(
+    path: T,
+    authenticated: bool,
+    encrypted: bool,
+    extension: bool,
+) -> anyhow::Result<()>
 where
     T: Into<String>,
 {
