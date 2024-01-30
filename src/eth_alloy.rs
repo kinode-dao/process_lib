@@ -1,17 +1,9 @@
 use crate::*;
 use crate::{Address as uqAddress, Request as uqRequest};
-pub use alloy_primitives::{keccak256, Address, B256, U8, U64, U256};
-pub use alloy_rpc_types::{ 
-    AccessList,
-    BlockNumberOrTag,
-    CallInput,
-    CallRequest,
-    Filter,
-    FilterBlockOption,
-    FilterSet,
-    Log as AlloyLog, 
-    Topic,
-    ValueOrArray,
+pub use alloy_primitives::{keccak256, Address, B256, U256, U64, U8};
+pub use alloy_rpc_types::{
+    AccessList, BlockNumberOrTag, CallInput, CallRequest, Filter, FilterBlockOption, FilterSet,
+    Log as AlloyLog, Topic, ValueOrArray,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,7 +14,6 @@ pub struct Provider {
 }
 
 impl Provider {
-
     pub fn new() -> Self {
         Provider {
             closures: HashMap::new(),
@@ -37,50 +28,33 @@ impl Provider {
     }
 
     pub fn subscribe_logs(
-        &mut self, 
-        method: ProviderMethod,
-        closure: Box<dyn FnMut(Vec<u8>) + Send>
-    ) {
-        let id = self.count();
-        self.closures.insert(id, closure);
-        self.send(id, method)
-    }
-
-    pub fn call(
-        &mut self, 
-        method: ProviderMethod,
-        closure: Box<dyn FnMut(Vec<u8>) + Send>
-    ) {
-        let id = self.count();
-        self.closures.insert(id, closure);
-        self.send(id, method)
-    }
-
-    pub fn receive (
         &mut self,
-        id: u64,
-        body: Vec<u8>
+        method: ProviderMethod,
+        closure: Box<dyn FnMut(Vec<u8>) + Send>,
     ) {
+        let id = self.count();
+        self.closures.insert(id, closure);
+        self.send(id, method)
+    }
 
+    pub fn call(&mut self, method: ProviderMethod, closure: Box<dyn FnMut(Vec<u8>) + Send>) {
+        let id = self.count();
+        self.closures.insert(id, closure);
+        self.send(id, method)
+    }
+
+    pub fn receive(&mut self, id: u64, body: Vec<u8>) {
         let closure: &mut Box<dyn FnMut(Vec<u8>) + Send> = self.closures.get_mut(&id).unwrap();
         closure(body);
-
     }
 
-    fn send (
-        &mut self,
-        id: u64,
-        method: ProviderMethod
-    ) {
-
+    fn send(&mut self, id: u64, method: ProviderMethod) {
         let _ = uqRequest::new()
             .target(("our", "eth_provider", "eth_provider", "sys"))
             .body(method.get_provider_request_body())
             .metadata(&id.to_string())
             .send();
-
     }
-
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -106,7 +80,7 @@ impl ProviderMethodTrait for ProviderMethod {
 pub enum EthProviderRequests {
     RpcRequest(RpcRequest),
     RpcResponse(RpcResponse),
-    Test
+    Test,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -126,20 +100,16 @@ pub struct AlloyCallRequest {
 }
 
 impl AlloyCallRequest {
-
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     pub fn get_provider_request_body(&self) -> Vec<u8> {
-        serde_json::to_vec(
-            &EthProviderRequests::RpcRequest(
-                RpcRequest {
-                    method: "eth_call".to_string(),
-                    params: serde_json::json!(self.call_request).to_string(),
-                }
-            )
-        ).expect("Could not serialize request body")
+        serde_json::to_vec(&EthProviderRequests::RpcRequest(RpcRequest {
+            method: "eth_call".to_string(),
+            params: serde_json::json!(self.call_request).to_string(),
+        }))
+        .expect("Could not serialize request body")
     }
 
     pub fn from(mut self, addr: Address) -> Self {
@@ -211,7 +181,6 @@ impl AlloyCallRequest {
         self.call_request.transaction_type = Some(transaction_type);
         self
     }
-
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -220,25 +189,19 @@ pub struct AlloySubscribeLogsRequest {
 }
 
 impl AlloySubscribeLogsRequest {
-
     pub fn send(self) -> anyhow::Result<()> {
-
         uqRequest::new()
             .target(("our", "eth_provider", "eth_provider", "sys"))
             .body(self.get_provider_request_body())
             .send()
-
     }
 
     pub fn get_provider_request_body(&self) -> Vec<u8> {
-        serde_json::to_vec(
-            &EthProviderRequests::RpcRequest(
-                RpcRequest {
-                    method: "eth_subscribe".to_string(),
-                    params: serde_json::json!(["logs", self.filter]).to_string(),
-                }
-            )
-        ).expect("Could not serialize request body")
+        serde_json::to_vec(&EthProviderRequests::RpcRequest(RpcRequest {
+            method: "eth_subscribe".to_string(),
+            params: serde_json::json!(["logs", self.filter]).to_string(),
+        }))
+        .expect("Could not serialize request body")
     }
 
     /// Creates a new, empty filter
@@ -257,7 +220,7 @@ impl AlloySubscribeLogsRequest {
     /// ```rust
     /// # use alloy_rpc_types::Filter;
     /// # fn main() {
-    /// 
+    ///
     /// let filter = Filter::new().select(69u64);
     /// # }
     /// ```
@@ -385,7 +348,10 @@ impl AlloySubscribeLogsRequest {
     /// Hashes all event signatures and sets them as array to event_signature(topic0)
     #[must_use]
     pub fn events(self, events: impl IntoIterator<Item = impl AsRef<[u8]>>) -> Self {
-        let events = events.into_iter().map(|e| keccak256(e.as_ref())).collect::<Vec<_>>();
+        let events = events
+            .into_iter()
+            .map(|e| keccak256(e.as_ref()))
+            .collect::<Vec<_>>();
         self.event_signature(events)
     }
 
@@ -432,12 +398,18 @@ impl AlloySubscribeLogsRequest {
 
     /// Returns the numeric value of the `toBlock` field
     pub fn get_to_block(&self) -> Option<u64> {
-        self.filter.block_option.get_to_block().and_then(|b| b.as_number())
+        self.filter
+            .block_option
+            .get_to_block()
+            .and_then(|b| b.as_number())
     }
 
     /// Returns the numeric value of the `fromBlock` field
     pub fn get_from_block(&self) -> Option<u64> {
-        self.filter.block_option.get_from_block().and_then(|b| b.as_number())
+        self.filter
+            .block_option
+            .get_from_block()
+            .and_then(|b| b.as_number())
     }
 
     /// Returns the numeric value of the `fromBlock` field
