@@ -67,3 +67,28 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
         _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
     }
 }
+
+/// Removes a dir at path, errors if path not found or path is not a directory.
+pub fn remove_dir(path: &str) -> anyhow::Result<()> {
+    let request = VfsRequest {
+        path: path.to_string(),
+        action: VfsAction::RemoveDir,
+    };
+
+    let message = Request::new()
+        .target(("our", "vfs", "distro", "sys"))
+        .body(serde_json::to_vec(&request)?)
+        .send_and_await_response(5)?;
+
+    match message {
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
+            match response {
+                VfsResponse::Ok => Ok(()),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+            }
+        }
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+    }
+}
