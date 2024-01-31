@@ -405,3 +405,9 @@ pub enum PythonResponse {
     Run,
     Err(String),
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MessageType {
+    Request,
+    Response,
+}
