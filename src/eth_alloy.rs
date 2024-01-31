@@ -1,8 +1,24 @@
 use crate::{Address as uqAddress, Request as uqRequest};
-pub use alloy_primitives::{keccak256, Address, B256, U256, U64, U8};
+pub use alloy_primitives::{
+    keccak256, 
+    Address, 
+    B256, 
+    FixedBytes,
+    U256, 
+    U64, 
+    U8
+};
 pub use alloy_rpc_types::{
-    AccessList, BlockNumberOrTag, CallInput, CallRequest, Filter, FilterBlockOption, FilterSet,
-    Log as AlloyLog, Topic, ValueOrArray,
+    AccessList, 
+    BlockNumberOrTag, 
+    CallInput, 
+    CallRequest, 
+    Filter, 
+    FilterBlockOption, 
+    FilterSet,
+    Log, 
+    Topic, 
+    ValueOrArray,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,10 +67,13 @@ impl<T> Provider<T> {
         );
     }
 
-    pub fn call(&mut self, request: CallRequest, handler: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
+    pub fn call(&mut self, call: CallRequest, handler: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
         let id = self.count();
         self.handlers.insert(id, handler);
-        // add send.
+        self.send(
+            id, 
+            serde_json::to_vec(&create_call(call.clone())).unwrap(),
+        );
     }
 
     fn send(&mut self, id: u64, body: Vec<u8>) {
@@ -64,6 +83,13 @@ impl<T> Provider<T> {
             .metadata(&id.to_string())
             .send();
     }
+}
+
+fn create_call(call: CallRequest) -> EthProviderRequest {
+    EthProviderRequest::RpcRequest(RpcRequest {
+        method: "eth_call".to_string(),
+        params: serde_json::json!(vec![call]),
+    })
 }
 
 fn create_sub_logs(filter: Filter) -> EthProviderRequest {
