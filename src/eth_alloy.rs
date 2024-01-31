@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub struct Provider<T> {
-    pub closures: HashMap<u64, Box<dyn FnMut(Vec<u8>, &mut T) + Send>>,
+    pub handlers: HashMap<u64, Box<dyn FnMut(Vec<u8>, &mut T) + Send>>,
     pub count: u64,
 }
 
 impl<T> Provider<T> {
     pub fn new() -> Self {
         Provider {
-            closures: HashMap::new(),
+            handlers: HashMap::new(),
             count: 0,
         }
     }
@@ -28,7 +28,7 @@ impl<T> Provider<T> {
 
     pub fn receive(&mut self, id: u64, body: Vec<u8>, state: &mut T) {
         let closure: &mut Box<dyn FnMut(Vec<u8>, &mut T) + Send> =
-            self.closures.get_mut(&id).unwrap();
+            self.handlers.get_mut(&id).unwrap();
         closure(body, state);
     }
 
@@ -38,7 +38,7 @@ impl<T> Provider<T> {
         closure: Box<dyn FnMut(Vec<u8>, &mut T) + Send>,
     ) {
         let id = self.count();
-        self.closures.insert(id, closure);
+        self.handlers.insert(id, closure);
 
         // generate json for getLogs and subscribeLogs, send
         self.send(
@@ -53,7 +53,7 @@ impl<T> Provider<T> {
 
     pub fn call(&mut self, request: CallRequest, closure: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
         let id = self.count();
-        self.closures.insert(id, closure);
+        self.handlers.insert(id, closure);
         // add send.
     }
 
