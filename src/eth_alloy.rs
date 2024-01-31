@@ -27,18 +27,18 @@ impl<T> Provider<T> {
     }
 
     pub fn receive(&mut self, id: u64, body: Vec<u8>, state: &mut T) {
-        let closure: &mut Box<dyn FnMut(Vec<u8>, &mut T) + Send> =
+        let handler: &mut Box<dyn FnMut(Vec<u8>, &mut T) + Send> =
             self.handlers.get_mut(&id).unwrap();
-        closure(body, state);
+        handler(body, state);
     }
 
     pub fn subscribe_logs(
         &mut self,
         filter: Filter,
-        closure: Box<dyn FnMut(Vec<u8>, &mut T) + Send>,
+        handler: Box<dyn FnMut(Vec<u8>, &mut T) + Send>,
     ) {
         let id = self.count();
-        self.handlers.insert(id, closure);
+        self.handlers.insert(id, handler);
 
         // generate json for getLogs and subscribeLogs, send
         self.send(
@@ -51,9 +51,9 @@ impl<T> Provider<T> {
         );
     }
 
-    pub fn call(&mut self, request: CallRequest, closure: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
+    pub fn call(&mut self, request: CallRequest, handler: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
         let id = self.count();
-        self.handlers.insert(id, closure);
+        self.handlers.insert(id, handler);
         // add send.
     }
 
