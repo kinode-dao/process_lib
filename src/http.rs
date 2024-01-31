@@ -1,8 +1,9 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as KiBlob, Message, ProcessId, Request as KiRequest,
+    get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse, SendError,
 };
+use crate::kernel_types::MessageType;
 pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
