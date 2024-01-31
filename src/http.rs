@@ -119,6 +119,26 @@ pub enum HttpServerAction {
         channel_id: u32,
         message_type: WsMessageType,
     },
+    /// When sent, expects a `lazy_load_blob` containing the WebSocket message bytes to send.
+    /// Modifies the `lazy_load_blob` by placing into `WebSocketExtPushData` with id taken from
+    /// this `KernelMessage` and `kinode_message_type` set to `desired_reply_type`.
+    WebSocketExtPushOutgoing {
+        channel_id: u32,
+        message_type: WsMessageType,
+        desired_reply_type: MessageType,
+    },
+    /// For communicating with the ext.
+    /// Kinode's http_server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
+    /// Upon receiving reply with this type from ext, http_server parses, setting:
+    /// * id as given,
+    /// * message type as given (Request or Response),
+    /// * body as HttpServerRequest::WebSocketPush,
+    /// * blob as given.
+    WebSocketExtPushData {
+        id: u64,
+        kinode_message_type: MessageType,
+        blob: Vec<u8>,
+    },
     /// Sending will close a socket the process controls.
     WebSocketClose(u32),
 }
