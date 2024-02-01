@@ -134,6 +134,15 @@ pub fn spawn(
     )
 }
 
+impl std::default::Default for LazyLoadBlob {
+    fn default() -> Self {
+        LazyLoadBlob {
+            mime: None,
+            bytes: Vec::new(),
+        }
+    }
+}
+
 /// Create a blob with no MIME type and a generic type, plus a serializer
 /// function that turns that type into bytes.
 ///
