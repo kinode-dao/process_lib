@@ -500,11 +500,22 @@ pub fn send_request_await_response(
             error: "http_client timed out".to_string(),
         });
     };
-    let Ok(HttpClientResponse::Http(resp)) = serde_json::from_slice::<HttpClientResponse>(&body)
-    else {
-        return Err(HttpClientError::RequestFailed {
-            error: "http_client gave unexpected response".to_string(),
-        });
+    let resp = match serde_json::from_slice::<
+        std::result::Result<HttpClientResponse, HttpClientError>,
+    >(&body)
+    {
+        Ok(Ok(HttpClientResponse::Http(resp))) => resp,
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => {
+            return Err(HttpClientError::RequestFailed {
+                error: "http_client gave unexpected response".to_string(),
+            })
+        }
+        Ok(Err(e)) => return Err(e),
+        Err(e) => {
+            return Err(HttpClientError::RequestFailed {
+                error: format!("http_client gave invalid response: {e:?}"),
+            })
+        }
     };
     let mut http_response = http::Response::builder()
         .status(http::StatusCode::from_u16(resp.status).unwrap_or_default());
