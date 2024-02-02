@@ -392,3 +392,9 @@ pub fn en_wit_send_error_kind(kind: SendErrorKind) -> wit::SendErrorKind {
         SendErrorKind::Timeout => wit::SendErrorKind::Timeout,
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MessageType {
+    Request,
+    Response,
+}

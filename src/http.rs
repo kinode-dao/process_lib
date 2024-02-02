@@ -1,3 +1,4 @@
+use crate::kernel_types::MessageType;
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
     get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
@@ -99,12 +100,17 @@ pub enum HttpServerAction {
         path: String,
         authenticated: bool,
         encrypted: bool,
+        extension: bool,
     },
     /// SecureBind is the same as Bind, except that it forces new connections to be made
     /// from the unique subdomain of the process that bound the path. These are *always*
     /// authenticated. Since the subdomain is unique, it will require the user to be
     /// logged in separately to the general domain authentication.
-    WebSocketSecureBind { path: String, encrypted: bool },
+    WebSocketSecureBind {
+        path: String,
+        encrypted: bool,
+        extension: bool,
+    },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
@@ -113,6 +119,26 @@ pub enum HttpServerAction {
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
+    },
+    /// When sent, expects a `lazy_load_blob` containing the WebSocket message bytes to send.
+    /// Modifies the `lazy_load_blob` by placing into `WebSocketExtPushData` with id taken from
+    /// this `KernelMessage` and `kinode_message_type` set to `desired_reply_type`.
+    WebSocketExtPushOutgoing {
+        channel_id: u32,
+        message_type: WsMessageType,
+        desired_reply_type: MessageType,
+    },
+    /// For communicating with the ext.
+    /// Kinode's http_server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
+    /// Upon receiving reply with this type from ext, http_server parses, setting:
+    /// * id as given,
+    /// * message type as given (Request or Response),
+    /// * body as HttpServerRequest::WebSocketPush,
+    /// * blob as given.
+    WebSocketExtPushData {
+        id: u64,
+        kinode_message_type: MessageType,
+        blob: Vec<u8>,
     },
     /// Sending will close a socket the process controls.
     WebSocketClose(u32),
@@ -406,6 +432,39 @@ where
                 path: path.into(),
                 authenticated,
                 encrypted,
+                extension: false,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+/// Register a WebSockets path with the HTTP server specifically for sending and
+/// receiving system messages from a runtime extension. Only use this if you are
+/// writing a runtime extension.
+pub fn bind_ext_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::WebSocketBind {
+                path: path.into(),
+                authenticated: false,
+                encrypted: false,
+                extension: true,
             })
             .unwrap(),
         )
