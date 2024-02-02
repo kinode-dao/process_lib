@@ -8,7 +8,6 @@ pub use http::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::str::FromStr;
 use thiserror::Error;
 
 //
@@ -401,12 +400,7 @@ where
 
 /// Register a WebSockets path with the HTTP server. Your app must do this
 /// in order to receive incoming WebSocket connections.
-pub fn bind_ws_path<T>(
-    path: T,
-    authenticated: bool,
-    encrypted: bool,
-    extension: bool,
-) -> anyhow::Result<()>
+pub fn bind_ws_path<T>(path: T, authenticated: bool, encrypted: bool) -> anyhow::Result<()>
 where
     T: Into<String>,
 {
@@ -416,7 +410,32 @@ where
             path: path.into(),
             authenticated,
             encrypted,
-            extension,
+            extension: false,
+        })?)
+        .send_and_await_response(5)?;
+    match res {
+        Ok(Message::Response { body, .. }) => {
+            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
+            resp.map_err(|e| anyhow::anyhow!(e))
+        }
+        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
+    }
+}
+
+/// Register a WebSockets path with the HTTP server specifically for sending and
+/// receiving system messages from a runtime extension. Only use this if you are
+/// writing a runtime extension.
+pub fn bind_ext_path<T>(path: T) -> anyhow::Result<()>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::new()
+        .target(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
+            path: path.into(),
+            authenticated: false,
+            encrypted: false,
+            extension: true,
         })?)
         .send_and_await_response(5)?;
     match res {
