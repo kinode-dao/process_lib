@@ -1,12 +1,8 @@
 use crate::{Address as uqAddress, Request as uqRequest};
 pub use alloy_primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256, U64, U8};
 pub use alloy_rpc_types::{
-    AccessList, 
-    BlockNumberOrTag, 
-    CallInput, CallRequest, 
-    Filter, FilterBlockOption, FilterSet,
-    Log, Topic, 
-    ValueOrArray,
+    AccessList, BlockNumberOrTag, CallInput, CallRequest, Filter, FilterBlockOption, FilterSet,
+    Log, Topic, ValueOrArray,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
