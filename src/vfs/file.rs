@@ -266,6 +266,35 @@ impl File {
         }
     }
 
+    /// Copies a file to path, returns a new File.
+    pub fn copy(&mut self, path: &str) -> anyhow::Result<File> {
+        let request = VfsRequest {
+            path: self.path.to_string(),
+            action: VfsAction::CopyFile {
+                new_path: path.to_string(),
+            },
+        };
+
+        let message = Request::new()
+            .target(("our", "vfs", "distro", "sys"))
+            .body(serde_json::to_vec(&request)?)
+            .send_and_await_response(5)?;
+
+        match message {
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<VfsResponse>(&body)?;
+                match response {
+                    VfsResponse::Ok => Ok(File {
+                        path: path.to_string(),
+                    }),
+                    VfsResponse::Err(e) => Err(e.into()),
+                    _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+        }
+    }
+
     /// Set file length, if given size > underlying file, fills it with 0s.
     pub fn set_len(&mut self, size: u64) -> anyhow::Result<()> {
         let request = VfsRequest {
