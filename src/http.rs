@@ -451,9 +451,9 @@ where
     resp
 }
 
-/// Register a WebSockets path with the HTTP server specifically for sending and
-/// receiving system messages from a runtime extension. Only use this if you are
-/// writing a runtime extension.
+/// Register a WebSockets path with the HTTP server to send and
+/// receive system messages from a runtime extension. Only use
+/// this if you are writing a runtime extension.
 pub fn bind_ext_path<T>(path: T) -> std::result::Result<(), HttpServerError>
 where
     T: Into<String>,
