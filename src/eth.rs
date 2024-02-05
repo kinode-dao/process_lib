@@ -1,8 +1,9 @@
-use crate::*;
-use crate::{Address as KiAddress, Request as KiRequest};
-use alloy_rpc_types::Log;
-pub use ethers_core::types::{
-    Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
+use crate::{print_to_terminal, Message, Request as KiRequest};
+use alloy_primitives::{Address, BlockHash, Bytes, ChainId, TxHash, B256, U256, U64};
+use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
+use alloy_rpc_types::{
+    Block, BlockId, BlockNumberOrTag, CallRequest, FeeHistory, Filter, Log, Transaction,
+    TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,9 +14,32 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthAction {
     /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
-    SubscribeLogs { sub_id: u64, filter: Filter },
+    /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
+    SubscribeLogs {
+        sub_id: u64,
+        kind: SubscriptionKind,
+        params: Params,
+    },
     /// Kill a SubscribeLogs subscription of a given ID, to stop getting updates.
     UnsubscribeLogs(u64),
+    /// Raw Json_RPC request,
+    Request {
+        method: String,
+        params: serde_json::Value,
+    },
+}
+
+/// Potential EthResponse type.
+/// Can encapsulate all methods in their own response type,
+/// or return generic result which can be parsed later..
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthResponse {
+    // another possible strat, just return RpcResult<T, E, ErrResp>,
+    // then try deserializing on the process_lib side.
+    Ok,
+    Request(serde_json::Value),
+    Err(EthError),
+    Sub { id: u64, result: SubscriptionResult },
 }
 
 /// The Response type which a process will get from requesting with an [`EthAction`] will be
@@ -23,8 +47,6 @@ pub enum EthAction {
 /// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
-    /// The subscription ID already existed
-    SubscriptionIdCollision,
     /// The ethers provider threw an error when trying to subscribe
     /// (contains ProviderError serialized to debug string)
     ProviderError(String),
@@ -33,203 +55,190 @@ pub enum EthError {
     SubscriptionNotFound,
 }
 
-/// The Request type which a process will get from using SubscribeLogs to subscribe
-/// to a log.
-///
-/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum EthSubEvent {
-    Log(Log),
-}
+fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
+    action: EthAction,
+) -> anyhow::Result<T> {
+    let resp = KiRequest::new()
+        .target(("our", "eth", "distro", "sys"))
+        .body(serde_json::to_vec(&action)?)
+        .send_and_await_response(5)??;
 
-#[derive(Debug)]
-pub struct SubscribeLogsRequest {
-    pub request: KiRequest,
-    pub id: u64,
-    pub filter: Filter,
-}
-
-impl SubscribeLogsRequest {
-    /// Start building a new `SubscribeLogsRequest`.
-    pub fn new(id: u64) -> Self {
-        let request = KiRequest::new().target(KiAddress::new(
-            "our",
-            ProcessId::new(Some("eth"), "distro", "sys"),
-        ));
-
-        SubscribeLogsRequest {
-            request,
-            id,
-            filter: Filter::new(),
+    match resp {
+        Message::Response { body, .. } => {
+            let response = serde_json::from_slice::<EthResponse>(&body)?;
+            match response {
+                EthResponse::Request(raw) => serde_json::from_value::<T>(raw)
+                    .map_err(|e| anyhow::anyhow!("failed to parse response: {}", e)),
+                _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
+            }
         }
+        _ => Err(anyhow::anyhow!("unexpected message type: {:?}", resp)),
     }
+}
 
-    /// Attempt to send the request.
-    pub fn send(self) -> anyhow::Result<()> {
-        self.request
-            .body(serde_json::to_vec(&EthAction::SubscribeLogs {
-                sub_id: self.id,
-                filter: self.filter,
-            })?)
-            .send()
-    }
+pub fn get_block_number() -> anyhow::Result<u64> {
+    let action = EthAction::Request {
+        method: "eth_blockNumber".to_string(),
+        params: ().into(),
+    };
 
-    /// Sets the inner filter object
-    ///
-    /// *NOTE:* ranges are always inclusive
-    ///
-    /// # Examples
-    ///
-    /// Match only a specific block
-    ///
-    /// ```rust
-    /// # use process_lib::eth::SubscribeLogsRequest;
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(69u64);
-    /// # }
-    /// ```
-    /// This is the same as `SubscribeLogsRequest::new().from_block(1337u64).to_block(1337u64)`
-    ///
-    /// Match the latest block only
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, BlockNumber};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(BlockNumber::Latest);
-    /// # }
-    /// ```
-    ///
-    /// Match a block by its hash
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(H256::zero());
-    /// # }
-    /// ```
-    /// This is the same as `at_block_hash`
-    ///
-    /// Match a range of blocks
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(0u64..100u64);
-    /// # }
-    /// ```
-    ///
-    /// Match all blocks in range `(1337..BlockNumber::Latest)`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(1337u64..);
-    /// # }
-    /// ```
-    ///
-    /// Match all blocks in range `(BlockNumber::Earliest..1337)`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(..1337u64);
-    /// # }
-    /// ```
-    pub fn select(mut self, filter: impl Into<FilterBlockOption>) -> Self {
-        self.filter = self.filter.select(filter);
-        self
-    }
+    let res = send_request_and_parse_response::<U64>(action)?;
+    Ok(res.to::<u64>())
+}
 
-    /// Matches starting from a specific block
-    pub fn from_block<T: Into<BlockNumber>>(mut self, block: T) -> Self {
-        self.filter = self.filter.from_block(block);
-        self
-    }
+pub fn get_balance(address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
+    let params = serde_json::to_value((
+        address,
+        tag.unwrap_or(BlockId::Number(BlockNumberOrTag::Latest)),
+    ))?;
+    let action = EthAction::Request {
+        method: "eth_getBalance".to_string(),
+        params,
+    };
 
-    /// Matches up until a specific block
-    pub fn to_block<T: Into<BlockNumber>>(mut self, block: T) -> Self {
-        self.filter = self.filter.to_block(block);
-        self
-    }
+    send_request_and_parse_response::<U256>(action)
+}
 
-    /// Matches a for a specific block hash
-    pub fn at_block_hash<T: Into<H256>>(mut self, hash: T) -> Self {
-        self.filter = self.filter.at_block_hash(hash);
-        self
-    }
+pub fn get_logs(filter: Filter) -> anyhow::Result<Vec<Log>> {
+    let action = EthAction::Request {
+        method: "eth_getLogs".to_string(),
+        params: serde_json::to_value((filter,))?,
+    };
 
-    /// Sets the SubscribeLogs filter object
-    ///
-    /// *NOTE:* ranges are always inclusive
-    ///
-    /// # Examples
-    ///
-    /// Match only a specific address `("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF")`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, Address};
-    /// # fn main() {
-    /// let filter = SubscribeLogsRequest::new().address("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<EthAddress>().unwrap());
-    /// # }
-    /// ```
-    ///
-    /// Match all addresses in array `(vec!["0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF",
-    /// "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8"])`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, EthAddress, ValueOrArray};
-    /// # fn main() {
-    /// let addresses = vec!["0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<EthAddress>().unwrap(),"0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8".parse::<EthAddress>().unwrap()];
-    /// let filter = SubscribeLogsRequest::new().address(addresses);
-    /// # }
-    /// ```
-    pub fn address<T: Into<ValueOrArray<EthAddress>>>(mut self, address: T) -> Self {
-        self.filter = self.filter.address(address);
-        self
-    }
+    send_request_and_parse_response::<Vec<Log>>(action)
+}
 
-    /// Given the event signature in string form, it hashes it and adds it to the topics to monitor
-    pub fn event(mut self, event_name: &str) -> Self {
-        self.filter = self.filter.event(event_name);
-        self
-    }
+pub fn get_gas_price() -> anyhow::Result<U256> {
+    let action = EthAction::Request {
+        method: "eth_gasPrice".to_string(),
+        params: ().into(),
+    };
 
-    /// Hashes all event signatures and sets them as array to topic0
-    pub fn events(mut self, events: impl IntoIterator<Item = impl AsRef<[u8]>>) -> Self {
-        self.filter = self.filter.events(events);
-        self
-    }
+    send_request_and_parse_response::<U256>(action)
+}
 
-    /// Sets topic0 (the event name for non-anonymous events)
-    pub fn topic0<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic0(topic);
-        self
-    }
+pub fn get_chain_id() -> anyhow::Result<U256> {
+    let action = EthAction::Request {
+        method: "eth_chainId".to_string(),
+        params: ().into(),
+    };
 
-    /// Sets the 1st indexed topic
-    pub fn topic1<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic1(topic);
-        self
-    }
+    send_request_and_parse_response::<U256>(action)
+}
 
-    /// Sets the 2nd indexed topic
-    pub fn topic2<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic2(topic);
-        self
-    }
+pub fn get_transaction_count(address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
+    let params = serde_json::to_value((address, tag.unwrap_or_default()))?;
+    let action = EthAction::Request {
+        method: "eth_getTransactionCount".to_string(),
+        params,
+    };
 
-    /// Sets the 3rd indexed topic
-    pub fn topic3<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic3(topic);
-        self
-    }
+    send_request_and_parse_response::<U256>(action)
+}
 
-    pub fn is_paginatable(&self) -> bool {
-        self.filter.is_paginatable()
-    }
+pub fn get_block_by_hash(hash: BlockHash, full_tx: bool) -> anyhow::Result<Option<Block>> {
+    let params = serde_json::to_value((hash, full_tx))?;
+    let action = EthAction::Request {
+        method: "eth_getBlockByHash".to_string(),
+        params,
+    };
 
-    /// Returns the numeric value of the `toBlock` field
-    pub fn get_to_block(&self) -> Option<U64> {
-        self.filter.get_to_block()
-    }
+    send_request_and_parse_response::<Option<Block>>(action)
+}
+
+pub fn get_block_by_number(
+    number: BlockNumberOrTag,
+    full_tx: bool,
+) -> anyhow::Result<Option<Block>> {
+    let params = serde_json::to_value((number, full_tx))?;
+    let action = EthAction::Request {
+        method: "eth_getBlockByNumber".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Option<Block>>(action)
+}
+
+pub fn get_storage_at(address: Address, key: U256, tag: Option<BlockId>) -> anyhow::Result<Bytes> {
+    let params = serde_json::to_value((address, key, tag.unwrap_or_default()))?;
+    let action = EthAction::Request {
+        method: "eth_getStorageAt".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Bytes>(action)
+}
+
+pub fn get_code_at(address: Address, tag: BlockId) -> anyhow::Result<Bytes> {
+    let params = serde_json::to_value((address, tag))?;
+    let action = EthAction::Request {
+        method: "eth_getCode".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Bytes>(action)
+}
+
+pub fn get_transaction_by_hash(hash: TxHash) -> anyhow::Result<Option<Transaction>> {
+    let params = serde_json::to_value((hash,))?;
+    let action = EthAction::Request {
+        method: "eth_getTransactionByHash".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Option<Transaction>>(action)
+}
+
+pub fn get_transaction_receipt(hash: TxHash) -> anyhow::Result<Option<TransactionReceipt>> {
+    let params = serde_json::to_value((hash,))?;
+    let action = EthAction::Request {
+        method: "eth_getTransactionReceipt".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Option<TransactionReceipt>>(action)
+}
+
+pub fn estimate_gas(tx: CallRequest, block: Option<BlockId>) -> anyhow::Result<U256> {
+    let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
+    let action = EthAction::Request {
+        method: "eth_estimateGas".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<U256>(action)
+}
+
+// note will and should return empty I think...
+pub fn get_accounts() -> anyhow::Result<Vec<Address>> {
+    let action = EthAction::Request {
+        method: "eth_accounts".to_string(),
+        params: serde_json::Value::Array(vec![]),
+    };
+
+    send_request_and_parse_response::<Vec<Address>>(action)
+}
+
+pub fn get_fee_history(
+    block_count: U256,
+    last_block: BlockNumberOrTag,
+    reward_percentiles: Vec<f64>,
+) -> anyhow::Result<FeeHistory> {
+    let params = serde_json::to_value((block_count, last_block, reward_percentiles))?;
+    let action = EthAction::Request {
+        method: "eth_feeHistory".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<FeeHistory>(action)
+}
+
+pub fn call(tx: CallRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
+    let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
+    let action = EthAction::Request {
+        method: "eth_call".to_string(),
+        params,
+    };
+
+    send_request_and_parse_response::<Bytes>(action)
 }
