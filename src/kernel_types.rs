@@ -220,7 +220,6 @@ pub struct PackageManifestEntry {
 
 /// the type that gets deserialized from a `scripts.json` object
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DotScriptsEntry {
     pub root: bool,
     pub public: bool,
