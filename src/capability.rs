@@ -134,7 +134,7 @@ where
 
 impl std::fmt::Display for Capability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}^{}", self.issuer, self.params)
+        write!(f, "{}({})", self.issuer, self.params)
     }
 }
 
