@@ -1,4 +1,4 @@
-pub use crate::{Address, Capability, ProcessId};
+pub use crate::{Address, Capability};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
@@ -31,54 +31,30 @@ impl Capability {
 
 impl std::str::FromStr for Capability {
     type Err = CapabilityParseError;
-    /// Attempt to parse a `Capability` from a string. The formatting structure for
-    /// a Capability is `issuer^params`.
-    /// TODO not tested
-    fn from_str(input: &str) -> Result<Self, CapabilityParseError> {
-        // split string on colons into 4 segments,
-        // first one with @, next 3 with :
-        let mut name_rest = input.split('@');
-        let node = name_rest
-            .next()
-            .ok_or(CapabilityParseError::MissingField)?
-            .to_string();
-        let mut param_segments = name_rest
-            .next()
-            .ok_or(CapabilityParseError::MissingNodeId)?
-            .split('^');
-        let mut segments = param_segments
-            .next()
-            .ok_or(CapabilityParseError::MissingNodeId)?
-            .split(':');
-        let process_name = segments
-            .next()
-            .ok_or(CapabilityParseError::MissingField)?
-            .to_string();
-        let package_name = segments
-            .next()
-            .ok_or(CapabilityParseError::MissingField)?
-            .to_string();
-        let publisher_node = segments
-            .next()
-            .ok_or(CapabilityParseError::MissingField)?
-            .to_string();
-        let params = param_segments
-            .next()
-            .ok_or(CapabilityParseError::MissingParams)?
-            .to_string();
-        if segments.next().is_some() {
-            return Err(CapabilityParseError::TooManyColons);
+
+    fn from_str(s: &str) -> Result<Self, CapabilityParseError> {
+        let end_of_issuer_index = s
+            .find('(')
+            .ok_or_else(|| CapabilityParseError::MissingParenthesis)?;
+        let start_of_params_index = end_of_issuer_index + 1;
+        let params_end_index = s
+            .rfind(')')
+            .ok_or_else(|| CapabilityParseError::MissingParenthesis)?;
+
+        if params_end_index <= start_of_params_index {
+            return Err(CapabilityParseError::MissingParenthesis);
         }
+
+        let issuer_str = &s[..end_of_issuer_index];
+        let params_str = &s[start_of_params_index..params_end_index];
+
+        let Ok(issuer) = issuer_str.parse::<Address>() else {
+            return Err(CapabilityParseError::InvalidAddress);
+        };
+
         Ok(Capability {
-            issuer: Address {
-                node,
-                process: ProcessId {
-                    process_name,
-                    package_name,
-                    publisher_node,
-                },
-            },
-            params,
+            issuer,
+            params: params_str.to_string(),
         })
     }
 }
@@ -141,10 +117,9 @@ impl std::fmt::Display for Capability {
 /// Error type for parsing an `Address` from a string.
 #[derive(Debug)]
 pub enum CapabilityParseError {
-    TooManyColons,
-    MissingNodeId,
-    MissingField,
+    MissingParenthesis,
     MissingParams,
+    InvalidAddress,
 }
 
 impl std::fmt::Display for CapabilityParseError {
@@ -153,10 +128,9 @@ impl std::fmt::Display for CapabilityParseError {
             f,
             "{}",
             match self {
-                CapabilityParseError::TooManyColons => "Too many colons in ProcessId string",
-                CapabilityParseError::MissingNodeId => "Node ID missing",
-                CapabilityParseError::MissingField => "Missing field in ProcessId string",
+                CapabilityParseError::MissingParenthesis => "Missing parenthesis around Capability",
                 CapabilityParseError::MissingParams => "Missing params in Capability string",
+                CapabilityParseError::InvalidAddress => "Invalid address in Capability string",
             }
         )
     }
@@ -165,10 +139,9 @@ impl std::fmt::Display for CapabilityParseError {
 impl std::error::Error for CapabilityParseError {
     fn description(&self) -> &str {
         match self {
-            CapabilityParseError::TooManyColons => "Too many colons in ProcessId string",
-            CapabilityParseError::MissingNodeId => "Node ID missing",
-            CapabilityParseError::MissingField => "Missing field in ProcessId string",
+            CapabilityParseError::MissingParenthesis => "Missing parenthesis around Capability",
             CapabilityParseError::MissingParams => "Missing params in Capability string",
+            CapabilityParseError::InvalidAddress => "Invalid address in Capability string",
         }
     }
 }
