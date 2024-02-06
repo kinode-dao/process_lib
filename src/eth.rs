@@ -1,5 +1,5 @@
-use crate::{print_to_terminal, Message, Request as KiRequest};
-use alloy_primitives::{Address, BlockHash, Bytes, ChainId, TxHash, B256, U256, U64};
+use crate::{Message, Request as KiRequest};
+use alloy_primitives::{Address, BlockHash, Bytes, TxHash, U256, U64};
 use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
 use alloy_rpc_types::{
     Block, BlockId, BlockNumberOrTag, CallRequest, FeeHistory, Filter, Log, Transaction,
@@ -241,4 +241,13 @@ pub fn call(tx: CallRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
     };
 
     send_request_and_parse_response::<Bytes>(action)
+}
+
+pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
+    let action = EthAction::Request {
+        method: "eth_sendRawTransaction".to_string(),
+        params: serde_json::to_value((tx,))?,
+    };
+
+    send_request_and_parse_response::<TxHash>(action)
 }
