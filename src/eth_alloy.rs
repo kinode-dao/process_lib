@@ -57,6 +57,12 @@ impl<T> Provider<T> {
         self.send(id, serde_json::to_vec(&create_call(call.clone())).unwrap());
     }
 
+    pub fn gas_price(&mut self, handler: Box<dyn FnMut(Vec<u8>, &mut T) + Send>) {
+        let id = self.count();
+        self.handlers.insert(id, handler);
+        self.send(id, serde_json::to_vec(&create_gas_price()).unwrap());
+    }
+
     fn send(&mut self, id: u64, body: Vec<u8>) {
         let _ = uqRequest::new()
             .target(("our", "eth_provider", "eth_provider", "sys"))
@@ -84,6 +90,13 @@ fn create_get_logs(filter: Filter) -> EthProviderRequest {
     EthProviderRequest::RpcRequest(RpcRequest {
         method: "eth_getLogs".to_string(),
         params: serde_json::json!(vec![filter]),
+    })
+}
+
+fn create_gas_price() -> EthProviderRequest {
+    EthProviderRequest::RpcRequest(RpcRequest {
+        method: "eth_gasPrice".to_string(),
+        params: serde_json::json!([]),
     })
 }
 
