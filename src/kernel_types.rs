@@ -224,7 +224,7 @@ pub struct PackageManifestEntry {
 }
 
 /// the type that gets deserialized from a `scripts.json` object
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DotScriptsEntry {
     pub root: bool,
     pub public: bool,
