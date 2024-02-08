@@ -1,14 +1,14 @@
 [package]
 name = "kinode_process_lib"
 description = "A library for writing Kinode processes in Rust."
-version = "0.5.9"
+version = "0.6.0"
 edition = "2021"
 license-file = "LICENSE"
 homepage = "https://kinode.org"
 repository = "https://github.com/kinode-dao/process_lib"
 
 [features]
-eth = [ "ethers-core", "alloy-rpc-types" ]
+eth = ["ethers-core", "alloy-rpc-types"]
 
 [dependencies]
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy.git", rev = "3b1c310", optional = true }
