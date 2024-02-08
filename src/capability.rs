@@ -1,5 +1,6 @@
 pub use crate::{Address, Capability};
-use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::ser::{Serialize, SerializeStruct};
 use std::hash::{Hash, Hasher};
 
 /// Capability is defined in the wit bindings, but constructors and methods here.
@@ -29,42 +30,15 @@ impl Capability {
     }
 }
 
-impl std::str::FromStr for Capability {
-    type Err = CapabilityParseError;
-
-    fn from_str(s: &str) -> Result<Self, CapabilityParseError> {
-        let end_of_issuer_index = s
-            .find('(')
-            .ok_or_else(|| CapabilityParseError::MissingParenthesis)?;
-        let start_of_params_index = end_of_issuer_index + 1;
-        let params_end_index = s
-            .rfind(')')
-            .ok_or_else(|| CapabilityParseError::MissingParenthesis)?;
-
-        if params_end_index <= start_of_params_index {
-            return Err(CapabilityParseError::MissingParenthesis);
-        }
-
-        let issuer_str = &s[..end_of_issuer_index];
-        let params_str = &s[start_of_params_index..params_end_index];
-
-        let Ok(issuer) = issuer_str.parse::<Address>() else {
-            return Err(CapabilityParseError::InvalidAddress);
-        };
-
-        Ok(Capability {
-            issuer,
-            params: params_str.to_string(),
-        })
-    }
-}
-
 impl Serialize for Capability {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
-        format!("{}", self).serialize(serializer)
+        let mut state = serializer.serialize_struct("Capability", 2)?;
+        state.serialize_field("issuer", &self.issuer)?;
+        state.serialize_field("params", &self.params)?;
+        state.end()
     }
 }
 
@@ -73,8 +47,97 @@ impl<'a> Deserialize<'a> for Capability {
     where
         D: serde::de::Deserializer<'a>,
     {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
+        enum Field {
+            Issuer,
+            Params,
+        }
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`issuer` or `params`")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "issuer" => Ok(Field::Issuer),
+                            "params" => Ok(Field::Params),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct CapabilityVisitor;
+
+        impl<'de> Visitor<'de> for CapabilityVisitor {
+            type Value = Capability;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct Capability")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Capability, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let issuer: Address = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let params: String = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                Ok(Capability::new(issuer, params))
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Capability, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut issuer: Option<Address> = None;
+                let mut params: Option<String> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Issuer => {
+                            if issuer.is_some() {
+                                return Err(de::Error::duplicate_field("issuer"));
+                            }
+                            issuer = Some(map.next_value()?);
+                        }
+                        Field::Params => {
+                            if params.is_some() {
+                                return Err(de::Error::duplicate_field("params"));
+                            }
+                            params = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let issuer: Address = issuer
+                    .ok_or_else(|| de::Error::missing_field("issuer"))?
+                    .into();
+                let params: String = params
+                    .ok_or_else(|| de::Error::missing_field("params"))?
+                    .into();
+                Ok(Capability::new(issuer, params))
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["issuer", "params"];
+        deserializer.deserialize_struct("Capability", FIELDS, CapabilityVisitor)
     }
 }
 
@@ -111,37 +174,5 @@ where
 impl std::fmt::Display for Capability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}({})", self.issuer, self.params)
-    }
-}
-
-/// Error type for parsing an `Address` from a string.
-#[derive(Debug)]
-pub enum CapabilityParseError {
-    MissingParenthesis,
-    MissingParams,
-    InvalidAddress,
-}
-
-impl std::fmt::Display for CapabilityParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                CapabilityParseError::MissingParenthesis => "Missing parenthesis around Capability",
-                CapabilityParseError::MissingParams => "Missing params in Capability string",
-                CapabilityParseError::InvalidAddress => "Invalid address in Capability string",
-            }
-        )
-    }
-}
-
-impl std::error::Error for CapabilityParseError {
-    fn description(&self) -> &str {
-        match self {
-            CapabilityParseError::MissingParenthesis => "Missing parenthesis around Capability",
-            CapabilityParseError::MissingParams => "Missing params in Capability string",
-            CapabilityParseError::InvalidAddress => "Invalid address in Capability string",
-        }
     }
 }
