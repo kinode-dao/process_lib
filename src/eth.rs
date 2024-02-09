@@ -2,8 +2,8 @@ use crate::{Message, Request as KiRequest};
 use alloy_primitives::{Address, BlockHash, Bytes, TxHash, U256, U64};
 use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
 use alloy_rpc_types::{
-    Block, BlockId, BlockNumberOrTag, CallRequest, FeeHistory, Filter, Log, Transaction,
-    TransactionReceipt,
+    request::TransactionRequest, Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, Log,
+    Transaction, TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -199,7 +199,7 @@ pub fn get_transaction_receipt(hash: TxHash) -> anyhow::Result<Option<Transactio
     send_request_and_parse_response::<Option<TransactionReceipt>>(action)
 }
 
-pub fn estimate_gas(tx: CallRequest, block: Option<BlockId>) -> anyhow::Result<U256> {
+pub fn estimate_gas(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<U256> {
     let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
     let action = EthAction::Request {
         method: "eth_estimateGas".to_string(),
@@ -233,7 +233,7 @@ pub fn get_fee_history(
     send_request_and_parse_response::<FeeHistory>(action)
 }
 
-pub fn call(tx: CallRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
+pub fn call(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
     let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
     let action = EthAction::Request {
         method: "eth_call".to_string(),
