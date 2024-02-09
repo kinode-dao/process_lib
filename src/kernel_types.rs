@@ -106,6 +106,11 @@ pub enum KernelCommand {
         target: ProcessId,
         capabilities: Vec<Capability>,
     },
+    /// Drop capabilities. Does nothing if process doesn't have these caps
+    DropCapabilities {
+        target: ProcessId,
+        capabilities: Vec<Capability>,
+    },
     /// Tell the kernel to run a process that has already been installed.
     /// TODO: in the future, this command could be extended to allow for
     /// resource provision.
@@ -219,8 +224,7 @@ pub struct PackageManifestEntry {
 }
 
 /// the type that gets deserialized from a `scripts.json` object
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DotScriptsEntry {
     pub root: bool,
     pub public: bool,
