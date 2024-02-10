@@ -25,6 +25,8 @@ wit_bindgen::generate!({
 /// Interact with the eth provider module.
 #[cfg(feature = "eth")]
 pub mod eth;
+/// Interact with the graphdb module
+pub mod graphdb;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
 pub mod http;
