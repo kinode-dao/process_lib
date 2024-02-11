@@ -60,6 +60,8 @@ mod on_exit;
 pub use on_exit::OnExit;
 mod capability;
 pub use capability::Capability;
+mod lazy_load_blob;
+pub use lazy_load_blob::LazyLoadBlob;
 
 /// Implement the wit-bindgen specific code that the kernel uses to hook into
 /// a process. Write an `init(our: Address)` function and call it with this.
@@ -132,15 +134,6 @@ pub fn spawn(
         &grant_capabilities,
         public,
     )
-}
-
-impl std::default::Default for LazyLoadBlob {
-    fn default() -> Self {
-        LazyLoadBlob {
-            mime: None,
-            bytes: Vec::new(),
-        }
-    }
 }
 
 /// Create a blob with no MIME type and a generic type, plus a serializer
