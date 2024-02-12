@@ -1,14 +1,23 @@
 use crate::{Message, Request as KiRequest};
-use alloy_primitives::{Address, BlockHash, Bytes, TxHash, U256, U64};
-use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
-use alloy_rpc_types::{
-    request::TransactionRequest, Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, Log,
-    Transaction, TransactionReceipt,
+pub use alloy_primitives::{Address, BlockHash, Bytes, TxHash, U128, U256, U64, U8};
+pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
+pub use alloy_rpc_types::{
+    request::{TransactionInput, TransactionRequest},
+    Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, Log, Transaction, TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
 
-/// The Request type that can be made to eth:distro:sys. Currently primitive, this
-/// enum will expand to support more actions in the future.
+/// The Message type that can be made to eth:distro:sys. The id is used to match the response,
+/// if you're not doing send_and_await.
+///
+/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EthMessage {
+    pub id: u64,
+    pub action: EthAction,
+}
+
+/// The Action and Request type that can be made to eth:distro:sys.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,58 +25,64 @@ pub enum EthAction {
     /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
     /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
     SubscribeLogs {
-        sub_id: u64,
         kind: SubscriptionKind,
         params: Params,
     },
     /// Kill a SubscribeLogs subscription of a given ID, to stop getting updates.
-    UnsubscribeLogs(u64),
-    /// Raw Json_RPC request,
+    UnsubscribeLogs,
+    /// Raw request. Used by kinode_process_lib.
     Request {
         method: String,
         params: serde_json::Value,
     },
+    /// Incoming subscription update.
+    Sub { result: SubscriptionResult },
 }
 
-/// Potential EthResponse type.
-/// Can encapsulate all methods in their own response type,
-/// or return generic result which can be parsed later..
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthResponse {
-    // another possible strat, just return RpcResult<T, E, ErrResp>,
-    // then try deserializing on the process_lib side.
     Ok,
-    Request(serde_json::Value),
+    Response { value: serde_json::Value },
     Err(EthError),
-    Sub { id: u64, result: SubscriptionResult },
 }
 
-/// The Response type which a process will get from requesting with an [`EthAction`] will be
+/// The Response type which a process will get from requesting with an [`EthMessage`] will be
 /// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
 /// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
-    /// The ethers provider threw an error when trying to subscribe
-    /// (contains ProviderError serialized to debug string)
-    ProviderError(String),
-    SubscriptionClosed,
+    /// Underlying transport error
+    TransportError(String),
+    /// Subscription closed
+    SubscriptionClosed(u64),
     /// The subscription ID was not found, so we couldn't unsubscribe.
     SubscriptionNotFound,
+    /// Invalid method
+    InvalidMethod(String),
+    /// Permission denied
+    PermissionDenied(String),
+    /// Internal RPC error
+    RpcError(String),
 }
 
 fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
     action: EthAction,
 ) -> anyhow::Result<T> {
+    let msg = EthMessage {
+        id: rand::random(),
+        action,
+    };
+
     let resp = KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&action)?)
+        .body(serde_json::to_vec(&msg)?)
         .send_and_await_response(5)??;
 
     match resp {
         Message::Response { body, .. } => {
             let response = serde_json::from_slice::<EthResponse>(&body)?;
             match response {
-                EthResponse::Request(raw) => serde_json::from_value::<T>(raw)
+                EthResponse::Response { value } => serde_json::from_value::<T>(value)
                     .map_err(|e| anyhow::anyhow!("failed to parse response: {}", e)),
                 _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
             }
