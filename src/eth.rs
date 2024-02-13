@@ -1,9 +1,10 @@
 use crate::{Message, Request as KiRequest};
-pub use alloy_primitives::{Address, BlockHash, Bytes, TxHash, U128, U256, U64, U8};
+pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
 pub use alloy_rpc_types::{
     request::{TransactionInput, TransactionRequest},
-    Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, Log, Transaction, TransactionReceipt,
+    Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
+    TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -114,7 +115,7 @@ pub fn get_balance(address: Address, tag: Option<BlockId>) -> anyhow::Result<U25
     send_request_and_parse_response::<U256>(action)
 }
 
-pub fn get_logs(filter: Filter) -> anyhow::Result<Vec<Log>> {
+pub fn get_logs(filter: &Filter) -> anyhow::Result<Vec<Log>> {
     let action = EthAction::Request {
         method: "eth_getLogs".to_string(),
         params: serde_json::to_value((filter,))?,
@@ -265,4 +266,44 @@ pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
     };
 
     send_request_and_parse_response::<TxHash>(action)
+}
+
+/// sends requests eth_getLogs and eth_subscribe,
+/// doesn't await, handle them as incoming EthMessage::Sub, and EthResponse::Response
+pub fn getlogs_and_subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
+    let action = EthAction::SubscribeLogs {
+        kind: SubscriptionKind::Logs,
+        params: Params::Logs(Box::new(filter)),
+    };
+    let msg = EthMessage { id: sub_id, action };
+
+    KiRequest::new()
+        .target(("our", "eth", "distro", "sys"))
+        .body(serde_json::to_vec(&msg)?)
+        .send()
+}
+
+/// sends a request to eth_subscribe, doesn't wait for ok..
+pub fn subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
+    let action = EthAction::SubscribeLogs {
+        kind: SubscriptionKind::Logs,
+        params: Params::Logs(Box::new(filter)),
+    };
+
+    let msg = EthMessage { id: sub_id, action };
+
+    KiRequest::new()
+        .target(("our", "eth", "distro", "sys"))
+        .body(serde_json::to_vec(&msg)?)
+        .send()
+}
+
+pub fn unsubscribe(sub_id: u64) -> anyhow::Result<()> {
+    let action = EthAction::UnsubscribeLogs;
+    let msg = EthMessage { id: sub_id, action };
+
+    KiRequest::new()
+        .target(("our", "eth", "distro", "sys"))
+        .body(serde_json::to_vec(&msg)?)
+        .send()
 }
