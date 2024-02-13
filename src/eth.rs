@@ -8,38 +8,35 @@ pub use alloy_rpc_types::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The Message type that can be made to eth:distro:sys. The id is used to match the response,
-/// if you're not doing send_and_await.
-///
-/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EthMessage {
-    pub id: u64,
-    pub action: EthAction,
-}
-
 /// The Action and Request type that can be made to eth:distro:sys.
-///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthAction {
     /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
     /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
     SubscribeLogs {
+        sub_id: u64,
         kind: SubscriptionKind,
         params: Params,
     },
     /// Kill a SubscribeLogs subscription of a given ID, to stop getting updates.
-    UnsubscribeLogs,
+    UnsubscribeLogs(u64),
     /// Raw request. Used by kinode_process_lib.
     Request {
         method: String,
         params: serde_json::Value,
     },
-    /// Incoming subscription update.
-    Sub { result: SubscriptionResult },
+}
+/// Incoming subscription update.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EthSub {
+    pub id: u64,
+    pub result: SubscriptionResult,
 }
 
+/// The Response type which a process will get from requesting with an [`EthAction`] will be
+/// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
+/// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthResponse {
     Ok,
@@ -47,9 +44,6 @@ pub enum EthResponse {
     Err(EthError),
 }
 
-/// The Response type which a process will get from requesting with an [`EthMessage`] will be
-/// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
-/// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
     /// Underlying transport error
@@ -69,14 +63,9 @@ pub enum EthError {
 fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
     action: EthAction,
 ) -> anyhow::Result<T> {
-    let msg = EthMessage {
-        id: rand::random(),
-        action,
-    };
-
     let resp = KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&msg)?)
+        .body(serde_json::to_vec(&action)?)
         .send_and_await_response(5)??;
 
     match resp {
@@ -272,38 +261,36 @@ pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
 /// doesn't await, handle them as incoming EthMessage::Sub, and EthResponse::Response
 pub fn getlogs_and_subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
     let action = EthAction::SubscribeLogs {
+        sub_id,
         kind: SubscriptionKind::Logs,
         params: Params::Logs(Box::new(filter)),
     };
-    let msg = EthMessage { id: sub_id, action };
 
     KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&msg)?)
+        .body(serde_json::to_vec(&action)?)
         .send()
 }
 
 /// sends a request to eth_subscribe, doesn't wait for ok..
 pub fn subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
     let action = EthAction::SubscribeLogs {
+        sub_id,
         kind: SubscriptionKind::Logs,
         params: Params::Logs(Box::new(filter)),
     };
 
-    let msg = EthMessage { id: sub_id, action };
-
     KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&msg)?)
+        .body(serde_json::to_vec(&action)?)
         .send()
 }
 
 pub fn unsubscribe(sub_id: u64) -> anyhow::Result<()> {
-    let action = EthAction::UnsubscribeLogs;
-    let msg = EthMessage { id: sub_id, action };
+    let action = EthAction::UnsubscribeLogs(sub_id);
 
     KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&msg)?)
+        .body(serde_json::to_vec(&action)?)
         .send()
 }
