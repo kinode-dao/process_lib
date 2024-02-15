@@ -27,7 +27,8 @@ pub enum EthAction {
         params: serde_json::Value,
     },
 }
-/// Incoming subscription update.
+
+/// Incoming Request for subscription updates that processes will receive.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EthSub {
     pub id: u64,
