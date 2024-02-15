@@ -28,11 +28,21 @@ pub enum EthAction {
     },
 }
 
-/// Incoming Request for subscription updates that processes will receive.
+/// Incoming Result type for subscription updates or errors that processes will receive.
+pub type EthSubResult = Result<EthSub, EthSubError>;
+
+/// Incoming Request type for subscription updates.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EthSub {
     pub id: u64,
     pub result: SubscriptionResult,
+}
+
+/// Incoming Request for subscription errors that processes will receive.
+/// If your subscription is closed unexpectedly, you will receive this.
+pub struct EthSubError {
+    pub id: u64,
+    pub error: String,
 }
 
 /// The Response type which a process will get from requesting with an [`EthAction`] will be
@@ -380,27 +390,6 @@ pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
     };
 
     send_request_and_parse_response::<TxHash>(action)
-}
-
-/// Sends requests for `eth_getLogs` and `eth_subscribe` without waiting for a response, handling them as incoming `EthMessage::Sub` and `EthResponse::Response`.
-///
-/// # Parameters
-/// - `sub_id`: The subscription ID to be used for these operations.
-/// - `filter`: The filter criteria for the logs.
-///
-/// # Returns
-/// An `anyhow::Result<()>` indicating the operation was dispatched.
-pub fn getlogs_and_subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
-    let action = EthAction::SubscribeLogs {
-        sub_id,
-        kind: SubscriptionKind::Logs,
-        params: Params::Logs(Box::new(filter)),
-    };
-
-    KiRequest::new()
-        .target(("our", "eth", "distro", "sys"))
-        .body(serde_json::to_vec(&action)?)
-        .send()
 }
 
 /// Subscribes to logs without waiting for a confirmation.
