@@ -44,7 +44,9 @@ pub struct IncomingHttpRequest {
     source_socket_addr: Option<String>, // will parse to SocketAddr
     method: String,                     // will parse to http::Method
     url: String,                        // will parse to url::Url
+    bound_path: String,                 // the matching path that was bound
     headers: HashMap<String, String>,   // will parse to http::HeaderMap
+    url_params: HashMap<String, String>,
     query_params: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
 }
@@ -233,6 +235,18 @@ impl IncomingHttpRequest {
         }
     }
 
+    /// Returns the path that was originally bound, with an optional prefix stripped.
+    /// The prefix would normally be the process ID as a &str, but it could be anything.
+    pub fn bound_path(&self, process_id_to_strip: Option<&str>) -> &str {
+        match process_id_to_strip {
+            Some(process_id) => self
+                .bound_path
+                .strip_prefix(&format!("/{}", process_id))
+                .unwrap_or(&self.bound_path),
+            None => &self.bound_path,
+        }
+    }
+
     pub fn path(&self) -> anyhow::Result<String> {
         let url = url::Url::parse(&self.url)?;
         // skip the first path segment, which is the process ID.
@@ -258,6 +272,10 @@ impl IncomingHttpRequest {
             header_map.insert(key_name, value_header);
         }
         header_map
+    }
+
+    pub fn url_params(&self) -> &HashMap<String, String> {
+        &self.url_params
     }
 
     pub fn query_params(&self) -> &HashMap<String, String> {
