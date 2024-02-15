@@ -236,8 +236,7 @@ impl IncomingHttpRequest {
     }
 
     pub fn bound_path(&self, strip_prefix: Option<&str>) -> String {
-        self
-            .bound_path
+        self.bound_path
             .replace(strip_prefix.unwrap_or(""), "")
             .replace("//", "/")
     }
