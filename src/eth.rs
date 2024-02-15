@@ -40,6 +40,7 @@ pub struct EthSub {
 
 /// Incoming Request for subscription errors that processes will receive.
 /// If your subscription is closed unexpectedly, you will receive this.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EthSubError {
     pub id: u64,
     pub error: String,
