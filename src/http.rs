@@ -235,10 +235,16 @@ impl IncomingHttpRequest {
         }
     }
 
-    pub fn bound_path(&self, strip_prefix: Option<&str>) -> String {
-        self.bound_path
-            .replace(strip_prefix.unwrap_or(""), "")
-            .replace("//", "/")
+    /// Returns the path that was originally bound, with an optional prefix stripped.
+    /// The prefix would normally be the process ID as a &str, but it could be anything.
+    pub fn bound_path(&self, process_id_to_strip: Option<&str>) -> &str {
+        match process_id_to_strip {
+            Some(process_id) => self
+                .bound_path
+                .strip_prefix(&format!("/{}", process_id))
+                .unwrap_or(&self.bound_path),
+            None => &self.bound_path,
+        }
     }
 
     pub fn path(&self) -> anyhow::Result<String> {
