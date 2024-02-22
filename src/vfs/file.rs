@@ -6,6 +6,7 @@ use crate::{get_blob, Message, PackageId, Request};
 /// You can call it's impl functions to interact with it.
 pub struct File {
     pub path: String,
+    pub timeout: u64,
 }
 
 impl File {
@@ -19,7 +20,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -50,7 +51,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -84,7 +85,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -117,7 +118,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -149,7 +150,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -176,7 +177,7 @@ impl File {
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -201,7 +202,7 @@ impl File {
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -226,7 +227,7 @@ impl File {
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
             .blob_bytes(buffer)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -251,7 +252,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -286,6 +287,7 @@ impl File {
                 match response {
                     VfsResponse::Ok => Ok(File {
                         path: path.to_string(),
+                        timeout: self.timeout,
                     }),
                     VfsResponse::Err(e) => Err(e.into()),
                     _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
@@ -304,7 +306,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -328,7 +330,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -352,7 +354,7 @@ impl File {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -412,6 +414,7 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
             match response {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
+                    timeout: 5,
                 }),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
@@ -422,7 +425,8 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
 }
 
 /// Creates a file at path, if file found at path, truncates it to 0.
-pub fn create_file(path: &str) -> anyhow::Result<File> {
+pub fn create_file(path: &str, timeout: Option<u64>) -> anyhow::Result<File> {
+    let timeout = timeout.unwrap_or(5);
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::CreateFile,
@@ -431,7 +435,7 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
@@ -439,6 +443,7 @@ pub fn create_file(path: &str) -> anyhow::Result<File> {
             match response {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
+                    timeout,
                 }),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),

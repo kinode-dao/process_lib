@@ -6,6 +6,7 @@ use crate::{Message, Request};
 /// You can call it's impl functions to interact with it.
 pub struct Directory {
     pub path: String,
+    pub timeout: u64,
 }
 
 impl Directory {
@@ -37,10 +38,12 @@ impl Directory {
 
 /// Opens or creates a directory at path.
 /// If trying to create an existing directory, will just give you the path.
-pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
+pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> anyhow::Result<Directory> {
+    let timeout = timeout.unwrap_or(5);
     if !create {
         return Ok(Directory {
             path: path.to_string(),
+            timeout,
         });
     }
     let request = VfsRequest {
@@ -51,7 +54,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
@@ -59,6 +62,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
             match response {
                 VfsResponse::Ok => Ok(Directory {
                     path: path.to_string(),
+                    timeout,
                 }),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
