@@ -57,6 +57,7 @@ pub enum KvError {
 pub struct Kv {
     pub package_id: PackageId,
     pub db: String,
+    pub timeout: u64,
 }
 
 impl Kv {
@@ -69,7 +70,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Get { key },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -101,7 +102,7 @@ impl Kv {
                 action: KvAction::Set { key, tx_id },
             })?)
             .blob_bytes(value)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -126,7 +127,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Delete { key, tx_id },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -151,7 +152,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::BeginTx,
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -176,7 +177,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Commit { tx_id },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -194,7 +195,9 @@ impl Kv {
 }
 
 /// Opens or creates a kv db.
-pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
+pub fn open(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<Kv> {
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
@@ -202,7 +205,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
             db: db.to_string(),
             action: KvAction::Open,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {
@@ -212,6 +215,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
                 KvResponse::Ok => Ok(Kv {
                     package_id,
                     db: db.to_string(),
+                    timeout,
                 }),
                 KvResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
@@ -222,7 +226,9 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
 }
 
 /// Removes and deletes a kv db.
-pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
+pub fn remove_db(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
@@ -230,7 +236,7 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
             db: db.to_string(),
             action: KvAction::RemoveDb,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {
