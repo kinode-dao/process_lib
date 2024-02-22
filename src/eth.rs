@@ -8,7 +8,9 @@ pub use alloy_rpc_types::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The Action and Request type that can be made to eth:distro:sys.
+/// The Action and Request type that can be made to eth:distro:sys. Any process with messaging
+/// capabilities can send this action to the eth provider.
+///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthAction {
@@ -16,6 +18,7 @@ pub enum EthAction {
     /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
     SubscribeLogs {
         sub_id: u64,
+        chain_id: u64,
         kind: SubscriptionKind,
         params: Params,
     },
@@ -23,22 +26,25 @@ pub enum EthAction {
     UnsubscribeLogs(u64),
     /// Raw request. Used by kinode_process_lib.
     Request {
+        chain_id: u64,
         method: String,
         params: serde_json::Value,
     },
 }
 
 /// Incoming Result type for subscription updates or errors that processes will receive.
+/// Can deserialize all incoming requests from eth:distro:sys to this type.
+///
+/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 pub type EthSubResult = Result<EthSub, EthSubError>;
 
-/// Incoming Request type for subscription updates.
+/// Incoming Request type for successful subscription updates.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EthSub {
     pub id: u64,
     pub result: SubscriptionResult,
 }
 
-/// Incoming Request for subscription errors that processes will receive.
 /// If your subscription is closed unexpectedly, you will receive this.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EthSubError {
@@ -58,6 +64,8 @@ pub enum EthResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
+    /// No RPC provider for the chain
+    NoRpcForChain,
     /// Underlying transport error
     TransportError(String),
     /// Subscription closed
@@ -67,9 +75,66 @@ pub enum EthError {
     /// Invalid method
     InvalidMethod(String),
     /// Permission denied
-    PermissionDenied(String),
+    PermissionDenied,
     /// Internal RPC error
     RpcError(String),
+}
+
+/// The action type used for configuring eth:distro:sys. Only processes which have the "root"
+/// capability from eth:distro:sys can successfully send this action.
+///
+/// NOTE: changes to config will not be persisted between boots, they must be saved in .env
+/// to be reflected between boots. TODO: can change this
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthConfigAction {
+    /// Add a new provider to the list of providers.
+    AddProvider(ProviderConfig),
+    /// Remove a provider from the list of providers.
+    /// The tuple is (chain_id, node_id/rpc_url).
+    RemoveProvider((u64, String)),
+    /// make our provider public
+    SetPublic,
+    /// make our provider not-public
+    SetPrivate,
+    /// add node to whitelist on a provider
+    AllowNode(String),
+    /// remove node from whitelist on a provider
+    UnallowNode(String),
+    /// add node to blacklist on a provider
+    DenyNode(String),
+    /// remove node from blacklist on a provider
+    UndenyNode(String),
+    /// Set the list of providers to a new list.
+    /// Replaces all existing saved provider configs.
+    SetProviders(SavedConfigs),
+    /// Get the list of as a [`SavedConfigs`] object.
+    GetProviders,
+}
+
+/// Response type from an [`EthConfigAction`] request.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthConfigResponse {
+    Ok,
+    /// Response from a GetProviders request.
+    Providers(SavedConfigs),
+    /// Permission denied due to missing capability
+    PermissionDenied,
+}
+
+pub type SavedConfigs = Vec<ProviderConfig>;
+
+/// Provider config. Can currently be a node or a ws provider instance.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ProviderConfig {
+    pub chain_id: u64,
+    pub trusted: bool,
+    pub provider: NodeOrRpcUrl,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum NodeOrRpcUrl {
+    Node(crate::kernel_types::KnsUpdate),
+    RpcUrl(String),
 }
 
 /// Sends a request based on the specified `EthAction` and parses the response.
@@ -104,8 +169,9 @@ pub fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
 ///
 /// # Returns
 /// An `anyhow::Result<u64>` representing the current block number.
-pub fn get_block_number() -> anyhow::Result<u64> {
+pub fn get_block_number(chain_id: u64) -> anyhow::Result<u64> {
     let action = EthAction::Request {
+        chain_id,
         method: "eth_blockNumber".to_string(),
         params: ().into(),
     };
@@ -122,12 +188,13 @@ pub fn get_block_number() -> anyhow::Result<u64> {
 ///
 /// # Returns
 /// An `anyhow::Result<U256>` representing the balance of the address.
-pub fn get_balance(address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
+pub fn get_balance(chain_id: u64, address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
     let params = serde_json::to_value((
         address,
         tag.unwrap_or(BlockId::Number(BlockNumberOrTag::Latest)),
     ))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getBalance".to_string(),
         params,
     };
@@ -142,8 +209,9 @@ pub fn get_balance(address: Address, tag: Option<BlockId>) -> anyhow::Result<U25
 ///
 /// # Returns
 /// An `anyhow::Result<Vec<Log>>` containing the logs that match the filter.
-pub fn get_logs(filter: &Filter) -> anyhow::Result<Vec<Log>> {
+pub fn get_logs(chain_id: u64, filter: &Filter) -> anyhow::Result<Vec<Log>> {
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getLogs".to_string(),
         params: serde_json::to_value((filter,))?,
     };
@@ -155,22 +223,10 @@ pub fn get_logs(filter: &Filter) -> anyhow::Result<Vec<Log>> {
 ///
 /// # Returns
 /// An `anyhow::Result<U256>` representing the current gas price.
-pub fn get_gas_price() -> anyhow::Result<U256> {
+pub fn get_gas_price(chain_id: u64) -> anyhow::Result<U256> {
     let action = EthAction::Request {
+        chain_id,
         method: "eth_gasPrice".to_string(),
-        params: ().into(),
-    };
-
-    send_request_and_parse_response::<U256>(action)
-}
-
-/// Retrieves the chain ID.
-///
-/// # Returns
-/// An `anyhow::Result<U256>` representing the chain ID.
-pub fn get_chain_id() -> anyhow::Result<U256> {
-    let action = EthAction::Request {
-        method: "eth_chainId".to_string(),
         params: ().into(),
     };
 
@@ -185,9 +241,14 @@ pub fn get_chain_id() -> anyhow::Result<U256> {
 ///
 /// # Returns
 /// An `anyhow::Result<U256>` representing the number of transactions sent from the address.
-pub fn get_transaction_count(address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
+pub fn get_transaction_count(
+    chain_id: u64,
+    address: Address,
+    tag: Option<BlockId>,
+) -> anyhow::Result<U256> {
     let params = serde_json::to_value((address, tag.unwrap_or_default()))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getTransactionCount".to_string(),
         params,
     };
@@ -203,9 +264,14 @@ pub fn get_transaction_count(address: Address, tag: Option<BlockId>) -> anyhow::
 ///
 /// # Returns
 /// An `anyhow::Result<Option<Block>>` representing the block, if found.
-pub fn get_block_by_hash(hash: BlockHash, full_tx: bool) -> anyhow::Result<Option<Block>> {
+pub fn get_block_by_hash(
+    chain_id: u64,
+    hash: BlockHash,
+    full_tx: bool,
+) -> anyhow::Result<Option<Block>> {
     let params = serde_json::to_value((hash, full_tx))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getBlockByHash".to_string(),
         params,
     };
@@ -221,11 +287,13 @@ pub fn get_block_by_hash(hash: BlockHash, full_tx: bool) -> anyhow::Result<Optio
 /// # Returns
 /// An `anyhow::Result<Option<Block>>` representing the block, if found.
 pub fn get_block_by_number(
+    chain_id: u64,
     number: BlockNumberOrTag,
     full_tx: bool,
 ) -> anyhow::Result<Option<Block>> {
     let params = serde_json::to_value((number, full_tx))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getBlockByNumber".to_string(),
         params,
     };
@@ -242,9 +310,15 @@ pub fn get_block_by_number(
 ///
 /// # Returns
 /// An `anyhow::Result<Bytes>` representing the data stored at the given address and key.
-pub fn get_storage_at(address: Address, key: U256, tag: Option<BlockId>) -> anyhow::Result<Bytes> {
+pub fn get_storage_at(
+    chain_id: u64,
+    address: Address,
+    key: U256,
+    tag: Option<BlockId>,
+) -> anyhow::Result<Bytes> {
     let params = serde_json::to_value((address, key, tag.unwrap_or_default()))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getStorageAt".to_string(),
         params,
     };
@@ -260,9 +334,10 @@ pub fn get_storage_at(address: Address, key: U256, tag: Option<BlockId>) -> anyh
 ///
 /// # Returns
 /// An `anyhow::Result<Bytes>` representing the code stored at the given address.
-pub fn get_code_at(address: Address, tag: BlockId) -> anyhow::Result<Bytes> {
+pub fn get_code_at(chain_id: u64, address: Address, tag: BlockId) -> anyhow::Result<Bytes> {
     let params = serde_json::to_value((address, tag))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getCode".to_string(),
         params,
     };
@@ -277,9 +352,10 @@ pub fn get_code_at(address: Address, tag: BlockId) -> anyhow::Result<Bytes> {
 ///
 /// # Returns
 /// An `anyhow::Result<Option<Transaction>>` representing the transaction, if found.
-pub fn get_transaction_by_hash(hash: TxHash) -> anyhow::Result<Option<Transaction>> {
+pub fn get_transaction_by_hash(chain_id: u64, hash: TxHash) -> anyhow::Result<Option<Transaction>> {
     let params = serde_json::to_value((hash,))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getTransactionByHash".to_string(),
         params,
     };
@@ -294,9 +370,13 @@ pub fn get_transaction_by_hash(hash: TxHash) -> anyhow::Result<Option<Transactio
 ///
 /// # Returns
 /// An `anyhow::Result<Option<TransactionReceipt>>` representing the transaction receipt, if found.
-pub fn get_transaction_receipt(hash: TxHash) -> anyhow::Result<Option<TransactionReceipt>> {
+pub fn get_transaction_receipt(
+    chain_id: u64,
+    hash: TxHash,
+) -> anyhow::Result<Option<TransactionReceipt>> {
     let params = serde_json::to_value((hash,))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_getTransactionReceipt".to_string(),
         params,
     };
@@ -312,9 +392,14 @@ pub fn get_transaction_receipt(hash: TxHash) -> anyhow::Result<Option<Transactio
 ///
 /// # Returns
 /// An `anyhow::Result<U256>` representing the estimated gas amount.
-pub fn estimate_gas(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<U256> {
+pub fn estimate_gas(
+    chain_id: u64,
+    tx: TransactionRequest,
+    block: Option<BlockId>,
+) -> anyhow::Result<U256> {
     let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_estimateGas".to_string(),
         params,
     };
@@ -327,8 +412,9 @@ pub fn estimate_gas(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::R
 /// # Returns
 /// An `anyhow::Result<Vec<Address>>` representing the list of accounts.
 /// Note: This function may return an empty list depending on the node's configuration and capabilities.
-pub fn get_accounts() -> anyhow::Result<Vec<Address>> {
+pub fn get_accounts(chain_id: u64) -> anyhow::Result<Vec<Address>> {
     let action = EthAction::Request {
+        chain_id,
         method: "eth_accounts".to_string(),
         params: serde_json::Value::Array(vec![]),
     };
@@ -346,12 +432,14 @@ pub fn get_accounts() -> anyhow::Result<Vec<Address>> {
 /// # Returns
 /// An `anyhow::Result<FeeHistory>` representing the fee history for the specified range.
 pub fn get_fee_history(
+    chain_id: u64,
     block_count: U256,
     last_block: BlockNumberOrTag,
     reward_percentiles: Vec<f64>,
 ) -> anyhow::Result<FeeHistory> {
     let params = serde_json::to_value((block_count, last_block, reward_percentiles))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_feeHistory".to_string(),
         params,
     };
@@ -367,9 +455,14 @@ pub fn get_fee_history(
 ///
 /// # Returns
 /// An `anyhow::Result<Bytes>` representing the result of the call.
-pub fn call(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
+pub fn call(
+    chain_id: u64,
+    tx: TransactionRequest,
+    block: Option<BlockId>,
+) -> anyhow::Result<Bytes> {
     let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
     let action = EthAction::Request {
+        chain_id,
         method: "eth_call".to_string(),
         params,
     };
@@ -384,8 +477,9 @@ pub fn call(tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<By
 ///
 /// # Returns
 /// An `anyhow::Result<TxHash>` representing the hash of the transaction once it has been sent.
-pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
+pub fn send_raw_transaction(chain_id: u64, tx: Bytes) -> anyhow::Result<TxHash> {
     let action = EthAction::Request {
+        chain_id,
         method: "eth_sendRawTransaction".to_string(),
         params: serde_json::to_value((tx,))?,
     };
@@ -401,9 +495,10 @@ pub fn send_raw_transaction(tx: Bytes) -> anyhow::Result<TxHash> {
 ///
 /// # Returns
 /// An `anyhow::Result<()>` indicating the operation was dispatched.
-pub fn subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
+pub fn subscribe(sub_id: u64, chain_id: u64, filter: Filter) -> anyhow::Result<()> {
     let action = EthAction::SubscribeLogs {
         sub_id,
+        chain_id,
         kind: SubscriptionKind::Logs,
         params: Params::Logs(Box::new(filter)),
     };
@@ -413,6 +508,7 @@ pub fn subscribe(sub_id: u64, filter: Filter) -> anyhow::Result<()> {
         .body(serde_json::to_vec(&action)?)
         .send()
 }
+
 /// Unsubscribes from a previously created subscription.
 ///
 /// # Parameters
