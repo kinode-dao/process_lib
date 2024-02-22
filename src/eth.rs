@@ -147,6 +147,13 @@ pub struct Provider {
 }
 
 impl Provider {
+    /// Instantiate a new provider.
+    pub fn new(chain_id: u64, request_timeout: u64) -> Self {
+        Self {
+            chain_id,
+            request_timeout,
+        }
+    }
     /// Sends a request based on the specified `EthAction` and parses the response.
     ///
     /// This function constructs a request targeting the Ethereum distribution system, serializes the provided `EthAction`,
