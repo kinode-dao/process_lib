@@ -53,7 +53,7 @@ pub struct EthSubError {
 }
 
 /// The Response type which a process will get from requesting with an [`EthAction`] will be
-/// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
+/// of this type, serialized and deserialized using `serde_json::to_vec`
 /// and `serde_json::from_slice`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthResponse {
@@ -74,10 +74,14 @@ pub enum EthError {
     SubscriptionNotFound,
     /// Invalid method
     InvalidMethod(String),
+    /// Invalid params
+    InvalidParams,
     /// Permission denied
     PermissionDenied,
     /// Internal RPC error
     RpcError(String),
+    /// RPC timed out
+    RpcTimeout,
 }
 
 /// The action type used for configuring eth:distro:sys. Only processes which have the "root"
@@ -163,30 +167,33 @@ impl Provider {
     pub fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
         &self,
         action: EthAction,
-    ) -> anyhow::Result<T> {
+    ) -> Result<T, EthError> {
         let resp = KiRequest::new()
             .target(("our", "eth", "distro", "sys"))
-            .body(serde_json::to_vec(&action)?)
-            .send_and_await_response(self.request_timeout)??;
+            .body(serde_json::to_vec(&action).unwrap())
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
 
         match resp {
             Message::Response { body, .. } => {
-                let response = serde_json::from_slice::<EthResponse>(&body)?;
+                let response = serde_json::from_slice::<EthResponse>(&body);
                 match response {
-                    EthResponse::Response { value } => serde_json::from_value::<T>(value)
-                        .map_err(|e| anyhow::anyhow!("failed to parse response: {}", e)),
-                    _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
+                    Ok(EthResponse::Response { value }) => serde_json::from_value::<T>(value)
+                        .map_err(|e| EthError::RpcError(format!("{e:?}"))),
+                    Ok(EthResponse::Err(e)) => Err(e),
+                    _ => Err(EthError::RpcError("unexpected response".to_string())),
                 }
             }
-            _ => Err(anyhow::anyhow!("unexpected message type: {:?}", resp)),
+            _ => Err(EthError::RpcError("unexpected response".to_string())),
         }
     }
 
     /// Retrieves the current block number.
     ///
     /// # Returns
-    /// An `anyhow::Result<u64>` representing the current block number.
-    pub fn get_block_number(&self) -> anyhow::Result<u64> {
+    /// A `Result<u64, EthError>` representing the current block number.
+    pub fn get_block_number(&self) -> Result<u64, EthError> {
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_blockNumber".to_string(),
@@ -204,12 +211,13 @@ impl Provider {
     /// - `tag`: Optional block ID to specify the block at which the balance is queried.
     ///
     /// # Returns
-    /// An `anyhow::Result<U256>` representing the balance of the address.
-    pub fn get_balance(&self, address: Address, tag: Option<BlockId>) -> anyhow::Result<U256> {
+    /// A `Result<U256, EthError>` representing the balance of the address.
+    pub fn get_balance(&self, address: Address, tag: Option<BlockId>) -> Result<U256, EthError> {
         let params = serde_json::to_value((
             address,
             tag.unwrap_or(BlockId::Number(BlockNumberOrTag::Latest)),
-        ))?;
+        ))
+        .unwrap();
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getBalance".to_string(),
@@ -225,12 +233,15 @@ impl Provider {
     /// - `filter`: The filter criteria for the logs.
     ///
     /// # Returns
-    /// An `anyhow::Result<Vec<Log>>` containing the logs that match the filter.
-    pub fn get_logs(&self, filter: &Filter) -> anyhow::Result<Vec<Log>> {
+    /// A `Result<Vec<Log>, EthError>` containing the logs that match the filter.
+    pub fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, EthError> {
+        let Ok(params) = serde_json::to_value(filter) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getLogs".to_string(),
-            params: serde_json::to_value(filter)?,
+            params,
         };
 
         self.send_request_and_parse_response::<Vec<Log>>(action)
@@ -239,8 +250,8 @@ impl Provider {
     /// Retrieves the current gas price.
     ///
     /// # Returns
-    /// An `anyhow::Result<U256>` representing the current gas price.
-    pub fn get_gas_price(&self) -> anyhow::Result<U256> {
+    /// A `Result<U256, EthError>` representing the current gas price.
+    pub fn get_gas_price(&self) -> Result<U256, EthError> {
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_gasPrice".to_string(),
@@ -257,13 +268,15 @@ impl Provider {
     /// - `tag`: Optional block ID to specify the block at which the count is queried.
     ///
     /// # Returns
-    /// An `anyhow::Result<U256>` representing the number of transactions sent from the address.
+    /// A `Result<U256, EthError>` representing the number of transactions sent from the address.
     pub fn get_transaction_count(
         &self,
         address: Address,
         tag: Option<BlockId>,
-    ) -> anyhow::Result<U256> {
-        let params = serde_json::to_value((address, tag.unwrap_or_default()))?;
+    ) -> Result<U256, EthError> {
+        let Ok(params) = serde_json::to_value((address, tag.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getTransactionCount".to_string(),
@@ -280,13 +293,15 @@ impl Provider {
     /// - `full_tx`: Whether to return full transaction objects or just their hashes.
     ///
     /// # Returns
-    /// An `anyhow::Result<Option<Block>>` representing the block, if found.
+    /// A `Result<Option<Block>, EthError>` representing the block, if found.
     pub fn get_block_by_hash(
         &self,
         hash: BlockHash,
         full_tx: bool,
-    ) -> anyhow::Result<Option<Block>> {
-        let params = serde_json::to_value((hash, full_tx))?;
+    ) -> Result<Option<Block>, EthError> {
+        let Ok(params) = serde_json::to_value((hash, full_tx)) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getBlockByHash".to_string(),
@@ -302,13 +317,15 @@ impl Provider {
     /// - `full_tx`: Whether to return full transaction objects or just their hashes.
     ///
     /// # Returns
-    /// An `anyhow::Result<Option<Block>>` representing the block, if found.
+    /// A `Result<Option<Block>, EthError>` representing the block, if found.
     pub fn get_block_by_number(
         &self,
         number: BlockNumberOrTag,
         full_tx: bool,
-    ) -> anyhow::Result<Option<Block>> {
-        let params = serde_json::to_value((number, full_tx))?;
+    ) -> Result<Option<Block>, EthError> {
+        let Ok(params) = serde_json::to_value((number, full_tx)) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getBlockByNumber".to_string(),
@@ -326,14 +343,16 @@ impl Provider {
     /// - `tag`: Optional block ID to specify the block at which the storage is queried.
     ///
     /// # Returns
-    /// An `anyhow::Result<Bytes>` representing the data stored at the given address and key.
+    /// A `Result<Bytes, EthError>` representing the data stored at the given address and key.
     pub fn get_storage_at(
         &self,
         address: Address,
         key: U256,
         tag: Option<BlockId>,
-    ) -> anyhow::Result<Bytes> {
-        let params = serde_json::to_value((address, key, tag.unwrap_or_default()))?;
+    ) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((address, key, tag.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getStorageAt".to_string(),
@@ -350,9 +369,11 @@ impl Provider {
     /// - `tag`: The block ID to specify the block at which the code is queried.
     ///
     /// # Returns
-    /// An `anyhow::Result<Bytes>` representing the code stored at the given address.
-    pub fn get_code_at(&self, address: Address, tag: BlockId) -> anyhow::Result<Bytes> {
-        let params = serde_json::to_value((address, tag))?;
+    /// A `Result<Bytes, EthError>` representing the code stored at the given address.
+    pub fn get_code_at(&self, address: Address, tag: BlockId) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((address, tag)) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getCode".to_string(),
@@ -368,9 +389,11 @@ impl Provider {
     /// - `hash`: The hash of the transaction to retrieve.
     ///
     /// # Returns
-    /// An `anyhow::Result<Option<Transaction>>` representing the transaction, if found.
-    pub fn get_transaction_by_hash(&self, hash: TxHash) -> anyhow::Result<Option<Transaction>> {
-        let params = serde_json::to_value(hash)?;
+    /// A `Result<Option<Transaction>, EthError>` representing the transaction, if found.
+    pub fn get_transaction_by_hash(&self, hash: TxHash) -> Result<Option<Transaction>, EthError> {
+        let Ok(params) = serde_json::to_value(hash) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getTransactionByHash".to_string(),
@@ -386,12 +409,14 @@ impl Provider {
     /// - `hash`: The hash of the transaction for which the receipt is requested.
     ///
     /// # Returns
-    /// An `anyhow::Result<Option<TransactionReceipt>>` representing the transaction receipt, if found.
+    /// A `Result<Option<TransactionReceipt>, EthError>` representing the transaction receipt, if found.
     pub fn get_transaction_receipt(
         &self,
         hash: TxHash,
-    ) -> anyhow::Result<Option<TransactionReceipt>> {
-        let params = serde_json::to_value(hash)?;
+    ) -> Result<Option<TransactionReceipt>, EthError> {
+        let Ok(params) = serde_json::to_value(hash) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_getTransactionReceipt".to_string(),
@@ -408,13 +433,15 @@ impl Provider {
     /// - `block`: Optional block ID to specify the block at which the gas estimate should be made.
     ///
     /// # Returns
-    /// An `anyhow::Result<U256>` representing the estimated gas amount.
+    /// A `Result<U256, EthError>` representing the estimated gas amount.
     pub fn estimate_gas(
         &self,
         tx: TransactionRequest,
         block: Option<BlockId>,
-    ) -> anyhow::Result<U256> {
-        let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
+    ) -> Result<U256, EthError> {
+        let Ok(params) = serde_json::to_value((tx, block.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_estimateGas".to_string(),
@@ -427,9 +454,9 @@ impl Provider {
     /// Retrieves the list of accounts controlled by the node.
     ///
     /// # Returns
-    /// An `anyhow::Result<Vec<Address>>` representing the list of accounts.
+    /// A `Result<Vec<Address>, EthError>` representing the list of accounts.
     /// Note: This function may return an empty list depending on the node's configuration and capabilities.
-    pub fn get_accounts(&self) -> anyhow::Result<Vec<Address>> {
+    pub fn get_accounts(&self) -> Result<Vec<Address>, EthError> {
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_accounts".to_string(),
@@ -447,14 +474,16 @@ impl Provider {
     /// - `reward_percentiles`: A list of percentiles to report fee rewards for.
     ///
     /// # Returns
-    /// An `anyhow::Result<FeeHistory>` representing the fee history for the specified range.
+    /// A `Result<FeeHistory, EthError>` representing the fee history for the specified range.
     pub fn get_fee_history(
         &self,
         block_count: U256,
         last_block: BlockNumberOrTag,
         reward_percentiles: Vec<f64>,
-    ) -> anyhow::Result<FeeHistory> {
-        let params = serde_json::to_value((block_count, last_block, reward_percentiles))?;
+    ) -> Result<FeeHistory, EthError> {
+        let Ok(params) = serde_json::to_value((block_count, last_block, reward_percentiles)) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_feeHistory".to_string(),
@@ -471,9 +500,11 @@ impl Provider {
     /// - `block`: Optional block ID to specify the block at which the call should be made.
     ///
     /// # Returns
-    /// An `anyhow::Result<Bytes>` representing the result of the call.
-    pub fn call(&self, tx: TransactionRequest, block: Option<BlockId>) -> anyhow::Result<Bytes> {
-        let params = serde_json::to_value((tx, block.unwrap_or_default()))?;
+    /// A `Result<Bytes, EthError>` representing the result of the call.
+    pub fn call(&self, tx: TransactionRequest, block: Option<BlockId>) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((tx, block.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_call".to_string(),
@@ -489,12 +520,12 @@ impl Provider {
     /// - `tx`: The raw transaction data.
     ///
     /// # Returns
-    /// An `anyhow::Result<TxHash>` representing the hash of the transaction once it has been sent.
-    pub fn send_raw_transaction(&self, tx: Bytes) -> anyhow::Result<TxHash> {
+    /// A `Result<TxHash, EthError>` representing the hash of the transaction once it has been sent.
+    pub fn send_raw_transaction(&self, tx: Bytes) -> Result<TxHash, EthError> {
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_sendRawTransaction".to_string(),
-            params: serde_json::to_value(tx)?,
+            params: serde_json::to_value(tx).unwrap(),
         };
 
         self.send_request_and_parse_response::<TxHash>(action)
@@ -507,8 +538,8 @@ impl Provider {
     /// - `filter`: The filter criteria for the logs.
     ///
     /// # Returns
-    /// An `anyhow::Result<()>` indicating whether the subscription was created.
-    pub fn subscribe(&self, sub_id: u64, filter: Filter) -> anyhow::Result<()> {
+    /// A `Result<(), EthError>` indicating whether the subscription was created.
+    pub fn subscribe(&self, sub_id: u64, filter: Filter) -> Result<(), EthError> {
         let action = EthAction::SubscribeLogs {
             sub_id,
             chain_id: self.chain_id,
@@ -516,23 +547,27 @@ impl Provider {
             params: Params::Logs(Box::new(filter)),
         };
 
+        let Ok(body) = serde_json::to_vec(&action) else {
+            return Err(EthError::InvalidParams);
+        };
+
         let resp = KiRequest::new()
             .target(("our", "eth", "distro", "sys"))
-            .body(serde_json::to_vec(&action)?)
-            .send_and_await_response(self.request_timeout)??;
+            .body(body)
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
 
         match resp {
             Message::Response { body, .. } => {
-                let response = serde_json::from_slice::<EthResponse>(&body)?;
+                let response = serde_json::from_slice::<EthResponse>(&body);
                 match response {
-                    EthResponse::Ok => Ok(()),
-                    EthResponse::Response { .. } => {
-                        Err(anyhow::anyhow!("unexpected response: {:?}", response))
-                    }
-                    EthResponse::Err(e) => Err(anyhow::anyhow!("{e:?}")),
+                    Ok(EthResponse::Ok) => Ok(()),
+                    Ok(EthResponse::Err(e)) => Err(e),
+                    _ => Err(EthError::RpcError("unexpected response".to_string())),
                 }
             }
-            _ => Err(anyhow::anyhow!("unexpected message type: {:?}", resp)),
+            _ => Err(EthError::RpcError("unexpected response".to_string())),
         }
     }
 
