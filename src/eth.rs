@@ -235,7 +235,8 @@ impl Provider {
     /// # Returns
     /// A `Result<Vec<Log>, EthError>` containing the logs that match the filter.
     pub fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, EthError> {
-        let Ok(params) = serde_json::to_value(filter) else {
+        // NOTE: filter must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((filter,)) else {
             return Err(EthError::InvalidParams);
         };
         let action = EthAction::Request {
@@ -391,7 +392,8 @@ impl Provider {
     /// # Returns
     /// A `Result<Option<Transaction>, EthError>` representing the transaction, if found.
     pub fn get_transaction_by_hash(&self, hash: TxHash) -> Result<Option<Transaction>, EthError> {
-        let Ok(params) = serde_json::to_value(hash) else {
+        // NOTE: hash must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((hash,)) else {
             return Err(EthError::InvalidParams);
         };
         let action = EthAction::Request {
@@ -414,7 +416,8 @@ impl Provider {
         &self,
         hash: TxHash,
     ) -> Result<Option<TransactionReceipt>, EthError> {
-        let Ok(params) = serde_json::to_value(hash) else {
+        // NOTE: hash must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((hash,)) else {
             return Err(EthError::InvalidParams);
         };
         let action = EthAction::Request {
@@ -525,7 +528,8 @@ impl Provider {
         let action = EthAction::Request {
             chain_id: self.chain_id,
             method: "eth_sendRawTransaction".to_string(),
-            params: serde_json::to_value(tx).unwrap(),
+            // NOTE: tx must be encased by a tuple to be serialized correctly
+            params: serde_json::to_value((tx,)).unwrap(),
         };
 
         self.send_request_and_parse_response::<TxHash>(action)
