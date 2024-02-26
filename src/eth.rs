@@ -7,6 +7,11 @@ pub use alloy_rpc_types::{
     TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+//
+//  types mirrored from runtime module
+//
 
 /// The Action and Request type that can be made to eth:distro:sys. Any process with messaging
 /// capabilities can send this action to the eth provider.
@@ -32,13 +37,13 @@ pub enum EthAction {
     },
 }
 
-/// Incoming Result type for subscription updates or errors that processes will receive.
+/// Incoming `Request` containing subscription updates or errors that processes will receive.
 /// Can deserialize all incoming requests from eth:distro:sys to this type.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
 pub type EthSubResult = Result<EthSub, EthSubError>;
 
-/// Incoming Request type for successful subscription updates.
+/// Incoming type for successful subscription updates.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EthSub {
     pub id: u64,
@@ -55,6 +60,9 @@ pub struct EthSubError {
 /// The Response type which a process will get from requesting with an [`EthAction`] will be
 /// of this type, serialized and deserialized using `serde_json::to_vec`
 /// and `serde_json::from_slice`.
+///
+/// In the case of an [`EthAction::SubscribeLogs`] request, the response will indicate if
+/// the subscription was successfully created or not.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthResponse {
     Ok,
@@ -64,22 +72,16 @@ pub enum EthResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
+    /// provider module cannot parse message
+    MalformedRequest,
     /// No RPC provider for the chain
     NoRpcForChain,
-    /// Underlying transport error
-    TransportError(String),
     /// Subscription closed
     SubscriptionClosed(u64),
-    /// The subscription ID was not found, so we couldn't unsubscribe.
-    SubscriptionNotFound,
     /// Invalid method
     InvalidMethod(String),
-    /// Invalid params
-    InvalidParams,
     /// Permission denied
     PermissionDenied,
-    /// Internal RPC error
-    RpcError(String),
     /// RPC timed out
     RpcTimeout,
 }
@@ -111,8 +113,10 @@ pub enum EthConfigAction {
     /// Set the list of providers to a new list.
     /// Replaces all existing saved provider configs.
     SetProviders(SavedConfigs),
-    /// Get the list of as a [`SavedConfigs`] object.
+    /// Get the list of current providers as a [`SavedConfigs`] object.
     GetProviders,
+    /// Get the current access settings.
+    GetAccessSettings,
 }
 
 /// Response type from an [`EthConfigAction`] request.
@@ -120,9 +124,21 @@ pub enum EthConfigAction {
 pub enum EthConfigResponse {
     Ok,
     /// Response from a GetProviders request.
+    /// Note the [`crate::kernel_types::KnsUpdate`] will only have the correct `name` field.
+    /// The rest of the Update is not saved in this module.
     Providers(SavedConfigs),
+    /// Response from a GetAccessSettings request.
+    AccessSettings(AccessSettings),
     /// Permission denied due to missing capability
     PermissionDenied,
+}
+
+/// Settings for our ETH provider
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AccessSettings {
+    pub public: bool,           // whether or not other nodes can access through us
+    pub allow: HashSet<String>, // whitelist for access (only used if public == false)
+    pub deny: HashSet<String>,  // blacklist for access (always used)
 }
 
 pub type SavedConfigs = Vec<ProviderConfig>;
@@ -139,6 +155,15 @@ pub struct ProviderConfig {
 pub enum NodeOrRpcUrl {
     Node(crate::kernel_types::KnsUpdate),
     RpcUrl(String),
+}
+
+impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
+    fn eq(&self, other: &str) -> bool {
+        match self {
+            NodeOrRpcUrl::Node(kns) => kns.name == other,
+            NodeOrRpcUrl::RpcUrl(url) => url == other,
+        }
+    }
 }
 
 /// An EVM chain provider. Create this object to start making RPC calls.
