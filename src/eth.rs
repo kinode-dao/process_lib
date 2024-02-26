@@ -80,10 +80,14 @@ pub enum EthError {
     SubscriptionClosed(u64),
     /// Invalid method
     InvalidMethod(String),
+    /// Invalid parameters
+    InvalidParams,
     /// Permission denied
     PermissionDenied,
     /// RPC timed out
     RpcTimeout,
+    /// RPC gave garbage back
+    RpcMalformedResponse,
 }
 
 /// The action type used for configuring eth:distro:sys. Only processes which have the "root"
@@ -201,16 +205,14 @@ impl Provider {
             .map_err(|_| EthError::RpcTimeout)?;
 
         match resp {
-            Message::Response { body, .. } => {
-                let response = serde_json::from_slice::<EthResponse>(&body);
-                match response {
-                    Ok(EthResponse::Response { value }) => serde_json::from_value::<T>(value)
-                        .map_err(|e| EthError::RpcError(format!("{e:?}"))),
-                    Ok(EthResponse::Err(e)) => Err(e),
-                    _ => Err(EthError::RpcError("unexpected response".to_string())),
+            Message::Response { body, .. } => match serde_json::from_slice::<EthResponse>(&body) {
+                Ok(EthResponse::Response { value }) => {
+                    serde_json::from_value::<T>(value).map_err(|_| EthError::RpcMalformedResponse)
                 }
-            }
-            _ => Err(EthError::RpcError("unexpected response".to_string())),
+                Ok(EthResponse::Err(e)) => Err(e),
+                _ => Err(EthError::RpcMalformedResponse),
+            },
+            _ => Err(EthError::RpcMalformedResponse),
         }
     }
 
@@ -593,10 +595,10 @@ impl Provider {
                 match response {
                     Ok(EthResponse::Ok) => Ok(()),
                     Ok(EthResponse::Err(e)) => Err(e),
-                    _ => Err(EthError::RpcError("unexpected response".to_string())),
+                    _ => Err(EthError::RpcMalformedResponse),
                 }
             }
-            _ => Err(EthError::RpcError("unexpected response".to_string())),
+            _ => Err(EthError::RpcMalformedResponse),
         }
     }
 
@@ -606,27 +608,23 @@ impl Provider {
     /// - `sub_id`: The subscription ID to unsubscribe from.
     ///
     /// # Returns
-    /// An `anyhow::Result<()>` indicating whether the subscription was cancelled.
-    pub fn unsubscribe(&self, sub_id: u64) -> anyhow::Result<()> {
+    /// A `Result<(), EthError>` indicating whether the subscription was cancelled.
+    pub fn unsubscribe(&self, sub_id: u64) -> Result<(), EthError> {
         let action = EthAction::UnsubscribeLogs(sub_id);
 
         let resp = KiRequest::new()
             .target(("our", "eth", "distro", "sys"))
-            .body(serde_json::to_vec(&action)?)
-            .send_and_await_response(self.request_timeout)??;
+            .body(serde_json::to_vec(&action).map_err(|_| EthError::MalformedRequest)?)
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
 
         match resp {
-            Message::Response { body, .. } => {
-                let response = serde_json::from_slice::<EthResponse>(&body)?;
-                match response {
-                    EthResponse::Ok => Ok(()),
-                    EthResponse::Response { .. } => {
-                        Err(anyhow::anyhow!("unexpected response: {:?}", response))
-                    }
-                    EthResponse::Err(e) => Err(anyhow::anyhow!("{e:?}")),
-                }
-            }
-            _ => Err(anyhow::anyhow!("unexpected message type: {:?}", resp)),
+            Message::Response { body, .. } => match serde_json::from_slice::<EthResponse>(&body) {
+                Ok(EthResponse::Ok) => Ok(()),
+                _ => Err(EthError::RpcMalformedResponse),
+            },
+            _ => Err(EthError::RpcMalformedResponse),
         }
     }
 }
