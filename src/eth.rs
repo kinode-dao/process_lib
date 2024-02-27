@@ -73,7 +73,7 @@ pub fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
     let resp = KiRequest::new()
         .target(("our", "eth", "distro", "sys"))
         .body(serde_json::to_vec(&action)?)
-        .send_and_await_response(5)??;
+        .send_and_await_response(10)??;
 
     match resp {
         Message::Response { body, .. } => {
