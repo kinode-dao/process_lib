@@ -20,7 +20,7 @@ impl Directory {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -73,7 +73,9 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> anyhow::Resul
 }
 
 /// Removes a dir at path, errors if path not found or path is not a directory.
-pub fn remove_dir(path: &str) -> anyhow::Result<()> {
+pub fn remove_dir(path: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::RemoveDir,
@@ -82,7 +84,7 @@ pub fn remove_dir(path: &str) -> anyhow::Result<()> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {

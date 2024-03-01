@@ -373,7 +373,13 @@ impl File {
 /// Creates a drive with path "/package_id/drive", gives you read and write caps.
 /// Will only work on the same package_id as you're calling it from, unless you
 /// have root capabilities.
-pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String> {
+pub fn create_drive(
+    package_id: PackageId,
+    drive: &str,
+    timeout: Option<u64>,
+) -> anyhow::Result<String> {
+    let timeout = timeout.unwrap_or(5);
+
     let path = format!("/{}/{}", package_id, drive);
     let res = Request::new()
         .target(("our", "vfs", "distro", "sys"))
@@ -381,7 +387,7 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
             path: path.clone(),
             action: VfsAction::CreateDrive,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {
@@ -397,7 +403,9 @@ pub fn create_drive(package_id: PackageId, drive: &str) -> anyhow::Result<String
 }
 
 /// Opens a file at path, if no file at path, creates one if boolean create is true.
-pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
+pub fn open_file(path: &str, create: bool, timeout: Option<u64>) -> anyhow::Result<File> {
+    let timeout = timeout.unwrap_or(5);
+
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::OpenFile { create },
@@ -406,7 +414,7 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
@@ -414,7 +422,7 @@ pub fn open_file(path: &str, create: bool) -> anyhow::Result<File> {
             match response {
                 VfsResponse::Ok => Ok(File {
                     path: path.to_string(),
-                    timeout: 5,
+                    timeout,
                 }),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
@@ -454,7 +462,9 @@ pub fn create_file(path: &str, timeout: Option<u64>) -> anyhow::Result<File> {
 }
 
 /// Removes a file at path, errors if path not found or path is not a file.
-pub fn remove_file(path: &str) -> anyhow::Result<()> {
+pub fn remove_file(path: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::RemoveFile,
@@ -463,7 +473,7 @@ pub fn remove_file(path: &str) -> anyhow::Result<()> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
