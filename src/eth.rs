@@ -17,7 +17,7 @@ use std::collections::HashSet;
 /// capabilities can send this action to the eth provider.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EthAction {
     /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
     /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
@@ -70,7 +70,7 @@ pub enum EthResponse {
     Err(EthError),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum EthError {
     /// provider module cannot parse message
     MalformedRequest,
@@ -157,14 +157,17 @@ pub struct ProviderConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum NodeOrRpcUrl {
-    Node(crate::kernel_types::KnsUpdate),
+    Node {
+        kns_update: crate::kernel_types::KnsUpdate,
+        use_as_provider: bool, // for routers inside saved config
+    },
     RpcUrl(String),
 }
 
 impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
     fn eq(&self, other: &str) -> bool {
         match self {
-            NodeOrRpcUrl::Node(kns) => kns.name == other,
+            NodeOrRpcUrl::Node { kns_update, .. } => kns_update.name == other,
             NodeOrRpcUrl::RpcUrl(url) => url == other,
         }
     }
