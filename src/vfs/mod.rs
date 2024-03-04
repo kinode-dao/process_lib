@@ -127,7 +127,9 @@ impl VfsError {
 }
 
 /// Metadata of a path, returns file type and length.
-pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
+pub fn metadata(path: &str, timeout: Option<u64>) -> anyhow::Result<FileMetadata> {
+    let timeout = timeout.unwrap_or(5);
+
     let request = VfsRequest {
         path: path.to_string(),
         action: VfsAction::Metadata,
@@ -135,7 +137,7 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
@@ -151,11 +153,11 @@ pub fn metadata(path: &str) -> anyhow::Result<FileMetadata> {
 }
 
 /// Removes a path, if it's either a directory or a file.
-pub fn remove_path(path: &str) -> anyhow::Result<()> {
-    let meta = metadata(path)?;
+pub fn remove_path(path: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let meta = metadata(path, timeout)?;
     match meta.file_type {
-        FileType::Directory => remove_dir(path),
-        FileType::File => remove_file(path),
+        FileType::Directory => remove_dir(path, timeout),
+        FileType::File => remove_file(path, timeout),
         _ => Err(anyhow::anyhow!(
             "vfs: path is not a file or directory: {}",
             path
