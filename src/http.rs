@@ -96,6 +96,8 @@ pub enum HttpServerAction {
         /// lazy_load_blob bytes and serve them as the response to any request to this path.
         cache: bool,
     },
+    /// Unbind a previously-bound HTTP path
+    Unbind { path: String },
     /// Bind a path to receive incoming WebSocket connections.
     /// Doesn't need a cache since does not serve assets.
     WebSocketBind {
@@ -113,6 +115,8 @@ pub enum HttpServerAction {
         encrypted: bool,
         extension: bool,
     },
+    /// Unbind a previously-bound WebSocket path
+    WebSocketUnbind { path: String },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
@@ -434,6 +438,27 @@ where
     resp
 }
 
+pub fn unbind_http_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::Unbind { path: path.into() }).unwrap())
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
 /// Register a WebSockets path with the HTTP server. Your app must do this
 /// in order to receive incoming WebSocket connections.
 pub fn bind_ws_path<T>(
@@ -486,6 +511,27 @@ where
             })
             .unwrap(),
         )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+pub fn unbind_ws_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::WebSocketUnbind { path: path.into() }).unwrap())
         .send_and_await_response(5)
         .unwrap();
     let Ok(Message::Response { body, .. }) = res else {
