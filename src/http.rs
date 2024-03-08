@@ -44,7 +44,9 @@ pub struct IncomingHttpRequest {
     source_socket_addr: Option<String>, // will parse to SocketAddr
     method: String,                     // will parse to http::Method
     url: String,                        // will parse to url::Url
+    bound_path: String,                 // the matching path that was bound
     headers: HashMap<String, String>,   // will parse to http::HeaderMap
+    url_params: HashMap<String, String>,
     query_params: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
 }
@@ -94,6 +96,8 @@ pub enum HttpServerAction {
         /// lazy_load_blob bytes and serve them as the response to any request to this path.
         cache: bool,
     },
+    /// Unbind a previously-bound HTTP path
+    Unbind { path: String },
     /// Bind a path to receive incoming WebSocket connections.
     /// Doesn't need a cache since does not serve assets.
     WebSocketBind {
@@ -111,6 +115,8 @@ pub enum HttpServerAction {
         encrypted: bool,
         extension: bool,
     },
+    /// Unbind a previously-bound WebSocket path
+    WebSocketUnbind { path: String },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
@@ -233,6 +239,18 @@ impl IncomingHttpRequest {
         }
     }
 
+    /// Returns the path that was originally bound, with an optional prefix stripped.
+    /// The prefix would normally be the process ID as a &str, but it could be anything.
+    pub fn bound_path(&self, process_id_to_strip: Option<&str>) -> &str {
+        match process_id_to_strip {
+            Some(process_id) => self
+                .bound_path
+                .strip_prefix(&format!("/{}", process_id))
+                .unwrap_or(&self.bound_path),
+            None => &self.bound_path,
+        }
+    }
+
     pub fn path(&self) -> anyhow::Result<String> {
         let url = url::Url::parse(&self.url)?;
         // skip the first path segment, which is the process ID.
@@ -258,6 +276,10 @@ impl IncomingHttpRequest {
             header_map.insert(key_name, value_header);
         }
         header_map
+    }
+
+    pub fn url_params(&self) -> &HashMap<String, String> {
+        &self.url_params
     }
 
     pub fn query_params(&self) -> &HashMap<String, String> {
@@ -416,6 +438,27 @@ where
     resp
 }
 
+pub fn unbind_http_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::Unbind { path: path.into() }).unwrap())
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
 /// Register a WebSockets path with the HTTP server. Your app must do this
 /// in order to receive incoming WebSocket connections.
 pub fn bind_ws_path<T>(
@@ -468,6 +511,27 @@ where
             })
             .unwrap(),
         )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+pub fn unbind_ws_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::WebSocketUnbind { path: path.into() }).unwrap())
         .send_and_await_response(5)
         .unwrap();
     let Ok(Message::Response { body, .. }) = res else {
