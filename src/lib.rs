@@ -217,10 +217,10 @@ pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
         .cloned()
 }
 
-/// if the next message is a request, return its body, otherwise, return an error
-pub fn await_next_request_body() -> anyhow::Result<Vec<u8>> {
-    let Ok(Message::Request { body, .. }) = await_message() else {
-        return Err(anyhow::anyhow!("failed to get request body, bailing out"));
-    };
-    Ok(body)
+/// get the next message body from the message queue, or propagate the error
+pub fn await_next_message_body() -> anyhow::Result<Vec<u8>> {
+    match await_message() {
+        Ok(msg) => Ok(msg.body().to_vec()),
+        Err(e) => Err(e.into()),
+    }
 }
