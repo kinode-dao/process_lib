@@ -33,6 +33,9 @@ pub mod http;
 pub mod kernel_types;
 /// Interact with the key_value module
 pub mod kv;
+/// Interact with the networking module
+/// For configuration, debugging, and creating signatures with networking key.
+pub mod net;
 /// Interact with the sqlite module
 pub mod sqlite;
 /// Interact with the timer runtime module.
