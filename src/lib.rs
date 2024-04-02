@@ -218,7 +218,7 @@ pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
 }
 
 /// get the next message body from the message queue, or propagate the error
-pub fn await_next_message_body() -> anyhow::Result<Vec<u8>> {
+pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
     match await_message() {
         Ok(msg) => Ok(msg.body().to_vec()),
         Err(e) => Err(e.into()),
