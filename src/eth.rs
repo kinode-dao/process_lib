@@ -1,235 +1,640 @@
-use crate::*;
-use crate::{Address as uqAddress, Request as uqRequest};
-use alloy_rpc_types::Log;
-pub use ethers_core::types::{
-    Address as EthAddress, BlockNumber, Filter, FilterBlockOption, Topic, ValueOrArray, H256, U64,
+use crate::{Message, Request as KiRequest};
+pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
+pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
+pub use alloy_rpc_types::{
+    request::{TransactionInput, TransactionRequest},
+    Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
+    TransactionReceipt,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
-/// The Request type that can be made to eth:distro:sys. Currently primitive, this
-/// enum will expand to support more actions in the future.
+//
+//  types mirrored from runtime module
+//
+
+/// The Action and Request type that can be made to eth:distro:sys. Any process with messaging
+/// capabilities can send this action to the eth provider.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EthAction {
     /// Subscribe to logs with a custom filter. ID is to be used to unsubscribe.
-    SubscribeLogs { sub_id: u64, filter: Filter },
+    /// Logs come in as alloy_rpc_types::pubsub::SubscriptionResults
+    SubscribeLogs {
+        sub_id: u64,
+        chain_id: u64,
+        kind: SubscriptionKind,
+        params: Params,
+    },
     /// Kill a SubscribeLogs subscription of a given ID, to stop getting updates.
     UnsubscribeLogs(u64),
+    /// Raw request. Used by kinode_process_lib.
+    Request {
+        chain_id: u64,
+        method: String,
+        params: serde_json::Value,
+    },
+}
+
+/// Incoming `Request` containing subscription updates or errors that processes will receive.
+/// Can deserialize all incoming requests from eth:distro:sys to this type.
+///
+/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
+pub type EthSubResult = Result<EthSub, EthSubError>;
+
+/// Incoming type for successful subscription updates.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EthSub {
+    pub id: u64,
+    pub result: SubscriptionResult,
+}
+
+/// If your subscription is closed unexpectedly, you will receive this.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EthSubError {
+    pub id: u64,
+    pub error: String,
 }
 
 /// The Response type which a process will get from requesting with an [`EthAction`] will be
-/// of the form `Result<(), EthError>`, serialized and deserialized using `serde_json::to_vec`
+/// of this type, serialized and deserialized using `serde_json::to_vec`
 /// and `serde_json::from_slice`.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum EthError {
-    /// The subscription ID already existed
-    SubscriptionIdCollision,
-    /// The ethers provider threw an error when trying to subscribe
-    /// (contains ProviderError serialized to debug string)
-    ProviderError(String),
-    SubscriptionClosed,
-    /// The subscription ID was not found, so we couldn't unsubscribe.
-    SubscriptionNotFound,
-}
-
-/// The Request type which a process will get from using SubscribeLogs to subscribe
-/// to a log.
 ///
-/// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
+/// In the case of an [`EthAction::SubscribeLogs`] request, the response will indicate if
+/// the subscription was successfully created or not.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum EthSubEvent {
-    Log(Log),
+pub enum EthResponse {
+    Ok,
+    Response { value: serde_json::Value },
+    Err(EthError),
 }
 
-#[derive(Debug)]
-pub struct SubscribeLogsRequest {
-    pub request: uqRequest,
-    pub id: u64,
-    pub filter: Filter,
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum EthError {
+    /// provider module cannot parse message
+    MalformedRequest,
+    /// No RPC provider for the chain
+    NoRpcForChain,
+    /// Subscription closed
+    SubscriptionClosed(u64),
+    /// Invalid method
+    InvalidMethod(String),
+    /// Invalid parameters
+    InvalidParams,
+    /// Permission denied
+    PermissionDenied,
+    /// RPC timed out
+    RpcTimeout,
+    /// RPC gave garbage back
+    RpcMalformedResponse,
 }
 
-impl SubscribeLogsRequest {
-    /// Start building a new `SubscribeLogsRequest`.
-    pub fn new(id: u64) -> Self {
-        let request = uqRequest::new().target(uqAddress::new(
-            "our",
-            ProcessId::new(Some("eth"), "distro", "sys"),
-        ));
+/// The action type used for configuring eth:distro:sys. Only processes which have the "root"
+/// capability from eth:distro:sys can successfully send this action.
+///
+/// NOTE: changes to config will not be persisted between boots, they must be saved in .env
+/// to be reflected between boots. TODO: can change this
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthConfigAction {
+    /// Add a new provider to the list of providers.
+    AddProvider(ProviderConfig),
+    /// Remove a provider from the list of providers.
+    /// The tuple is (chain_id, node_id/rpc_url).
+    RemoveProvider((u64, String)),
+    /// make our provider public
+    SetPublic,
+    /// make our provider not-public
+    SetPrivate,
+    /// add node to whitelist on a provider
+    AllowNode(String),
+    /// remove node from whitelist on a provider
+    UnallowNode(String),
+    /// add node to blacklist on a provider
+    DenyNode(String),
+    /// remove node from blacklist on a provider
+    UndenyNode(String),
+    /// Set the list of providers to a new list.
+    /// Replaces all existing saved provider configs.
+    SetProviders(SavedConfigs),
+    /// Get the list of current providers as a [`SavedConfigs`] object.
+    GetProviders,
+    /// Get the current access settings.
+    GetAccessSettings,
+    /// Get the state of calls and subscriptions. Used for debugging.
+    GetState,
+}
 
-        SubscribeLogsRequest {
-            request,
-            id,
-            filter: Filter::new(),
+/// Response type from an [`EthConfigAction`] request.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EthConfigResponse {
+    Ok,
+    /// Response from a GetProviders request.
+    /// Note the [`crate::kernel_types::KnsUpdate`] will only have the correct `name` field.
+    /// The rest of the Update is not saved in this module.
+    Providers(SavedConfigs),
+    /// Response from a GetAccessSettings request.
+    AccessSettings(AccessSettings),
+    /// Permission denied due to missing capability
+    PermissionDenied,
+    /// Response from a GetState request
+    State {
+        active_subscriptions: HashMap<crate::Address, HashMap<u64, Option<String>>>, // None if local, Some(node_provider_name) if remote
+        outstanding_requests: HashSet<u64>,
+    },
+}
+
+/// Settings for our ETH provider
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AccessSettings {
+    pub public: bool,           // whether or not other nodes can access through us
+    pub allow: HashSet<String>, // whitelist for access (only used if public == false)
+    pub deny: HashSet<String>,  // blacklist for access (always used)
+}
+
+pub type SavedConfigs = Vec<ProviderConfig>;
+
+/// Provider config. Can currently be a node or a ws provider instance.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ProviderConfig {
+    pub chain_id: u64,
+    pub trusted: bool,
+    pub provider: NodeOrRpcUrl,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum NodeOrRpcUrl {
+    Node {
+        kns_update: crate::kernel_types::KnsUpdate,
+        use_as_provider: bool, // for routers inside saved config
+    },
+    RpcUrl(String),
+}
+
+impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
+    fn eq(&self, other: &str) -> bool {
+        match self {
+            NodeOrRpcUrl::Node { kns_update, .. } => kns_update.name == other,
+            NodeOrRpcUrl::RpcUrl(url) => url == other,
+        }
+    }
+}
+
+/// An EVM chain provider. Create this object to start making RPC calls.
+/// Set the chain_id to determine which chain to call: requests will fail
+/// unless the node this process is running on has access to a provider
+/// for that chain.
+pub struct Provider {
+    chain_id: u64,
+    request_timeout: u64,
+}
+
+impl Provider {
+    /// Instantiate a new provider.
+    pub fn new(chain_id: u64, request_timeout: u64) -> Self {
+        Self {
+            chain_id,
+            request_timeout,
+        }
+    }
+    /// Sends a request based on the specified `EthAction` and parses the response.
+    ///
+    /// This function constructs a request targeting the Ethereum distribution system, serializes the provided `EthAction`,
+    /// and sends it. It awaits a response with a specified timeout, then attempts to parse the response into the expected
+    /// type `T`. This method is generic and can be used for various Ethereum actions by specifying the appropriate `EthAction`
+    /// and return type `T`.
+    pub fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
+        &self,
+        action: EthAction,
+    ) -> Result<T, EthError> {
+        let resp = KiRequest::new()
+            .target(("our", "eth", "distro", "sys"))
+            .body(serde_json::to_vec(&action).unwrap())
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
+
+        match resp {
+            Message::Response { body, .. } => match serde_json::from_slice::<EthResponse>(&body) {
+                Ok(EthResponse::Response { value }) => {
+                    serde_json::from_value::<T>(value).map_err(|_| EthError::RpcMalformedResponse)
+                }
+                Ok(EthResponse::Err(e)) => Err(e),
+                _ => Err(EthError::RpcMalformedResponse),
+            },
+            _ => Err(EthError::RpcMalformedResponse),
         }
     }
 
-    /// Attempt to send the request.
-    pub fn send(self) -> anyhow::Result<()> {
-        self.request
-            .body(serde_json::to_vec(&EthAction::SubscribeLogs {
-                sub_id: self.id,
-                filter: self.filter,
-            })?)
-            .send()
+    /// Retrieves the current block number.
+    ///
+    /// # Returns
+    /// A `Result<u64, EthError>` representing the current block number.
+    pub fn get_block_number(&self) -> Result<u64, EthError> {
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_blockNumber".to_string(),
+            params: ().into(),
+        };
+
+        let res = self.send_request_and_parse_response::<U64>(action)?;
+        Ok(res.to::<u64>())
     }
 
-    /// Sets the inner filter object
+    /// Retrieves the balance of the given address at the specified block.
     ///
-    /// *NOTE:* ranges are always inclusive
+    /// # Parameters
+    /// - `address`: The address to query the balance for.
+    /// - `tag`: Optional block ID to specify the block at which the balance is queried.
     ///
-    /// # Examples
-    ///
-    /// Match only a specific block
-    ///
-    /// ```rust
-    /// # use process_lib::eth::SubscribeLogsRequest;
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(69u64);
-    /// # }
-    /// ```
-    /// This is the same as `SubscribeLogsRequest::new().from_block(1337u64).to_block(1337u64)`
-    ///
-    /// Match the latest block only
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, BlockNumber};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(BlockNumber::Latest);
-    /// # }
-    /// ```
-    ///
-    /// Match a block by its hash
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(H256::zero());
-    /// # }
-    /// ```
-    /// This is the same as `at_block_hash`
-    ///
-    /// Match a range of blocks
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(0u64..100u64);
-    /// # }
-    /// ```
-    ///
-    /// Match all blocks in range `(1337..BlockNumber::Latest)`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(1337u64..);
-    /// # }
-    /// ```
-    ///
-    /// Match all blocks in range `(BlockNumber::Earliest..1337)`
-    ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, H256};
-    /// # fn main() {
-    /// let request = SubscribeLogsRequest::new().select(..1337u64);
-    /// # }
-    /// ```
-    pub fn select(mut self, filter: impl Into<FilterBlockOption>) -> Self {
-        self.filter = self.filter.select(filter);
-        self
+    /// # Returns
+    /// A `Result<U256, EthError>` representing the balance of the address.
+    pub fn get_balance(&self, address: Address, tag: Option<BlockId>) -> Result<U256, EthError> {
+        let params = serde_json::to_value((
+            address,
+            tag.unwrap_or(BlockId::Number(BlockNumberOrTag::Latest)),
+        ))
+        .unwrap();
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getBalance".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<U256>(action)
     }
 
-    /// Matches starting from a specific block
-    pub fn from_block<T: Into<BlockNumber>>(mut self, block: T) -> Self {
-        self.filter = self.filter.from_block(block);
-        self
-    }
-
-    /// Matches up until a specific block
-    pub fn to_block<T: Into<BlockNumber>>(mut self, block: T) -> Self {
-        self.filter = self.filter.to_block(block);
-        self
-    }
-
-    /// Matches a for a specific block hash
-    pub fn at_block_hash<T: Into<H256>>(mut self, hash: T) -> Self {
-        self.filter = self.filter.at_block_hash(hash);
-        self
-    }
-
-    /// Sets the SubscribeLogs filter object
+    /// Retrieves logs based on a filter.
     ///
-    /// *NOTE:* ranges are always inclusive
+    /// # Parameters
+    /// - `filter`: The filter criteria for the logs.
     ///
-    /// # Examples
+    /// # Returns
+    /// A `Result<Vec<Log>, EthError>` containing the logs that match the filter.
+    pub fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, EthError> {
+        // NOTE: filter must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((filter,)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getLogs".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Vec<Log>>(action)
+    }
+
+    /// Retrieves the current gas price.
     ///
-    /// Match only a specific address `("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF")`
+    /// # Returns
+    /// A `Result<U256, EthError>` representing the current gas price.
+    pub fn get_gas_price(&self) -> Result<U256, EthError> {
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_gasPrice".to_string(),
+            params: ().into(),
+        };
+
+        self.send_request_and_parse_response::<U256>(action)
+    }
+
+    /// Retrieves the number of transactions sent from the given address.
     ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, Address};
-    /// # fn main() {
-    /// let filter = SubscribeLogsRequest::new().address("0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<EthAddress>().unwrap());
-    /// # }
-    /// ```
+    /// # Parameters
+    /// - `address`: The address to query the transaction count for.
+    /// - `tag`: Optional block ID to specify the block at which the count is queried.
     ///
-    /// Match all addresses in array `(vec!["0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF",
-    /// "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8"])`
+    /// # Returns
+    /// A `Result<U256, EthError>` representing the number of transactions sent from the address.
+    pub fn get_transaction_count(
+        &self,
+        address: Address,
+        tag: Option<BlockId>,
+    ) -> Result<U256, EthError> {
+        let Ok(params) = serde_json::to_value((address, tag.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getTransactionCount".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<U256>(action)
+    }
+
+    /// Retrieves a block by its hash.
     ///
-    /// ```rust
-    /// # use process_lib::eth::{SubscribeLogsRequest, EthAddress, ValueOrArray};
-    /// # fn main() {
-    /// let addresses = vec!["0xAc4b3DacB91461209Ae9d41EC517c2B9Cb1B7DAF".parse::<EthAddress>().unwrap(),"0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8".parse::<EthAddress>().unwrap()];
-    /// let filter = SubscribeLogsRequest::new().address(addresses);
-    /// # }
-    /// ```
-    pub fn address<T: Into<ValueOrArray<EthAddress>>>(mut self, address: T) -> Self {
-        self.filter = self.filter.address(address);
-        self
+    /// # Parameters
+    /// - `hash`: The hash of the block to retrieve.
+    /// - `full_tx`: Whether to return full transaction objects or just their hashes.
+    ///
+    /// # Returns
+    /// A `Result<Option<Block>, EthError>` representing the block, if found.
+    pub fn get_block_by_hash(
+        &self,
+        hash: BlockHash,
+        full_tx: bool,
+    ) -> Result<Option<Block>, EthError> {
+        let Ok(params) = serde_json::to_value((hash, full_tx)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getBlockByHash".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Option<Block>>(action)
+    }
+    /// Retrieves a block by its number or tag.
+    ///
+    /// # Parameters
+    /// - `number`: The number or tag of the block to retrieve.
+    /// - `full_tx`: Whether to return full transaction objects or just their hashes.
+    ///
+    /// # Returns
+    /// A `Result<Option<Block>, EthError>` representing the block, if found.
+    pub fn get_block_by_number(
+        &self,
+        number: BlockNumberOrTag,
+        full_tx: bool,
+    ) -> Result<Option<Block>, EthError> {
+        let Ok(params) = serde_json::to_value((number, full_tx)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getBlockByNumber".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Option<Block>>(action)
     }
 
-    /// Given the event signature in string form, it hashes it and adds it to the topics to monitor
-    pub fn event(mut self, event_name: &str) -> Self {
-        self.filter = self.filter.event(event_name);
-        self
+    /// Retrieves the storage at a given address and key.
+    ///
+    /// # Parameters
+    /// - `address`: The address of the storage to query.
+    /// - `key`: The key of the storage slot to retrieve.
+    /// - `tag`: Optional block ID to specify the block at which the storage is queried.
+    ///
+    /// # Returns
+    /// A `Result<Bytes, EthError>` representing the data stored at the given address and key.
+    pub fn get_storage_at(
+        &self,
+        address: Address,
+        key: U256,
+        tag: Option<BlockId>,
+    ) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((address, key, tag.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getStorageAt".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Bytes>(action)
     }
 
-    /// Hashes all event signatures and sets them as array to topic0
-    pub fn events(mut self, events: impl IntoIterator<Item = impl AsRef<[u8]>>) -> Self {
-        self.filter = self.filter.events(events);
-        self
+    /// Retrieves the code at a given address.
+    ///
+    /// # Parameters
+    /// - `address`: The address of the code to query.
+    /// - `tag`: The block ID to specify the block at which the code is queried.
+    ///
+    /// # Returns
+    /// A `Result<Bytes, EthError>` representing the code stored at the given address.
+    pub fn get_code_at(&self, address: Address, tag: BlockId) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((address, tag)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getCode".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Bytes>(action)
     }
 
-    /// Sets topic0 (the event name for non-anonymous events)
-    pub fn topic0<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic0(topic);
-        self
+    /// Retrieves a transaction by its hash.
+    ///
+    /// # Parameters
+    /// - `hash`: The hash of the transaction to retrieve.
+    ///
+    /// # Returns
+    /// A `Result<Option<Transaction>, EthError>` representing the transaction, if found.
+    pub fn get_transaction_by_hash(&self, hash: TxHash) -> Result<Option<Transaction>, EthError> {
+        // NOTE: hash must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((hash,)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getTransactionByHash".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Option<Transaction>>(action)
     }
 
-    /// Sets the 1st indexed topic
-    pub fn topic1<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic1(topic);
-        self
+    /// Retrieves the receipt of a transaction by its hash.
+    ///
+    /// # Parameters
+    /// - `hash`: The hash of the transaction for which the receipt is requested.
+    ///
+    /// # Returns
+    /// A `Result<Option<TransactionReceipt>, EthError>` representing the transaction receipt, if found.
+    pub fn get_transaction_receipt(
+        &self,
+        hash: TxHash,
+    ) -> Result<Option<TransactionReceipt>, EthError> {
+        // NOTE: hash must be encased by a tuple to be serialized correctly
+        let Ok(params) = serde_json::to_value((hash,)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_getTransactionReceipt".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Option<TransactionReceipt>>(action)
     }
 
-    /// Sets the 2nd indexed topic
-    pub fn topic2<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic2(topic);
-        self
+    /// Estimates the amount of gas that a transaction will consume.
+    ///
+    /// # Parameters
+    /// - `tx`: The transaction request object containing the details of the transaction to estimate gas for.
+    /// - `block`: Optional block ID to specify the block at which the gas estimate should be made.
+    ///
+    /// # Returns
+    /// A `Result<U256, EthError>` representing the estimated gas amount.
+    pub fn estimate_gas(
+        &self,
+        tx: TransactionRequest,
+        block: Option<BlockId>,
+    ) -> Result<U256, EthError> {
+        let Ok(params) = serde_json::to_value((tx, block.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_estimateGas".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<U256>(action)
     }
 
-    /// Sets the 3rd indexed topic
-    pub fn topic3<T: Into<Topic>>(mut self, topic: T) -> Self {
-        self.filter = self.filter.topic3(topic);
-        self
+    /// Retrieves the list of accounts controlled by the node.
+    ///
+    /// # Returns
+    /// A `Result<Vec<Address>, EthError>` representing the list of accounts.
+    /// Note: This function may return an empty list depending on the node's configuration and capabilities.
+    pub fn get_accounts(&self) -> Result<Vec<Address>, EthError> {
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_accounts".to_string(),
+            params: serde_json::Value::Array(vec![]),
+        };
+
+        self.send_request_and_parse_response::<Vec<Address>>(action)
     }
 
-    pub fn is_paginatable(&self) -> bool {
-        self.filter.is_paginatable()
+    /// Retrieves the fee history for a given range of blocks.
+    ///
+    /// # Parameters
+    /// - `block_count`: The number of blocks to include in the history.
+    /// - `last_block`: The ending block number or tag for the history range.
+    /// - `reward_percentiles`: A list of percentiles to report fee rewards for.
+    ///
+    /// # Returns
+    /// A `Result<FeeHistory, EthError>` representing the fee history for the specified range.
+    pub fn get_fee_history(
+        &self,
+        block_count: U256,
+        last_block: BlockNumberOrTag,
+        reward_percentiles: Vec<f64>,
+    ) -> Result<FeeHistory, EthError> {
+        let Ok(params) = serde_json::to_value((block_count, last_block, reward_percentiles)) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_feeHistory".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<FeeHistory>(action)
     }
 
-    /// Returns the numeric value of the `toBlock` field
-    pub fn get_to_block(&self) -> Option<U64> {
-        self.filter.get_to_block()
+    /// Executes a call transaction, which is directly executed in the VM of the node, but never mined into the blockchain.
+    ///
+    /// # Parameters
+    /// - `tx`: The transaction request object containing the details of the call.
+    /// - `block`: Optional block ID to specify the block at which the call should be made.
+    ///
+    /// # Returns
+    /// A `Result<Bytes, EthError>` representing the result of the call.
+    pub fn call(&self, tx: TransactionRequest, block: Option<BlockId>) -> Result<Bytes, EthError> {
+        let Ok(params) = serde_json::to_value((tx, block.unwrap_or_default())) else {
+            return Err(EthError::InvalidParams);
+        };
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_call".to_string(),
+            params,
+        };
+
+        self.send_request_and_parse_response::<Bytes>(action)
+    }
+
+    /// Sends a raw transaction to the network.
+    ///
+    /// # Parameters
+    /// - `tx`: The raw transaction data.
+    ///
+    /// # Returns
+    /// A `Result<TxHash, EthError>` representing the hash of the transaction once it has been sent.
+    pub fn send_raw_transaction(&self, tx: Bytes) -> Result<TxHash, EthError> {
+        let action = EthAction::Request {
+            chain_id: self.chain_id,
+            method: "eth_sendRawTransaction".to_string(),
+            // NOTE: tx must be encased by a tuple to be serialized correctly
+            params: serde_json::to_value((tx,)).unwrap(),
+        };
+
+        self.send_request_and_parse_response::<TxHash>(action)
+    }
+
+    /// Subscribes to logs without waiting for a confirmation.
+    ///
+    /// # Parameters
+    /// - `sub_id`: The subscription ID to be used for unsubscribing.
+    /// - `filter`: The filter criteria for the logs.
+    ///
+    /// # Returns
+    /// A `Result<(), EthError>` indicating whether the subscription was created.
+    pub fn subscribe(&self, sub_id: u64, filter: Filter) -> Result<(), EthError> {
+        let action = EthAction::SubscribeLogs {
+            sub_id,
+            chain_id: self.chain_id,
+            kind: SubscriptionKind::Logs,
+            params: Params::Logs(Box::new(filter)),
+        };
+
+        let Ok(body) = serde_json::to_vec(&action) else {
+            return Err(EthError::InvalidParams);
+        };
+
+        let resp = KiRequest::new()
+            .target(("our", "eth", "distro", "sys"))
+            .body(body)
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
+
+        match resp {
+            Message::Response { body, .. } => {
+                let response = serde_json::from_slice::<EthResponse>(&body);
+                match response {
+                    Ok(EthResponse::Ok) => Ok(()),
+                    Ok(EthResponse::Err(e)) => Err(e),
+                    _ => Err(EthError::RpcMalformedResponse),
+                }
+            }
+            _ => Err(EthError::RpcMalformedResponse),
+        }
+    }
+
+    /// Unsubscribes from a previously created subscription.
+    ///
+    /// # Parameters
+    /// - `sub_id`: The subscription ID to unsubscribe from.
+    ///
+    /// # Returns
+    /// A `Result<(), EthError>` indicating whether the subscription was cancelled.
+    pub fn unsubscribe(&self, sub_id: u64) -> Result<(), EthError> {
+        let action = EthAction::UnsubscribeLogs(sub_id);
+
+        let resp = KiRequest::new()
+            .target(("our", "eth", "distro", "sys"))
+            .body(serde_json::to_vec(&action).map_err(|_| EthError::MalformedRequest)?)
+            .send_and_await_response(self.request_timeout)
+            .unwrap()
+            .map_err(|_| EthError::RpcTimeout)?;
+
+        match resp {
+            Message::Response { body, .. } => match serde_json::from_slice::<EthResponse>(&body) {
+                Ok(EthResponse::Ok) => Ok(()),
+                _ => Err(EthError::RpcMalformedResponse),
+            },
+            _ => Err(EthError::RpcMalformedResponse),
+        }
     }
 }

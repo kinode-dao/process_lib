@@ -1,5 +1,6 @@
 use crate::{get_blob, Message, PackageId, Request};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::marker::PhantomData;
 use thiserror::Error;
 
 /// Actions are sent to a specific key value database, "db" is the name,
@@ -53,14 +54,22 @@ pub enum KvError {
 /// Kv helper struct for a db.
 /// Opening or creating a kv will give you a Result<Kv>.
 /// You can call it's impl functions to interact with it.
-pub struct Kv {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Kv<K, V> {
     pub package_id: PackageId,
     pub db: String,
+    pub timeout: u64,
+    _marker: PhantomData<(K, V)>,
 }
 
-impl Kv {
+impl<K, V> Kv<K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
     /// Get a value.
-    pub fn get(&self, key: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    pub fn get(&self, key: &K) -> anyhow::Result<V> {
+        let key = serde_json::to_vec(key)?;
         let res = Request::new()
             .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
@@ -68,7 +77,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Get { key },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -80,7 +89,9 @@ impl Kv {
                             Some(bytes) => bytes.bytes,
                             None => return Err(anyhow::anyhow!("kv: no blob")),
                         };
-                        Ok(bytes)
+                        let value = serde_json::from_slice::<V>(&bytes)
+                            .map_err(|e| anyhow::anyhow!("Failed to deserialize value: {}", e))?;
+                        Ok(value)
                     }
                     KvResponse::Err { error } => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
@@ -91,7 +102,10 @@ impl Kv {
     }
 
     /// Set a value, optionally in a transaction.
-    pub fn set(&self, key: Vec<u8>, value: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
+    pub fn set(&self, key: &K, value: &V, tx_id: Option<u64>) -> anyhow::Result<()> {
+        let key = serde_json::to_vec(key)?;
+        let value = serde_json::to_vec(value)?;
+
         let res = Request::new()
             .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
@@ -100,7 +114,7 @@ impl Kv {
                 action: KvAction::Set { key, tx_id },
             })?)
             .blob_bytes(value)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -117,7 +131,8 @@ impl Kv {
     }
 
     /// Delete a value, optionally in a transaction.
-    pub fn delete(&self, key: Vec<u8>, tx_id: Option<u64>) -> anyhow::Result<()> {
+    pub fn delete(&self, key: &K, tx_id: Option<u64>) -> anyhow::Result<()> {
+        let key = serde_json::to_vec(key)?;
         let res = Request::new()
             .target(("our", "kv", "distro", "sys"))
             .body(serde_json::to_vec(&KvRequest {
@@ -125,7 +140,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Delete { key, tx_id },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -150,7 +165,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::BeginTx,
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -175,7 +190,7 @@ impl Kv {
                 db: self.db.clone(),
                 action: KvAction::Commit { tx_id },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -193,7 +208,13 @@ impl Kv {
 }
 
 /// Opens or creates a kv db.
-pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
+pub fn open<K, V>(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<Kv<K, V>>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
@@ -201,7 +222,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
             db: db.to_string(),
             action: KvAction::Open,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {
@@ -211,6 +232,8 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
                 KvResponse::Ok => Ok(Kv {
                     package_id,
                     db: db.to_string(),
+                    timeout,
+                    _marker: PhantomData,
                 }),
                 KvResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
@@ -221,7 +244,9 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Kv> {
 }
 
 /// Removes and deletes a kv db.
-pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
+pub fn remove_db(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "kv", "distro", "sys"))
         .body(serde_json::to_vec(&KvRequest {
@@ -229,7 +254,7 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
             db: db.to_string(),
             action: KvAction::RemoveDb,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {

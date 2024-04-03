@@ -15,6 +15,7 @@
 //!
 pub use crate::kinode::process::standard::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 wit_bindgen::generate!({
     path: "kinode-wit",
@@ -22,7 +23,6 @@ wit_bindgen::generate!({
 });
 
 /// Interact with the eth provider module.
-#[cfg(feature = "eth")]
 pub mod eth;
 /// Interact with the HTTP server and client modules.
 /// Contains types from the `http` crate to use as well.
@@ -59,6 +59,8 @@ mod on_exit;
 pub use on_exit::OnExit;
 mod capability;
 pub use capability::Capability;
+mod lazy_load_blob;
+pub use lazy_load_blob::LazyLoadBlob;
 
 /// Implement the wit-bindgen specific code that the kernel uses to hook into
 /// a process. Write an `init(our: Address)` function and call it with this.
@@ -204,10 +206,21 @@ pub fn can_message(address: &Address) -> bool {
 }
 
 /// Get a capability in our store
-/// NOTE unfortunatly this is O(n), not sure if wit let's us do any better
 pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
+    let params = serde_json::from_str::<Value>(params).unwrap_or_default();
     crate::our_capabilities()
         .iter()
-        .find(|cap| cap.issuer == *our && cap.params == params)
+        .find(|cap| {
+            let cap_params = serde_json::from_str::<Value>(&cap.params).unwrap_or_default();
+            cap.issuer == *our && params == cap_params
+        })
         .cloned()
+}
+
+/// get the next message body from the message queue, or propagate the error
+pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
+    match await_message() {
+        Ok(msg) => Ok(msg.body().to_vec()),
+        Err(e) => Err(e.into()),
+    }
 }

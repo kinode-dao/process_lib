@@ -79,6 +79,7 @@ pub enum SqliteError {
 pub struct Sqlite {
     pub package_id: PackageId,
     pub db: String,
+    pub timeout: u64,
 }
 
 impl Sqlite {
@@ -86,7 +87,7 @@ impl Sqlite {
     pub fn read(
         &self,
         query: String,
-        params: Vec<SqlValue>,
+        params: Vec<serde_json::Value>,
     ) -> anyhow::Result<Vec<HashMap<String, serde_json::Value>>> {
         let res = Request::new()
             .target(("our", "sqlite", "distro", "sys"))
@@ -96,7 +97,7 @@ impl Sqlite {
                 action: SqliteAction::Read { query },
             })?)
             .blob_bytes(serde_json::to_vec(&params)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -141,7 +142,7 @@ impl Sqlite {
                 action: SqliteAction::Write { statement, tx_id },
             })?)
             .blob_bytes(serde_json::to_vec(&params)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -169,7 +170,7 @@ impl Sqlite {
                 db: self.db.clone(),
                 action: SqliteAction::BeginTx,
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -197,7 +198,7 @@ impl Sqlite {
                 db: self.db.clone(),
                 action: SqliteAction::Commit { tx_id },
             })?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match res {
             Ok(Message::Response { body, .. }) => {
@@ -218,7 +219,9 @@ impl Sqlite {
 }
 
 /// Open or create sqlite database.
-pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
+pub fn open(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<Sqlite> {
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "sqlite", "distro", "sys"))
         .body(serde_json::to_vec(&SqliteRequest {
@@ -226,7 +229,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
             db: db.to_string(),
             action: SqliteAction::Open,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {
@@ -236,6 +239,7 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
                 SqliteResponse::Ok => Ok(Sqlite {
                     package_id,
                     db: db.to_string(),
+                    timeout,
                 }),
                 SqliteResponse::Err { error } => Err(error.into()),
                 _ => Err(anyhow::anyhow!(
@@ -249,7 +253,9 @@ pub fn open(package_id: PackageId, db: &str) -> anyhow::Result<Sqlite> {
 }
 
 /// Remove and delete sqlite database.
-pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
+pub fn remove_db(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
     let res = Request::new()
         .target(("our", "sqlite", "distro", "sys"))
         .body(serde_json::to_vec(&SqliteRequest {
@@ -257,7 +263,7 @@ pub fn remove_db(package_id: PackageId, db: &str) -> anyhow::Result<()> {
             db: db.to_string(),
             action: SqliteAction::RemoveDb,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match res {
         Ok(Message::Response { body, .. }) => {

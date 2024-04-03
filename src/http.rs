@@ -1,7 +1,8 @@
+use crate::kernel_types::MessageType;
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as uqBlob, Message, ProcessId, Request as uqRequest,
-    Response as uqResponse, SendError,
+    get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
+    Response as KiResponse,
 };
 pub use http::*;
 use serde::{Deserialize, Serialize};
@@ -43,7 +44,9 @@ pub struct IncomingHttpRequest {
     source_socket_addr: Option<String>, // will parse to SocketAddr
     method: String,                     // will parse to http::Method
     url: String,                        // will parse to url::Url
+    bound_path: String,                 // the matching path that was bound
     headers: HashMap<String, String>,   // will parse to http::HeaderMap
+    url_params: HashMap<String, String>,
     query_params: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
 }
@@ -93,18 +96,27 @@ pub enum HttpServerAction {
         /// lazy_load_blob bytes and serve them as the response to any request to this path.
         cache: bool,
     },
+    /// Unbind a previously-bound HTTP path
+    Unbind { path: String },
     /// Bind a path to receive incoming WebSocket connections.
     /// Doesn't need a cache since does not serve assets.
     WebSocketBind {
         path: String,
         authenticated: bool,
         encrypted: bool,
+        extension: bool,
     },
     /// SecureBind is the same as Bind, except that it forces new connections to be made
     /// from the unique subdomain of the process that bound the path. These are *always*
     /// authenticated. Since the subdomain is unique, it will require the user to be
     /// logged in separately to the general domain authentication.
-    WebSocketSecureBind { path: String, encrypted: bool },
+    WebSocketSecureBind {
+        path: String,
+        encrypted: bool,
+        extension: bool,
+    },
+    /// Unbind a previously-bound WebSocket path
+    WebSocketUnbind { path: String },
     /// Processes will RECEIVE this kind of request when a client connects to them.
     /// If a process does not want this websocket open, they should issue a *request*
     /// containing a [`type@HttpServerAction::WebSocketClose`] message and this channel ID.
@@ -113,6 +125,26 @@ pub enum HttpServerAction {
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
+    },
+    /// When sent, expects a `lazy_load_blob` containing the WebSocket message bytes to send.
+    /// Modifies the `lazy_load_blob` by placing into `WebSocketExtPushData` with id taken from
+    /// this `KernelMessage` and `kinode_message_type` set to `desired_reply_type`.
+    WebSocketExtPushOutgoing {
+        channel_id: u32,
+        message_type: WsMessageType,
+        desired_reply_type: MessageType,
+    },
+    /// For communicating with the ext.
+    /// Kinode's http_server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
+    /// Upon receiving reply with this type from ext, http_server parses, setting:
+    /// * id as given,
+    /// * message type as given (Request or Response),
+    /// * body as HttpServerRequest::WebSocketPush,
+    /// * blob as given.
+    WebSocketExtPushData {
+        id: u64,
+        kinode_message_type: MessageType,
+        blob: Vec<u8>,
     },
     /// Sending will close a socket the process controls.
     WebSocketClose(u32),
@@ -207,6 +239,18 @@ impl IncomingHttpRequest {
         }
     }
 
+    /// Returns the path that was originally bound, with an optional prefix stripped.
+    /// The prefix would normally be the process ID as a &str, but it could be anything.
+    pub fn bound_path(&self, process_id_to_strip: Option<&str>) -> &str {
+        match process_id_to_strip {
+            Some(process_id) => self
+                .bound_path
+                .strip_prefix(&format!("/{}", process_id))
+                .unwrap_or(&self.bound_path),
+            None => &self.bound_path,
+        }
+    }
+
     pub fn path(&self) -> anyhow::Result<String> {
         let url = url::Url::parse(&self.url)?;
         // skip the first path segment, which is the process ID.
@@ -232,6 +276,10 @@ impl IncomingHttpRequest {
             header_map.insert(key_name, value_header);
         }
         header_map
+    }
+
+    pub fn url_params(&self) -> &HashMap<String, String> {
+        &self.url_params
     }
 
     pub fn query_params(&self) -> &HashMap<String, String> {
@@ -315,28 +363,38 @@ pub enum HttpClientError {
 }
 
 /// Register a new path with the HTTP server. This will cause the HTTP server to
-/// forward any requests on this path to the calling process. Requests will be
-/// given in the form of `Result<(), HttpServerError>`
-pub fn bind_http_path<T>(path: T, authenticated: bool, local_only: bool) -> anyhow::Result<()>
+/// forward any requests on this path to the calling process.
+pub fn bind_http_path<T>(
+    path: T,
+    authenticated: bool,
+    local_only: bool,
+) -> std::result::Result<(), HttpServerError>
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "distro", "sys"))
-        .body(serde_json::to_vec(&HttpServerAction::Bind {
-            path: path.into(),
-            authenticated,
-            local_only,
-            cache: false,
-        })?)
-        .send_and_await_response(5)?;
-    match res {
-        Ok(Message::Response { body, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
-            resp.map_err(|e| anyhow::anyhow!(e))
-        }
-        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
-    }
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::Bind {
+                path: path.into(),
+                authenticated,
+                local_only,
+                cache: false,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
 }
 
 /// Register a new path with the HTTP server, and serve a static file from it.
@@ -347,107 +405,205 @@ pub fn bind_http_static_path<T>(
     local_only: bool,
     content_type: Option<String>,
     content: Vec<u8>,
-) -> anyhow::Result<()>
+) -> std::result::Result<(), HttpServerError>
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "distro", "sys"))
-        .body(serde_json::to_vec(&HttpServerAction::Bind {
-            path: path.into(),
-            authenticated,
-            local_only,
-            cache: true,
-        })?)
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::Bind {
+                path: path.into(),
+                authenticated,
+                local_only,
+                cache: true,
+            })
+            .unwrap(),
+        )
         .blob(crate::kinode::process::standard::LazyLoadBlob {
             mime: content_type,
             bytes: content,
         })
-        .send_and_await_response(5)?;
-    match res {
-        Ok(Message::Response { body, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
-            resp.map_err(|e| anyhow::anyhow!(e))
-        }
-        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
-    }
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+pub fn unbind_http_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::Unbind { path: path.into() }).unwrap())
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
 }
 
 /// Register a WebSockets path with the HTTP server. Your app must do this
 /// in order to receive incoming WebSocket connections.
-pub fn bind_ws_path<T>(path: T, authenticated: bool, encrypted: bool) -> anyhow::Result<()>
+pub fn bind_ws_path<T>(
+    path: T,
+    authenticated: bool,
+    encrypted: bool,
+) -> std::result::Result<(), HttpServerError>
 where
     T: Into<String>,
 {
-    let res = uqRequest::new()
-        .target(("our", "http_server", "distro", "sys"))
-        .body(serde_json::to_vec(&HttpServerAction::WebSocketBind {
-            path: path.into(),
-            authenticated,
-            encrypted,
-        })?)
-        .send_and_await_response(5)?;
-    match res {
-        Ok(Message::Response { body, .. }) => {
-            let resp: std::result::Result<(), HttpServerError> = serde_json::from_slice(&body)?;
-            resp.map_err(|e| anyhow::anyhow!(e))
-        }
-        _ => Err(anyhow::anyhow!("http_server: couldn't bind path")),
-    }
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::WebSocketBind {
+                path: path.into(),
+                authenticated,
+                encrypted,
+                extension: false,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+/// Register a WebSockets path with the HTTP server to send and
+/// receive system messages from a runtime extension. Only use
+/// this if you are writing a runtime extension.
+pub fn bind_ext_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::WebSocketBind {
+                path: path.into(),
+                authenticated: false,
+                encrypted: false,
+                extension: true,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+pub fn unbind_ws_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(serde_json::to_vec(&HttpServerAction::WebSocketUnbind { path: path.into() }).unwrap())
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
 }
 
 /// Send an HTTP response to the incoming HTTP request.
-pub fn send_response(
-    status: StatusCode,
-    headers: Option<HashMap<String, String>>,
-    body: Vec<u8>,
-) -> anyhow::Result<()> {
-    uqResponse::new()
-        .body(serde_json::to_vec(&HttpResponse {
-            status: status.as_u16(),
-            headers: headers.unwrap_or_default(),
-        })?)
+pub fn send_response(status: StatusCode, headers: Option<HashMap<String, String>>, body: Vec<u8>) {
+    KiResponse::new()
+        .body(
+            serde_json::to_vec(&HttpResponse {
+                status: status.as_u16(),
+                headers: headers.unwrap_or_default(),
+            })
+            .unwrap(),
+        )
         .blob_bytes(body)
         .send()
+        .unwrap()
 }
 
 /// Fire off an HTTP request. If a timeout is given, the response will
 /// come in the main event loop, otherwise none will be given.
+///
+/// Note that the response type is [`type@HttpClientResponse`], which, if
+/// it originated from this request, will be of the variant [`type@HttpClientResponse::Http`].
+/// It will need to be parsed and the body of the response will be stored in the LazyLoadBlob.
 pub fn send_request(
     method: Method,
     url: url::Url,
     headers: Option<HashMap<String, String>>,
     timeout: Option<u64>,
     body: Vec<u8>,
-) -> anyhow::Result<()> {
-    let req = uqRequest::new()
-        .target(("our", "http_client", "distro", "sys"))
-        .body(serde_json::to_vec(&HttpClientAction::Http(
-            OutgoingHttpRequest {
+) {
+    let req = KiRequest::to(("our", "http_client", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
                 version: None,
                 url: url.to_string(),
                 headers: headers.unwrap_or_default(),
-            },
-        ))?)
+            }))
+            .unwrap(),
+        )
         .blob_bytes(body);
     if let Some(timeout) = timeout {
-        req.expects_response(timeout).send()
+        req.expects_response(timeout).send().unwrap()
     } else {
-        req.send()
+        req.send().unwrap()
     }
 }
 
 /// Make an HTTP request using http_client and await its response.
+///
+/// Returns [`Response`] from the `http` crate if successful, with the body type as bytes.
 pub fn send_request_await_response(
     method: Method,
     url: url::Url,
     headers: Option<HashMap<String, String>>,
     timeout: u64,
     body: Vec<u8>,
-) -> std::result::Result<HttpClientResponse, HttpClientError> {
-    let res = uqRequest::new()
-        .target(("our", "http_client", "distro", "sys"))
+) -> std::result::Result<Response<Vec<u8>>, HttpClientError> {
+    let res = KiRequest::to(("our", "http_client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
@@ -461,20 +617,48 @@ pub fn send_request_await_response(
         )
         .blob_bytes(body)
         .send_and_await_response(timeout)
-        .map_err(|e| HttpClientError::RequestFailed {
-            error: e.to_string(),
-        })?;
-    match res {
-        Ok(Message::Response { body, .. }) => match serde_json::from_slice(&body) {
-            Ok(resp) => resp,
-            Err(e) => Err(HttpClientError::RequestFailed {
-                error: format!("http_client gave unparsable response: {e}"),
-            }),
-        },
-        _ => Err(HttpClientError::RequestFailed {
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpClientError::RequestFailed {
             error: "http_client timed out".to_string(),
-        }),
+        });
+    };
+    let resp = match serde_json::from_slice::<
+        std::result::Result<HttpClientResponse, HttpClientError>,
+    >(&body)
+    {
+        Ok(Ok(HttpClientResponse::Http(resp))) => resp,
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => {
+            return Err(HttpClientError::RequestFailed {
+                error: "http_client gave unexpected response".to_string(),
+            })
+        }
+        Ok(Err(e)) => return Err(e),
+        Err(e) => {
+            return Err(HttpClientError::RequestFailed {
+                error: format!("http_client gave invalid response: {e:?}"),
+            })
+        }
+    };
+    let mut http_response = http::Response::builder()
+        .status(http::StatusCode::from_u16(resp.status).unwrap_or_default());
+    let headers = http_response.headers_mut().unwrap();
+    for (key, value) in &resp.headers {
+        let Ok(key) = http::header::HeaderName::from_str(key) else {
+            return Err(HttpClientError::RequestFailed {
+                error: format!("http_client gave invalid header key: {key}"),
+            });
+        };
+        let Ok(value) = http::header::HeaderValue::from_str(value) else {
+            return Err(HttpClientError::RequestFailed {
+                error: format!("http_client gave invalid header value: {value}"),
+            });
+        };
+        headers.insert(key, value);
     }
+    Ok(http_response
+        .body(get_blob().unwrap_or_default().bytes)
+        .unwrap())
 }
 
 pub fn get_mime_type(filename: &str) -> String {
@@ -490,15 +674,20 @@ pub fn get_mime_type(filename: &str) -> String {
         .to_string()
 }
 
-// Serve index.html
-pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
-    let _ = uqRequest::new()
-        .target("our@vfs:distro:sys".parse::<Address>()?)
+/// Serve index.html
+pub fn serve_index_html(
+    our: &Address,
+    directory: &str,
+    authenticated: bool,
+    local_only: bool,
+    paths: Vec<&str>,
+) -> anyhow::Result<()> {
+    KiRequest::to(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
             action: VfsAction::Read,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(5)??;
 
     let Some(blob) = get_blob() else {
         return Err(anyhow::anyhow!("serve_index_html: no index.html blob"));
@@ -506,21 +695,29 @@ pub fn serve_index_html(our: &Address, directory: &str) -> anyhow::Result<(), an
 
     let index = String::from_utf8(blob.bytes)?;
 
-    // index.html will be served from the root path of your app
-    bind_http_static_path(
-        "/",
-        true,
-        false,
-        Some("text/html".to_string()),
-        index.to_string().as_bytes().to_vec(),
-    )?;
+    for path in paths {
+        bind_http_static_path(
+            path,
+            authenticated,
+            local_only,
+            Some("text/html".to_string()),
+            index.to_string().as_bytes().to_vec(),
+        )?;
+    }
 
     Ok(())
 }
 
-// Serve static files by binding all of them statically, including index.html
-pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Error> {
-    serve_index_html(our, directory)?;
+/// Serve static files from a given directory by binding all of them
+/// in http_server to their filesystem path.
+pub fn serve_ui(
+    our: &Address,
+    directory: &str,
+    authenticated: bool,
+    local_only: bool,
+    paths: Vec<&str>,
+) -> anyhow::Result<()> {
+    serve_index_html(our, directory, authenticated, local_only, paths)?;
 
     let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
@@ -528,15 +725,13 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
     queue.push_back(initial_path.clone());
 
     while let Some(path) = queue.pop_front() {
-        let directory_response = uqRequest::new()
-            .target("our@vfs:distro:sys".parse::<Address>()?)
+        let Ok(directory_response) = KiRequest::to(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&VfsRequest {
                 path,
                 action: VfsAction::ReadDir,
             })?)
-            .send_and_await_response(5)?;
-
-        let Ok(directory_response) = directory_response else {
+            .send_and_await_response(5)?
+        else {
             return Err(anyhow::anyhow!("serve_ui: no response for path"));
         };
 
@@ -549,19 +744,12 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
                     match entry.file_type {
                         // If it's a file, serve it statically
                         FileType::File => {
-                            if format!("{}/index.html", initial_path.trim_start_matches('/'))
-                                == entry.path
-                            {
-                                continue;
-                            }
-
-                            let _ = uqRequest::new()
-                                .target("our@vfs:distro:sys".parse::<Address>()?)
+                            KiRequest::to(("our", "vfs", "distro", "sys"))
                                 .body(serde_json::to_vec(&VfsRequest {
                                     path: entry.path.clone(),
                                     action: VfsAction::Read,
                                 })?)
-                                .send_and_await_response(5)?;
+                                .send_and_await_response(5)??;
 
                             let Some(blob) = get_blob() else {
                                 return Err(anyhow::anyhow!(
@@ -574,8 +762,8 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
 
                             bind_http_static_path(
                                 entry.path.replace(&initial_path, ""),
-                                true,  // Must be authenticated
-                                false, // Is not local-only
+                                authenticated, // Must be authenticated
+                                local_only,    // Is not local-only
                                 Some(content_type),
                                 blob.bytes,
                             )?;
@@ -600,29 +788,24 @@ pub fn serve_ui(our: &Address, directory: &str) -> anyhow::Result<(), anyhow::Er
     Ok(())
 }
 
-pub fn handle_ui_asset_request(
-    our: &Address,
-    directory: &str,
-    path: &str,
-) -> anyhow::Result<(), anyhow::Error> {
+pub fn handle_ui_asset_request(our: &Address, directory: &str, path: &str) -> anyhow::Result<()> {
     let parts: Vec<&str> = path.split(&our.process.to_string()).collect();
     let after_process = parts.get(1).unwrap_or(&"");
 
     let target_path = format!("{}/{}", directory, after_process.trim_start_matches('/'));
 
-    let _ = uqRequest::new()
-        .target("our@vfs:distro:sys".parse::<Address>()?)
+    KiRequest::to(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&VfsRequest {
             path: format!("{}/pkg/{}", our.package_id(), target_path),
             action: VfsAction::Read,
         })?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(5)??;
 
     let mut headers = HashMap::new();
     let content_type = get_mime_type(path);
     headers.insert("Content-Type".to_string(), content_type);
 
-    uqResponse::new()
+    KiResponse::new()
         .body(
             serde_json::json!(HttpResponse {
                 status: 200,
@@ -638,137 +821,76 @@ pub fn handle_ui_asset_request(
     Ok(())
 }
 
-pub fn send_ws_push(
-    node: String,
-    channel_id: u32,
-    message_type: WsMessageType,
-    blob: uqBlob,
-) -> anyhow::Result<()> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            "http_server:distro:sys".parse::<ProcessId>().unwrap(),
-        ))
+pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
+    KiRequest::to(("our", "http_server", "distro", "sys"))
         .body(
-            serde_json::json!(HttpServerRequest::WebSocketPush {
+            serde_json::to_vec(&HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,
             })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
-        )
-        .blob(blob)
-        .send()?;
-
-    Ok(())
-}
-
-pub fn open_ws_connection(
-    node: String,
-    url: String,
-    headers: Option<HashMap<String, String>>,
-    channel_id: u32,
-) -> anyhow::Result<()> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketOpen {
-                url,
-                headers: headers.unwrap_or(HashMap::new()),
-                channel_id,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
-        )
-        .send()?;
-
-    Ok(())
-}
-
-pub fn open_ws_connection_and_await(
-    node: String,
-    url: String,
-    headers: Option<HashMap<String, String>>,
-    channel_id: u32,
-) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketOpen {
-                url,
-                headers: headers.unwrap_or(HashMap::new()),
-                channel_id,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
-        )
-        .send_and_await_response(5)
-}
-
-pub fn send_ws_client_push(
-    node: String,
-    channel_id: u32,
-    message_type: WsMessageType,
-    blob: uqBlob,
-) -> std::result::Result<(), anyhow::Error> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketPush {
-                channel_id,
-                message_type,
-            })
-            .to_string()
-            .as_bytes()
-            .to_vec(),
+            .unwrap(),
         )
         .blob(blob)
         .send()
+        .unwrap()
 }
 
-pub fn close_ws_connection(node: String, channel_id: u32) -> anyhow::Result<()> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
-        .body(
-            serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
-                .to_string()
-                .as_bytes()
-                .to_vec(),
-        )
-        .send()?;
-
-    Ok(())
-}
-
-pub fn close_ws_connection_and_await(
-    node: String,
+pub fn open_ws_connection(
+    url: String,
+    headers: Option<HashMap<String, String>>,
     channel_id: u32,
-) -> std::result::Result<std::result::Result<Message, SendError>, anyhow::Error> {
-    uqRequest::new()
-        .target(Address::new(
-            node,
-            ProcessId::from_str("http_client:distro:sys").unwrap(),
-        ))
+) -> std::result::Result<(), HttpClientError> {
+    let Ok(Ok(Message::Response { body, .. })) =
+        KiRequest::to(("our", "http_client", "distro", "sys"))
+            .body(
+                serde_json::to_vec(&HttpClientAction::WebSocketOpen {
+                    url: url.clone(),
+                    headers: headers.unwrap_or(HashMap::new()),
+                    channel_id,
+                })
+                .unwrap(),
+            )
+            .send_and_await_response(5)
+    else {
+        return Err(HttpClientError::WsOpenFailed { url });
+    };
+    match serde_json::from_slice(&body) {
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        _ => Err(HttpClientError::WsOpenFailed { url }),
+    }
+}
+
+pub fn send_ws_client_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
+    KiRequest::to(("our", "http_client", "distro", "sys"))
         .body(
-            serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
-                .to_string()
-                .as_bytes()
-                .to_vec(),
+            serde_json::to_vec(&HttpClientAction::WebSocketPush {
+                channel_id,
+                message_type,
+            })
+            .unwrap(),
         )
-        .send_and_await_response(5)
+        .blob(blob)
+        .send()
+        .unwrap()
+}
+
+pub fn close_ws_connection(channel_id: u32) -> std::result::Result<(), HttpClientError> {
+    let Ok(Ok(Message::Response { body, .. })) =
+        KiRequest::to(("our", "http_client", "distro", "sys"))
+            .body(
+                serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
+                    .to_string()
+                    .as_bytes()
+                    .to_vec(),
+            )
+            .send_and_await_response(5)
+    else {
+        return Err(HttpClientError::WsCloseFailed { channel_id });
+    };
+    match serde_json::from_slice(&body) {
+        Ok(Ok(HttpClientResponse::WebSocketAck)) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        _ => Err(HttpClientError::WsCloseFailed { channel_id }),
+    }
 }

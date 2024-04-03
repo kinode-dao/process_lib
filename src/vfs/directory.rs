@@ -6,6 +6,7 @@ use crate::{Message, Request};
 /// You can call it's impl functions to interact with it.
 pub struct Directory {
     pub path: String,
+    pub timeout: u64,
 }
 
 impl Directory {
@@ -19,7 +20,7 @@ impl Directory {
         let message = Request::new()
             .target(("our", "vfs", "distro", "sys"))
             .body(serde_json::to_vec(&request)?)
-            .send_and_await_response(5)?;
+            .send_and_await_response(self.timeout)?;
 
         match message {
             Ok(Message::Response { body, .. }) => {
@@ -37,10 +38,12 @@ impl Directory {
 
 /// Opens or creates a directory at path.
 /// If trying to create an existing directory, will just give you the path.
-pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
+pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> anyhow::Result<Directory> {
+    let timeout = timeout.unwrap_or(5);
     if !create {
         return Ok(Directory {
             path: path.to_string(),
+            timeout,
         });
     }
     let request = VfsRequest {
@@ -51,7 +54,7 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
     let message = Request::new()
         .target(("our", "vfs", "distro", "sys"))
         .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(5)?;
+        .send_and_await_response(timeout)?;
 
     match message {
         Ok(Message::Response { body, .. }) => {
@@ -59,7 +62,35 @@ pub fn open_dir(path: &str, create: bool) -> anyhow::Result<Directory> {
             match response {
                 VfsResponse::Ok => Ok(Directory {
                     path: path.to_string(),
+                    timeout,
                 }),
+                VfsResponse::Err(e) => Err(e.into()),
+                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
+            }
+        }
+        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+    }
+}
+
+/// Removes a dir at path, errors if path not found or path is not a directory.
+pub fn remove_dir(path: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(5);
+
+    let request = VfsRequest {
+        path: path.to_string(),
+        action: VfsAction::RemoveDir,
+    };
+
+    let message = Request::new()
+        .target(("our", "vfs", "distro", "sys"))
+        .body(serde_json::to_vec(&request)?)
+        .send_and_await_response(timeout)?;
+
+    match message {
+        Ok(Message::Response { body, .. }) => {
+            let response = serde_json::from_slice::<VfsResponse>(&body)?;
+            match response {
+                VfsResponse::Ok => Ok(()),
                 VfsResponse::Err(e) => Err(e.into()),
                 _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
             }
