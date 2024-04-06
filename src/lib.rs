@@ -77,6 +77,7 @@ macro_rules! call_init {
                 $init_func(our);
             }
         }
+        export!(Component);
     };
 }
 
