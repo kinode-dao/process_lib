@@ -75,9 +75,15 @@ pub struct KnsUpdate {
     pub owner: String,
     pub node: String, // hex namehash of node
     pub public_key: String,
-    pub ip: String,
-    pub port: u16,
+    pub ips: Vec<String>,
+    pub ports: HashMap<String, u16>,
     pub routers: Vec<String>,
+}
+
+impl KnsUpdate {
+    pub fn get_protocol_port(&self, protocol: &str) -> u16 {
+        self.ports.get(protocol).cloned().unwrap_or(0)
+    }
 }
 
 //
