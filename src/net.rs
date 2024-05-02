@@ -155,8 +155,17 @@ pub fn dnswire_decode(wire_format_bytes: &[u8]) -> Result<String, DnsDecodeError
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum DnsDecodeError {
     Utf8Error(std::string::FromUtf8Error),
     FormatError,
+}
+
+impl std::fmt::Display for DnsDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DnsDecodeError::Utf8Error(e) => write!(f, "UTF-8 error: {}", e),
+            DnsDecodeError::FormatError => write!(f, "Format error"),
+        }
+    }
 }
