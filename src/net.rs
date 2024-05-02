@@ -122,3 +122,41 @@ where
             valid
         })
 }
+
+/// take a DNSwire-formatted node ID from chain and convert it to a String
+pub fn dnswire_decode(wire_format_bytes: &[u8]) -> Result<String, DnsDecodeError> {
+    let mut i = 0;
+    let mut result = Vec::new();
+
+    while i < wire_format_bytes.len() {
+        let len = wire_format_bytes[i] as usize;
+        if len == 0 {
+            break;
+        }
+        let end = i + len + 1;
+        let mut span = match wire_format_bytes.get(i + 1..end) {
+            Some(span) => span.to_vec(),
+            None => return Err(DnsDecodeError::FormatError),
+        };
+        span.push('.' as u8);
+        result.push(span);
+        i = end;
+    }
+
+    let flat: Vec<_> = result.into_iter().flatten().collect();
+
+    let name = String::from_utf8(flat).map_err(|e| DnsDecodeError::Utf8Error(e))?;
+
+    // Remove the trailing '.' if it exists (it should always exist)
+    if name.ends_with('.') {
+        Ok(name[0..name.len() - 1].to_string())
+    } else {
+        Ok(name)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DnsDecodeError {
+    Utf8Error(std::string::FromUtf8Error),
+    FormatError,
+}
