@@ -75,8 +75,8 @@ impl Message {
     /// source node is not our local node.
     pub fn is_local(&self, our: &Address) -> bool {
         match self {
-            Message::Request { source, .. } => source == our,
-            Message::Response { source, .. } => source == our,
+            Message::Request { source, .. } => source.node == our.node,
+            Message::Response { source, .. } => source.node == our.node,
         }
     }
     pub fn is_process<T>(&self, process: T) -> bool
