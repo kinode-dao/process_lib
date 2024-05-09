@@ -15,7 +15,7 @@ use thiserror::Error;
 // these types are a copy of the types used in http module of runtime.
 //
 
-/// HTTP Request type that can be shared over WASM boundary to apps.
+/// HTTP Request type that can be shared over Wasm boundary to apps.
 /// This is the one you receive from the `http_server:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
@@ -51,7 +51,7 @@ pub struct IncomingHttpRequest {
     // BODY is stored in the lazy_load_blob, as bytes
 }
 
-/// HTTP Response type that can be shared over WASM boundary to apps.
+/// HTTP Response type that can be shared over Wasm boundary to apps.
 /// Respond to [`IncomingHttpRequest`] with this type.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HttpResponse {
@@ -287,7 +287,7 @@ impl IncomingHttpRequest {
     }
 }
 
-/// Request type that can be shared over WASM boundary to apps.
+/// Request type that can be shared over Wasm boundary to apps.
 /// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientAction {
@@ -306,7 +306,7 @@ pub enum HttpClientAction {
     },
 }
 
-/// HTTP Request type that can be shared over WASM boundary to apps.
+/// HTTP Request type that can be shared over Wasm boundary to apps.
 /// This is the one you send to the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
@@ -318,7 +318,7 @@ pub struct OutgoingHttpRequest {
     // TIMEOUT is stored in the message expect_response
 }
 
-/// WebSocket Client Request type that can be shared over WASM boundary to apps.
+/// WebSocket Client Request type that can be shared over Wasm boundary to apps.
 /// This comes from an open websocket client connection in the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientRequest {
@@ -331,7 +331,7 @@ pub enum HttpClientRequest {
     },
 }
 
-/// HTTP Client Response type that can be shared over WASM boundary to apps.
+/// HTTP Client Response type that can be shared over Wasm boundary to apps.
 /// This is the one you receive from the `http_client:distro:sys` service.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {

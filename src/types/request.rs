@@ -65,7 +65,7 @@ impl Request {
     /// in the previous request's blob being attached to this request. This
     /// is useful for optimizing performance of middleware and other chains of
     /// requests that can pass large quantities of data through multiple
-    /// processes without repeatedly pushing it across the WASM boundary.
+    /// processes without repeatedly pushing it across the Wasm boundary.
     ///
     /// *Note that if the blob of this request is set separately, this flag
     /// will not override it.*
@@ -129,7 +129,7 @@ impl Request {
     ///
     /// The purpose of having a blob field distinct from the IPC body field is to enable
     /// performance optimizations in all sorts of situations. LazyLoadBlobs are only brought
-    /// across the runtime<>WASM boundary if the process calls `get_blob()`, and this
+    /// across the runtime<>Wasm boundary if the process calls `get_blob()`, and this
     /// saves lots of work in data-intensive pipelines.
     ///
     /// LazyLoadBlobs also provide a place for less-structured data, such that an IPC body type
