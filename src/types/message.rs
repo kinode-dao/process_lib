@@ -25,12 +25,6 @@ pub enum Message {
 }
 
 impl Message {
-    pub fn is_request(&self) -> bool {
-        match self {
-            Message::Request { .. } => true,
-            Message::Response { .. } => false,
-        }
-    }
     /// Get the source of a message.
     pub fn source(&self) -> &Address {
         match self {
@@ -63,12 +57,35 @@ impl Message {
     pub fn blob(&self) -> Option<LazyLoadBlob> {
         crate::get_blob()
     }
-
     /// Get the capabilities of a message.
     pub fn capabilities(&self) -> &Vec<Capability> {
         match self {
             Message::Request { capabilities, .. } => capabilities,
             Message::Response { capabilities, .. } => capabilities,
+        }
+    }
+    /// Check if a message is a request. Returns `false` if it's a response.
+    pub fn is_request(&self) -> bool {
+        match self {
+            Message::Request { .. } => true,
+            Message::Response { .. } => false,
+        }
+    }
+    /// Check if a message was sent by a local process. Returns `false` if the
+    /// source node is not our local node.
+    pub fn is_local(&self, our: &Address) -> bool {
+        match self {
+            Message::Request { source, .. } => source.node == our.node,
+            Message::Response { source, .. } => source.node == our.node,
+        }
+    }
+    pub fn is_process<T>(&self, process: T) -> bool
+    where
+        ProcessId: PartialEq<T>,
+    {
+        match self {
+            Message::Request { source, .. } => source.process == process,
+            Message::Response { source, .. } => source.process == process,
         }
     }
 }
