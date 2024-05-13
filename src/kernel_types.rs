@@ -433,7 +433,7 @@ pub enum MessageType {
     Response,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct KnsUpdate {
     pub name: String, // actual username / domain name
     pub owner: String,
