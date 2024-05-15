@@ -238,7 +238,7 @@ pub struct Erc721Properties {
     pub code_hashes: HashMap<String, String>,
     pub license: Option<String>,
     pub screenshots: Option<Vec<String>>,
-    pub wit_version: Option<(u32, u32, u32)>,
+    pub wit_version: Option<u32>,
 }
 
 /// the type that gets deserialized from each entry in the array in `manifest.json`
