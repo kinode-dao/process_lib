@@ -108,6 +108,7 @@ impl SendErrorKind {
 #[derive(Debug, Clone)]
 pub struct SendError {
     pub kind: SendErrorKind,
+    pub target: Address,
     pub message: Message,
     pub lazy_load_blob: Option<LazyLoadBlob>,
     pub context: Option<Vec<u8>>,
@@ -116,6 +117,9 @@ pub struct SendError {
 impl SendError {
     pub fn kind(&self) -> &SendErrorKind {
         &self.kind
+    }
+    pub fn target(&self) -> &Address {
+        &self.target
     }
     pub fn message(&self) -> &Message {
         &self.message
