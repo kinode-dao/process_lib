@@ -415,6 +415,7 @@ pub fn en_wit_message(message: Message) -> wit::Message {
 pub fn en_wit_send_error(error: SendError) -> wit::SendError {
     wit::SendError {
         kind: en_wit_send_error_kind(error.kind),
+        target: en_wit_address(error.target),
         message: en_wit_message(error.message),
         lazy_load_blob: en_wit_blob(error.lazy_load_blob),
     }
