@@ -107,10 +107,8 @@ pub fn await_message() -> Result<Message, SendError> {
                 crate::kinode::process::standard::SendErrorKind::Offline => SendErrorKind::Offline,
                 crate::kinode::process::standard::SendErrorKind::Timeout => SendErrorKind::Timeout,
             },
-            message: wit_message_to_message(
-                Address::new("our", ProcessId::new(Some("net"), "distro", "sys")),
-                send_err.message,
-            ),
+            target: send_err.target.clone(),
+            message: wit_message_to_message(send_err.target, send_err.message),
             lazy_load_blob: send_err.lazy_load_blob,
             context,
         }),

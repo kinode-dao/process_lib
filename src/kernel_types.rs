@@ -239,7 +239,7 @@ pub struct Erc721Properties {
     pub code_hashes: HashMap<String, String>,
     pub license: Option<String>,
     pub screenshots: Option<Vec<String>>,
-    pub wit_version: Option<(u32, u32, u32)>,
+    pub wit_version: Option<u32>,
     pub dependencies: Option<Vec<String>>,
 }
 
@@ -417,6 +417,7 @@ pub fn en_wit_message(message: Message) -> wit::Message {
 pub fn en_wit_send_error(error: SendError) -> wit::SendError {
     wit::SendError {
         kind: en_wit_send_error_kind(error.kind),
+        target: en_wit_address(error.target),
         message: en_wit_message(error.message),
         lazy_load_blob: en_wit_blob(error.lazy_load_blob),
     }
