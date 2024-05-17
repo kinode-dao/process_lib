@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{Address, LazyLoadBlob, Request};
 
 #[derive(Clone, Debug)]
 pub enum OnExit {
@@ -24,7 +24,7 @@ impl OnExit {
                         metadata: req.1.metadata,
                         blob: req.2,
                         context: None,
-                        capabilities: req.1.capabilities, // TODO double check
+                        capabilities: req.1.capabilities,
                     });
                 }
                 OnExit::Requests(requests)
@@ -87,21 +87,21 @@ impl OnExit {
             OnExit::Requests(reqs) => {
                 let mut kernel_reqs: Vec<(
                     Address,
-                    kinode::process::standard::Request,
+                    crate::kinode::process::standard::Request,
                     Option<LazyLoadBlob>,
                 )> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     kernel_reqs.push((
                         req.target
                             .ok_or(anyhow::anyhow!("request without target given"))?,
-                        kinode::process::standard::Request {
+                        crate::kinode::process::standard::Request {
                             inherit: req.inherit,
                             expects_response: None,
                             body: req
                                 .body
                                 .ok_or(anyhow::anyhow!("request without body given"))?,
                             metadata: req.metadata,
-                            capabilities: req.capabilities, // TODO double check
+                            capabilities: req.capabilities,
                         },
                         req.blob,
                     ));

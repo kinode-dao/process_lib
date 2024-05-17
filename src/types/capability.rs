@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 
 /// Capability is defined in the wit bindings, but constructors and methods here.
 /// A `Capability` is a combination of an Address and a set of Params (a serialized
-/// json string). Capabilities are attached to messages to either share that capability
+/// JSON string). Capabilities are attached to messages to either share that capability
 /// with the receiving process, or to prove that a process has authority to perform a
 /// certain action.
 impl Capability {
@@ -27,6 +27,15 @@ impl Capability {
     /// Read the params from a `Capability`.
     pub fn params(&self) -> &str {
         &self.params
+    }
+    /// Read the params from a `Capability` as a `serde_json::Value`.
+    pub fn params_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::from_str(&self.params)
+    }
+    /// Set the params for a `Capability` from a `serde_json::Value`.
+    pub fn set_params_json(&mut self, value: serde_json::Value) -> Result<(), serde_json::Error> {
+        self.params = serde_json::to_string(&value)?;
+        Ok(())
     }
 }
 

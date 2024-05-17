@@ -2,7 +2,7 @@ pub use crate::{Address, PackageId, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
-/// Address is defined in the wit bindings, but constructors and methods here.
+/// Address is defined in `kinode.wit`, but constructors and methods here.
 /// An `Address` is a combination of a node ID (string) and a [`ProcessId`]. It is
 /// used in the Request/Response pattern to indicate which process on a given node
 /// in the network to direct the message to. The formatting structure for
@@ -49,36 +49,42 @@ impl std::str::FromStr for Address {
     /// Attempt to parse an `Address` from a string. The formatting structure for
     /// an Address is `node@process_name:package_name:publisher_node`.
     ///
-    /// TODO: clarify if `@` can be present in process name / package name / publisher name
-    ///
-    /// TODO: ensure `:` cannot sneak into first segment
+    /// The string being parsed must contain exactly one `@` and three `:` characters.
+    /// The `@` character separates the node ID from the rest of the address, and the
+    /// `:` characters separate the process name, package name, and publisher node ID.
     fn from_str(input: &str) -> Result<Self, AddressParseError> {
-        // split string on colons into 4 segments,
-        // first one with @, next 3 with :
-        let mut name_rest = input.split('@');
-        let node = name_rest
-            .next()
-            .ok_or(AddressParseError::MissingField)?
-            .to_string();
-        let mut segments = name_rest
-            .next()
-            .ok_or(AddressParseError::MissingNodeId)?
-            .split(':');
-        let process_name = segments
-            .next()
-            .ok_or(AddressParseError::MissingField)?
-            .to_string();
-        let package_name = segments
-            .next()
-            .ok_or(AddressParseError::MissingField)?
-            .to_string();
-        let publisher_node = segments
-            .next()
-            .ok_or(AddressParseError::MissingField)?
-            .to_string();
-        if segments.next().is_some() {
+        // split string on '@' and ensure there is exactly one '@'
+        let parts: Vec<&str> = input.split('@').collect();
+        if parts.len() < 2 {
+            return Err(AddressParseError::MissingNodeId);
+        } else if parts.len() > 2 {
+            return Err(AddressParseError::TooManyAts);
+        }
+        let node = parts[0].to_string();
+        if node.is_empty() {
+            return Err(AddressParseError::MissingNodeId);
+        }
+
+        // split the rest on ':' and ensure there are exactly three ':'
+        let segments: Vec<&str> = parts[1].split(':').collect();
+        if segments.len() < 3 {
+            return Err(AddressParseError::MissingField);
+        } else if segments.len() > 3 {
             return Err(AddressParseError::TooManyColons);
         }
+        let process_name = segments[0].to_string();
+        if process_name.is_empty() {
+            return Err(AddressParseError::MissingField);
+        }
+        let package_name = segments[1].to_string();
+        if package_name.is_empty() {
+            return Err(AddressParseError::MissingField);
+        }
+        let publisher_node = segments[2].to_string();
+        if publisher_node.is_empty() {
+            return Err(AddressParseError::MissingField);
+        }
+
         Ok(Address {
             node,
             process: ProcessId {
@@ -163,6 +169,7 @@ impl std::fmt::Display for Address {
 /// Error type for parsing an `Address` from a string.
 #[derive(Debug)]
 pub enum AddressParseError {
+    TooManyAts,
     TooManyColons,
     MissingNodeId,
     MissingField,
@@ -170,24 +177,85 @@ pub enum AddressParseError {
 
 impl std::fmt::Display for AddressParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                AddressParseError::TooManyColons => "Too many colons in ProcessId string",
-                AddressParseError::MissingNodeId => "Node ID missing",
-                AddressParseError::MissingField => "Missing field in ProcessId string",
-            }
-        )
+        write!(f, "{self}")
     }
 }
 
 impl std::error::Error for AddressParseError {
     fn description(&self) -> &str {
         match self {
+            AddressParseError::TooManyAts => "Too many '@' chars in ProcessId string",
             AddressParseError::TooManyColons => "Too many colons in ProcessId string",
             AddressParseError::MissingNodeId => "Node ID missing",
             AddressParseError::MissingField => "Missing field in ProcessId string",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_valid_address() {
+        let input = "node123@process1:packageA:publisherB";
+        let address: Address = input.parse().unwrap();
+        assert_eq!(address.node(), "node123");
+        assert_eq!(address.process(), "process1");
+        assert_eq!(address.package(), "packageA");
+        assert_eq!(address.publisher(), "publisherB");
+    }
+
+    #[test]
+    fn test_missing_node_id() {
+        let input = "@process1:packageA:publisherB";
+        assert!(matches!(
+            Address::from_str(input),
+            Err(AddressParseError::MissingNodeId)
+        ));
+    }
+
+    #[test]
+    fn test_too_many_ats() {
+        let input = "node123@process1@packageA:publisherB";
+        assert!(matches!(
+            Address::from_str(input),
+            Err(AddressParseError::TooManyAts)
+        ));
+    }
+
+    #[test]
+    fn test_missing_field() {
+        let input = "node123@process1:packageA";
+        assert!(matches!(
+            Address::from_str(input),
+            Err(AddressParseError::MissingField)
+        ));
+    }
+
+    #[test]
+    fn test_too_many_colons() {
+        let input = "node123@process1:packageA:publisherB:extra";
+        assert!(matches!(
+            Address::from_str(input),
+            Err(AddressParseError::TooManyColons)
+        ));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let input = "";
+        assert!(matches!(
+            Address::from_str(input),
+            Err(AddressParseError::MissingNodeId)
+        ));
+    }
+
+    #[test]
+    fn test_display() {
+        let input = "node123@process1:packageA:publisherB";
+        let address: Address = input.parse().unwrap();
+        assert_eq!(format!("{}", address), input);
     }
 }

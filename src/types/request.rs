@@ -1,4 +1,7 @@
-use crate::*;
+use crate::{
+    Address, Capability, LazyLoadBlob, Message, SendError, _wit_message_to_message,
+    _wit_send_error_to_send_error,
+};
 
 /// Request builder. Use [`Request::new()`] to start a request, then build it,
 /// then call [`Request::send()`] on it to fire.
@@ -274,21 +277,8 @@ impl Request {
                 },
                 self.blob.as_ref(),
             ) {
-                Ok((source, message)) => Ok(Ok(wit_message_to_message(source, message))),
-                Err(send_err) => Ok(Err(SendError {
-                    kind: match send_err.kind {
-                        crate::kinode::process::standard::SendErrorKind::Offline => {
-                            SendErrorKind::Offline
-                        }
-                        crate::kinode::process::standard::SendErrorKind::Timeout => {
-                            SendErrorKind::Timeout
-                        }
-                    },
-                    target: send_err.target.clone(),
-                    message: wit_message_to_message(send_err.target, send_err.message),
-                    lazy_load_blob: send_err.lazy_load_blob,
-                    context: None,
-                })),
+                Ok((source, message)) => Ok(Ok(_wit_message_to_message(source, message))),
+                Err(send_err) => Ok(Err(_wit_send_error_to_send_error(send_err, self.context))),
             }
         } else {
             Err(anyhow::anyhow!("missing fields"))
