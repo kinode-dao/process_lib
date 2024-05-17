@@ -1,6 +1,6 @@
 use crate::{get_blob, Address, NodeId, Request, SendError};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 //
 // Networking protocol types
