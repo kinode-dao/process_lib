@@ -71,14 +71,14 @@ pub enum NetResponse {
     Verified(bool),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct KnsUpdate {
     pub name: String, // actual username / domain name
     pub owner: String,
     pub node: String, // hex namehash of node
     pub public_key: String,
     pub ips: Vec<String>,
-    pub ports: HashMap<String, u16>,
+    pub ports: BTreeMap<String, u16>,
     pub routers: Vec<String>,
 }
 
