@@ -99,7 +99,9 @@ macro_rules! println {
 /// a `SendError`. Those should be handled here.
 ///
 /// Example:
-/// ```
+/// ```no_run
+/// use kinode_process_lib::await_message;
+///
 /// loop {
 ///     match await_message() {
 ///         Ok(msg) => {
@@ -142,7 +144,22 @@ pub fn spawn(
 /// function that turns that type into bytes.
 ///
 /// Example usage:
-/// ```
+/// ```no_run
+/// use kinode_process_lib::make_blob;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyType {
+///    field: std::collections::HashMap<String, String>,
+///    field_two: std::collections::HashSet<String>,
+/// }
+///
+/// let my_type = MyType {
+///    field: std::collections::HashMap::new(),
+///    field_two: std::collections::HashSet::new(),
+/// };
+///
 /// make_blob(&my_type, |t| Ok(bincode::serialize(t)?));
 /// ```
 pub fn make_blob<T, F>(blob: &T, serializer: F) -> anyhow::Result<LazyLoadBlob>
@@ -160,7 +177,18 @@ where
 /// it from bytes with the provided function.
 ///
 /// Example:
-/// ```
+/// ```no_run
+/// use std::collections::{HashMap, HashSet};
+/// use kinode_process_lib::get_typed_blob;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyType {
+///   field: HashMap<String, String>,
+///   field_two: HashSet<String>,
+/// }
+///
 /// get_typed_blob(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),
@@ -184,7 +212,18 @@ where
 /// If it does, attempt to deserialize it from bytes with the provided function.
 ///
 /// Example:
-/// ```
+/// ```no_run
+/// use std::collections::{HashMap, HashSet};
+/// use kinode_process_lib::get_typed_state;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyStateType {
+///    field: HashMap<String, String>,
+///    field_two: HashSet<String>,
+/// }
+///
 /// get_typed_state(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyStateType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),
