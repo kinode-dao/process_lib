@@ -162,7 +162,7 @@ pub struct ProviderConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum NodeOrRpcUrl {
     Node {
-        kns_update: crate::kernel_types::KnsUpdate,
+        kns_update: crate::net::KnsUpdate,
         use_as_provider: bool, // for routers inside saved config
     },
     RpcUrl(String),
