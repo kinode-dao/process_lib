@@ -44,7 +44,7 @@
 #       #    published.
 #       #
 #       # We *could* pass through `--no-verify` so `cargo` doesn't build the crate before publishing,
-#       # which is reasonable, since this job only runs after the Linux, Windows, and WASM builds
+#       # which is reasonable, since this job only runs after the Linux, Windows, and Wasm builds
 #       # have passed.
 #       - name: "cargo release publish"
 #         run: |-

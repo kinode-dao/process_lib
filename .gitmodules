@@ -1,4 +1,4 @@
 [submodule "kinode-wit"]
 	path = kinode-wit
 	url = https://github.com/uqbar-dao/kinode-wit.git
-	branch = master
+	branch = v0.8
