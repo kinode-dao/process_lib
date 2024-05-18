@@ -263,6 +263,7 @@ pub struct DotScriptsEntry {
     pub request_networking: bool,
     pub request_capabilities: Option<Vec<serde_json::Value>>,
     pub grant_capabilities: Option<Vec<serde_json::Value>>,
+    pub wit_version: Option<u32>,
 }
 
 impl std::fmt::Display for Message {
