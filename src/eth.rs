@@ -149,21 +149,21 @@ pub struct AccessSettings {
     pub deny: HashSet<String>,  // blacklist for access (always used)
 }
 
-pub type SavedConfigs = Vec<ProviderConfig>;
+pub type SavedConfigs = HashSet<ProviderConfig>;
 
 /// Provider config. Can currently be a node or a ws provider instance.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Hash, Eq, PartialEq)]
 pub struct ProviderConfig {
     pub chain_id: u64,
     pub trusted: bool,
     pub provider: NodeOrRpcUrl,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Hash, Eq, PartialEq)]
 pub enum NodeOrRpcUrl {
     Node {
-        kns_update: crate::kernel_types::KnsUpdate,
-        use_as_provider: bool, // for routers inside saved config
+        kns_update: crate::net::KnsUpdate,
+        use_as_provider: bool, // false for just-routers inside saved config
     },
     RpcUrl(String),
 }

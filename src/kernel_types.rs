@@ -263,6 +263,7 @@ pub struct DotScriptsEntry {
     pub request_networking: bool,
     pub request_capabilities: Option<Vec<serde_json::Value>>,
     pub grant_capabilities: Option<Vec<serde_json::Value>>,
+    pub wit_version: Option<u32>,
 }
 
 impl std::fmt::Display for Message {
@@ -434,15 +435,4 @@ pub fn en_wit_send_error_kind(kind: SendErrorKind) -> wit::SendErrorKind {
 pub enum MessageType {
     Request,
     Response,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KnsUpdate {
-    pub name: String, // actual username / domain name
-    pub owner: String,
-    pub node: String, // hex namehash of node
-    pub public_key: String,
-    pub ip: String,
-    pub port: u16,
-    pub routers: Vec<String>,
 }
