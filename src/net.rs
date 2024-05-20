@@ -10,8 +10,34 @@ use std::collections::BTreeMap;
 pub struct Identity {
     pub name: NodeId,
     pub networking_key: String,
-    pub ws_routing: Option<(String, u16)>,
-    pub allowed_routers: Vec<NodeId>,
+    pub routing: NodeRouting,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum NodeRouting {
+    Routers(Vec<NodeId>),
+    Direct {
+        ip: String,
+        ports: BTreeMap<String, u16>,
+    },
+}
+
+impl Identity {
+    pub fn is_direct(&self) -> bool {
+        matches!(&self.routing, NodeRouting::Direct { .. })
+    }
+    pub fn get_protocol_port(&self, protocol: &str) -> Option<u16> {
+        match &self.routing {
+            NodeRouting::Routers(_) => None,
+            NodeRouting::Direct { ports, .. } => ports.get(protocol).cloned(),
+        }
+    }
+    pub fn routers(&self) -> Option<&Vec<NodeId>> {
+        match &self.routing {
+            NodeRouting::Routers(routers) => Some(routers),
+            NodeRouting::Direct { .. } => None,
+        }
+    }
 }
 
 /// Must be parsed from message pack vector.
