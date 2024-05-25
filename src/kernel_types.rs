@@ -151,69 +151,15 @@ pub enum KernelPrintResponse {
 
 pub type ProcessMap = HashMap<ProcessId, PersistedProcess>;
 
-#[derive(Clone, Debug)]
+// NOTE: this is different from the runtime representation of a process
+// in that the capabilities are stored as a Vec<(Capability, Vec<u8>)> instead of a HashMap.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
     pub wit_version: Option<u32>,
     pub on_exit: OnExit,
-    pub capabilities: HashMap<Capability, Vec<u8>>,
-    pub public: bool, // marks if a process allows messages from any process
-}
-
-impl Serialize for PersistedProcess {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let capabilities_as_vec = self
-            .capabilities
-            .iter()
-            .collect::<Vec<(&Capability, &Vec<u8>)>>();
-        let mut state = serializer.serialize_struct("PersistedProcess", 5)?;
-        state.serialize_field("wasm_bytes_handle", &self.wasm_bytes_handle)?;
-        state.serialize_field("wit_version", &self.wit_version)?;
-        state.serialize_field("on_exit", &self.on_exit)?;
-        state.serialize_field("public", &self.public)?;
-        state.serialize_field("capabilities", &capabilities_as_vec)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for PersistedProcess {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct InnerPersistedProcess {
-            wasm_bytes_handle: String,
-            wit_version: Option<u32>,
-            on_exit: OnExit,
-            public: bool,
-            capabilities: Vec<(Capability, Vec<u8>)>,
-        }
-
-        let InnerPersistedProcess {
-            wasm_bytes_handle,
-            wit_version,
-            on_exit,
-            public,
-            capabilities,
-        } = InnerPersistedProcess::deserialize(deserializer)?;
-
-        let capabilities_map = capabilities
-            .into_iter()
-            .collect::<HashMap<Capability, Vec<u8>>>();
-
-        Ok(PersistedProcess {
-            wasm_bytes_handle,
-            wit_version,
-            on_exit,
-            public,
-            capabilities: capabilities_map,
-        })
-    }
+    pub capabilities: Vec<(Capability, Vec<u8>)>,
+    pub public: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
