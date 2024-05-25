@@ -47,6 +47,18 @@ pub struct Capability {
     pub params: String, // JSON-string
 }
 
+impl std::fmt::Display for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            self.issuer,
+            serde_json::from_str::<serde_json::Value>(&self.params)
+                .unwrap_or(serde_json::json!("invalid JSON in capability"))
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendError {
     pub kind: SendErrorKind,
