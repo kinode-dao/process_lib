@@ -139,15 +139,24 @@ pub enum KernelResponse {
     StartedProcess,
     RunProcessError,
     KilledProcess(ProcessId),
+    Debug(KernelPrintResponse),
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KernelPrintResponse {
+    ProcessMap(ProcessMap),
+    Process(Option<PersistedProcess>),
+    HasCap(Option<bool>),
+}
+
+pub type ProcessMap = HashMap<ProcessId, PersistedProcess>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
-    // pub drive: String,
-    // pub full_path: String,
+    pub wit_version: Option<u32>,
     pub on_exit: OnExit,
-    pub capabilities: HashSet<Capability>,
+    pub capabilities: HashMap<Capability, Vec<u8>>,
     pub public: bool, // marks if a process allows messages from any process
 }
 
