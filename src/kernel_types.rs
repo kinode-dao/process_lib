@@ -158,7 +158,7 @@ pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
     pub wit_version: Option<u32>,
     pub on_exit: OnExit,
-    pub capabilities: Vec<(Capability, Vec<u8>)>,
+    pub capabilities: HashSet<Capability>,
     pub public: bool,
 }
 
