@@ -152,7 +152,7 @@ pub enum KernelPrintResponse {
 pub type ProcessMap = HashMap<ProcessId, PersistedProcess>;
 
 // NOTE: this is different from the runtime representation of a process
-// in that the capabilities are stored as a Vec<(Capability, Vec<u8>)> instead of a HashMap.
+// in that the capabilities are stored as a HashSet instead of a HashMap.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
