@@ -19,6 +19,7 @@ use serde_json::Value;
 
 wit_bindgen::generate!({
     path: "kinode-wit",
+    generate_unused_types: true,
     world: "lib",
 });
 
