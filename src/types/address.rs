@@ -1,4 +1,4 @@
-pub use crate::{Address, PackageId, ProcessId};
+pub use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
@@ -39,8 +39,8 @@ impl Address {
         &self.process.publisher_node
     }
     /// Read the package_id (package + publisher) from an `Address`.
-    pub fn package_id(&self) -> PackageId {
-        PackageId::new(self.package(), self.publisher())
+    pub fn package_id(&self) -> crate::PackageId {
+        crate::PackageId::new(self.package(), self.publisher())
     }
 }
 
