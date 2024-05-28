@@ -44,13 +44,6 @@ impl<'a> Deserialize<'a> for PackageId {
     }
 }
 
-impl std::hash::Hash for PackageId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.package_name.hash(state);
-        self.publisher_node.hash(state);
-    }
-}
-
 impl std::str::FromStr for PackageId {
     type Err = ProcessIdParseError;
     /// Attempt to parse a `PackageId` from a string. The string must
@@ -84,11 +77,26 @@ impl std::str::FromStr for PackageId {
     }
 }
 
+impl std::hash::Hash for PackageId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.package_name.hash(state);
+        self.publisher_node.hash(state);
+    }
+}
+
 impl std::fmt::Display for PackageId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.package_name, self.publisher_node)
     }
 }
+
+impl From<(&str, &str)> for PackageId {
+    fn from(input: (&str, &str)) -> Self {
+        PackageId::new(input.0, input.1)
+    }
+}
+
+impl std::cmp::Eq for PackageId {}
 
 impl PartialEq for PackageId {
     fn eq(&self, other: &Self) -> bool {
