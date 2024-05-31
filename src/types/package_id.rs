@@ -1,15 +1,9 @@
+pub use crate::PackageId;
 use crate::ProcessIdParseError;
 use serde::{Deserialize, Serialize};
-use std::hash::Hash;
 
-/// PackageId is like a ProcessId, but for a package. Only contains the name
-/// of the package and the name of the publisher.
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub struct PackageId {
-    package_name: String,
-    publisher_node: String,
-}
-
+/// `PackageId` is defined in the wit bindings, but constructors and methods
+/// are defined here. A `PackageId` contains a package name and a publisher node ID.
 impl PackageId {
     /// Create a new `PackageId`.
     pub fn new(package_name: &str, publisher_node: &str) -> Self {
@@ -28,6 +22,25 @@ impl PackageId {
     /// to an identity at all.
     pub fn publisher(&self) -> &str {
         &self.publisher_node
+    }
+}
+
+impl Serialize for PackageId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        format!("{}", self).serialize(serializer)
+    }
+}
+
+impl<'a> Deserialize<'a> for PackageId {
+    fn deserialize<D>(deserializer: D) -> Result<PackageId, D::Error>
+    where
+        D: serde::de::Deserializer<'a>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -64,8 +77,29 @@ impl std::str::FromStr for PackageId {
     }
 }
 
+impl std::hash::Hash for PackageId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.package_name.hash(state);
+        self.publisher_node.hash(state);
+    }
+}
+
 impl std::fmt::Display for PackageId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.package_name, self.publisher_node)
+    }
+}
+
+impl From<(&str, &str)> for PackageId {
+    fn from(input: (&str, &str)) -> Self {
+        PackageId::new(input.0, input.1)
+    }
+}
+
+impl std::cmp::Eq for PackageId {}
+
+impl PartialEq for PackageId {
+    fn eq(&self, other: &Self) -> bool {
+        self.package_name == other.package_name && self.publisher_node == other.publisher_node
     }
 }

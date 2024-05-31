@@ -47,6 +47,18 @@ pub struct Capability {
     pub params: String, // JSON-string
 }
 
+impl std::fmt::Display for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            self.issuer,
+            serde_json::from_str::<serde_json::Value>(&self.params)
+                .unwrap_or(serde_json::json!("invalid JSON in capability"))
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendError {
     pub kind: SendErrorKind,
@@ -139,16 +151,27 @@ pub enum KernelResponse {
     StartedProcess,
     RunProcessError,
     KilledProcess(ProcessId),
+    Debug(KernelPrintResponse),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KernelPrintResponse {
+    ProcessMap(ProcessMap),
+    Process(Option<PersistedProcess>),
+    HasCap(Option<bool>),
+}
+
+pub type ProcessMap = HashMap<ProcessId, PersistedProcess>;
+
+// NOTE: this is different from the runtime representation of a process
+// in that the capabilities are stored as a HashSet instead of a HashMap.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
-    // pub drive: String,
-    // pub full_path: String,
+    pub wit_version: Option<u32>,
     pub on_exit: OnExit,
     pub capabilities: HashSet<Capability>,
-    pub public: bool, // marks if a process allows messages from any process
+    pub public: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
