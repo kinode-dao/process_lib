@@ -142,15 +142,22 @@ pub enum ProcessIdParseError {
 
 impl std::fmt::Display for ProcessIdParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(
+            f,
+            "{}",
+            match self {
+                ProcessIdParseError::TooManyColons => "Too many colons",
+                ProcessIdParseError::MissingField => "Missing field",
+            }
+        )
     }
 }
 
 impl std::error::Error for ProcessIdParseError {
     fn description(&self) -> &str {
         match self {
-            ProcessIdParseError::TooManyColons => "Too many colons in ProcessId string",
-            ProcessIdParseError::MissingField => "Missing field in ProcessId string",
+            ProcessIdParseError::TooManyColons => "Too many colons",
+            ProcessIdParseError::MissingField => "Missing field",
         }
     }
 }
