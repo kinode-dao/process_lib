@@ -10,7 +10,6 @@ pub struct Response {
     capabilities: Vec<Capability>,
 }
 
-#[allow(dead_code)]
 impl Response {
     /// Start building a new response. Attempting to send this response will
     /// not succeed until its `body` has been set with `body()` or `try_body()`.

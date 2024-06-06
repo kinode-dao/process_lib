@@ -47,6 +47,18 @@ pub struct Capability {
     pub params: String, // JSON-string
 }
 
+impl std::fmt::Display for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            self.issuer,
+            serde_json::from_str::<serde_json::Value>(&self.params)
+                .unwrap_or(serde_json::json!("invalid JSON in capability"))
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendError {
     pub kind: SendErrorKind,
@@ -139,16 +151,27 @@ pub enum KernelResponse {
     StartedProcess,
     RunProcessError,
     KilledProcess(ProcessId),
+    Debug(KernelPrintResponse),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KernelPrintResponse {
+    ProcessMap(ProcessMap),
+    Process(Option<PersistedProcess>),
+    HasCap(Option<bool>),
+}
+
+pub type ProcessMap = HashMap<ProcessId, PersistedProcess>;
+
+// NOTE: this is different from the runtime representation of a process
+// in that the capabilities are stored as a HashSet instead of a HashMap.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedProcess {
     pub wasm_bytes_handle: String,
-    // pub drive: String,
-    // pub full_path: String,
+    pub wit_version: Option<u32>,
     pub on_exit: OnExit,
     pub capabilities: HashSet<Capability>,
-    pub public: bool, // marks if a process allows messages from any process
+    pub public: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -229,6 +252,7 @@ pub struct Erc721Metadata {
 /// - `license`: An optional field containing the license of the package.
 /// - `screenshots`: An optional field containing a list of URLs to screenshots of the package.
 /// - `wit_version`: An optional field containing the version of the WIT standard that the package adheres to.
+/// - `dependencies`: An optional field containing a list of `PackageId`s: API dependencies.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Erc721Properties {
     pub package_name: String,
@@ -238,7 +262,8 @@ pub struct Erc721Properties {
     pub code_hashes: HashMap<String, String>,
     pub license: Option<String>,
     pub screenshots: Option<Vec<String>>,
-    pub wit_version: Option<(u32, u32, u32)>,
+    pub wit_version: Option<u32>,
+    pub dependencies: Option<Vec<String>>,
 }
 
 /// the type that gets deserialized from each entry in the array in `manifest.json`
@@ -261,6 +286,7 @@ pub struct DotScriptsEntry {
     pub request_networking: bool,
     pub request_capabilities: Option<Vec<serde_json::Value>>,
     pub grant_capabilities: Option<Vec<serde_json::Value>>,
+    pub wit_version: Option<u32>,
 }
 
 impl std::fmt::Display for Message {
@@ -415,6 +441,7 @@ pub fn en_wit_message(message: Message) -> wit::Message {
 pub fn en_wit_send_error(error: SendError) -> wit::SendError {
     wit::SendError {
         kind: en_wit_send_error_kind(error.kind),
+        target: en_wit_address(error.target),
         message: en_wit_message(error.message),
         lazy_load_blob: en_wit_blob(error.lazy_load_blob),
     }
@@ -431,15 +458,4 @@ pub fn en_wit_send_error_kind(kind: SendErrorKind) -> wit::SendErrorKind {
 pub enum MessageType {
     Request,
     Response,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub struct KnsUpdate {
-    pub name: String, // actual username / domain name
-    pub owner: String,
-    pub node: String, // hex namehash of node
-    pub public_key: String,
-    pub ip: String,
-    pub port: u16,
-    pub routers: Vec<String>,
 }

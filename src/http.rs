@@ -494,6 +494,224 @@ where
     resp
 }
 
+/// Register a new path with the HTTP server. This will cause the HTTP server to
+/// forward any requests on this path to the calling process.
+///
+/// Instead of binding at just a path, this function tells the HTTP server to
+/// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+/// characters converted to `-`) and bind at that subdomain.
+pub fn secure_bind_http_path<T>(path: T) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::SecureBind {
+                path: path.into(),
+                cache: false,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+/// Register a new path with the HTTP server, and serve a static file from it.
+/// The server will respond to GET requests on this path with the given file.
+///
+/// Instead of binding at just a path, this function tells the HTTP server to
+/// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+/// characters converted to `-`) and bind at that subdomain.
+pub fn secure_bind_http_static_path<T>(
+    path: T,
+    content_type: Option<String>,
+    content: Vec<u8>,
+) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::SecureBind {
+                path: path.into(),
+                cache: true,
+            })
+            .unwrap(),
+        )
+        .blob(KiBlob {
+            mime: content_type,
+            bytes: content,
+        })
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+/// Register a WebSockets path with the HTTP server. Your app must do this
+/// in order to receive incoming WebSocket connections.
+///
+/// Instead of binding at just a path, this function tells the HTTP server to
+/// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+/// characters converted to `-`) and bind at that subdomain.
+pub fn secure_bind_ws_path<T>(path: T, encrypted: bool) -> std::result::Result<(), HttpServerError>
+where
+    T: Into<String>,
+{
+    let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        .body(
+            serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
+                path: path.into(),
+                encrypted,
+                extension: false,
+            })
+            .unwrap(),
+        )
+        .send_and_await_response(5)
+        .unwrap();
+    let Ok(Message::Response { body, .. }) = res else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server timed out".to_string(),
+        });
+    };
+    let Ok(resp) = serde_json::from_slice::<std::result::Result<(), HttpServerError>>(&body) else {
+        return Err(HttpServerError::PathBindError {
+            error: "http_server gave unexpected response".to_string(),
+        });
+    };
+    resp
+}
+
+/// Serve index.html
+///
+/// Instead of binding at just a path, this function tells the HTTP server to
+/// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+/// characters converted to `-`) and bind at that subdomain.
+pub fn secure_serve_index_html(
+    our: &Address,
+    directory: &str,
+    paths: Vec<&str>,
+) -> anyhow::Result<()> {
+    KiRequest::to(("our", "vfs", "distro", "sys"))
+        .body(serde_json::to_vec(&VfsRequest {
+            path: format!("/{}/pkg/{}/index.html", our.package_id(), directory),
+            action: VfsAction::Read,
+        })?)
+        .send_and_await_response(5)??;
+
+    let Some(blob) = get_blob() else {
+        return Err(anyhow::anyhow!("serve_index_html: no index.html blob"));
+    };
+
+    let index = String::from_utf8(blob.bytes)?;
+
+    for path in paths {
+        secure_bind_http_static_path(
+            path,
+            Some("text/html".to_string()),
+            index.to_string().as_bytes().to_vec(),
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Serve static files from a given directory by binding all of them
+/// in http_server to their filesystem path.
+///
+/// Instead of binding at just a path, this function tells the HTTP server to
+/// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+/// characters converted to `-`) and bind at that subdomain.
+pub fn secure_serve_ui(our: &Address, directory: &str, paths: Vec<&str>) -> anyhow::Result<()> {
+    secure_serve_index_html(our, directory, paths)?;
+
+    let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
+
+    let mut queue = VecDeque::new();
+    queue.push_back(initial_path.clone());
+
+    while let Some(path) = queue.pop_front() {
+        let Ok(directory_response) = KiRequest::to(("our", "vfs", "distro", "sys"))
+            .body(serde_json::to_vec(&VfsRequest {
+                path,
+                action: VfsAction::ReadDir,
+            })?)
+            .send_and_await_response(5)?
+        else {
+            return Err(anyhow::anyhow!("serve_ui: no response for path"));
+        };
+
+        let directory_body = serde_json::from_slice::<VfsResponse>(directory_response.body())?;
+
+        // Determine if it's a file or a directory and handle appropriately
+        match directory_body {
+            VfsResponse::ReadDir(directory_info) => {
+                for entry in directory_info {
+                    match entry.file_type {
+                        // If it's a file, serve it statically
+                        FileType::File => {
+                            KiRequest::to(("our", "vfs", "distro", "sys"))
+                                .body(serde_json::to_vec(&VfsRequest {
+                                    path: entry.path.clone(),
+                                    action: VfsAction::Read,
+                                })?)
+                                .send_and_await_response(5)??;
+
+                            let Some(blob) = get_blob() else {
+                                return Err(anyhow::anyhow!(
+                                    "serve_ui: no blob for {}",
+                                    entry.path
+                                ));
+                            };
+
+                            let content_type = get_mime_type(&entry.path);
+
+                            secure_bind_http_static_path(
+                                entry.path.replace(&initial_path, ""),
+                                Some(content_type),
+                                blob.bytes,
+                            )?;
+                        }
+                        FileType::Directory => {
+                            // Push the directory onto the queue
+                            queue.push_back(entry.path);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "serve_ui: unexpected response for path: {:?}",
+                    directory_body
+                ))
+            }
+        };
+    }
+
+    Ok(())
+}
+
 /// Register a WebSockets path with the HTTP server to send and
 /// receive system messages from a runtime extension. Only use
 /// this if you are writing a runtime extension.

@@ -19,6 +19,7 @@ use serde_json::Value;
 
 wit_bindgen::generate!({
     path: "kinode-wit",
+    generate_unused_types: true,
     world: "lib",
 });
 
@@ -53,13 +54,13 @@ pub use types::{
     address::{Address, AddressParseError},
     capability::Capability,
     lazy_load_blob::LazyLoadBlob,
-    message::wit_message_to_message,
-    message::{Message, SendError, SendErrorKind},
+    message::{Message, _wit_message_to_message},
     on_exit::OnExit,
     package_id::PackageId,
     process_id::{ProcessId, ProcessIdParseError},
     request::Request,
     response::Response,
+    send_error::{SendError, SendErrorKind, _wit_send_error_to_send_error},
 };
 
 /// Implement the wit-bindgen specific code that the kernel uses to hook into
@@ -98,22 +99,26 @@ macro_rules! println {
 /// attempts to send a message to another node, that message may bounce back with
 /// a `SendError`. Those should be handled here.
 ///
-/// TODO: example of usage
+/// Example:
+/// ```no_run
+/// use kinode_process_lib::await_message;
+///
+/// loop {
+///     match await_message() {
+///         Ok(msg) => {
+///             println!("Received message: {:?}", msg);
+///             // Do something with the message
+///         }
+///         Err(send_error) => {
+///             println!("Error sending message: {:?}", send_error);
+///         }
+///     }
+/// }
+/// ```
 pub fn await_message() -> Result<Message, SendError> {
     match crate::receive() {
-        Ok((source, message)) => Ok(wit_message_to_message(source, message)),
-        Err((send_err, context)) => Err(SendError {
-            kind: match send_err.kind {
-                crate::kinode::process::standard::SendErrorKind::Offline => SendErrorKind::Offline,
-                crate::kinode::process::standard::SendErrorKind::Timeout => SendErrorKind::Timeout,
-            },
-            message: wit_message_to_message(
-                Address::new("our", ProcessId::new(Some("net"), "distro", "sys")),
-                send_err.message,
-            ),
-            lazy_load_blob: send_err.lazy_load_blob,
-            context,
-        }),
+        Ok((source, message)) => Ok(_wit_message_to_message(source, message)),
+        Err((send_err, context)) => Err(_wit_send_error_to_send_error(send_err, context)),
     }
 }
 
@@ -139,7 +144,25 @@ pub fn spawn(
 /// Create a blob with no MIME type and a generic type, plus a serializer
 /// function that turns that type into bytes.
 ///
-/// Example: TODO
+/// Example usage:
+/// ```no_run
+/// use kinode_process_lib::make_blob;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyType {
+///    field: std::collections::HashMap<String, String>,
+///    field_two: std::collections::HashSet<String>,
+/// }
+///
+/// let my_type = MyType {
+///    field: std::collections::HashMap::new(),
+///    field_two: std::collections::HashSet::new(),
+/// };
+///
+/// make_blob(&my_type, |t| Ok(bincode::serialize(t)?));
+/// ```
 pub fn make_blob<T, F>(blob: &T, serializer: F) -> anyhow::Result<LazyLoadBlob>
 where
     F: Fn(&T) -> anyhow::Result<Vec<u8>>,
@@ -155,7 +178,18 @@ where
 /// it from bytes with the provided function.
 ///
 /// Example:
-/// ```
+/// ```no_run
+/// use std::collections::{HashMap, HashSet};
+/// use kinode_process_lib::get_typed_blob;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyType {
+///   field: HashMap<String, String>,
+///   field_two: HashSet<String>,
+/// }
+///
 /// get_typed_blob(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),
@@ -179,7 +213,18 @@ where
 /// If it does, attempt to deserialize it from bytes with the provided function.
 ///
 /// Example:
-/// ```
+/// ```no_run
+/// use std::collections::{HashMap, HashSet};
+/// use kinode_process_lib::get_typed_state;
+/// use bincode;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct MyStateType {
+///    field: HashMap<String, String>,
+///    field_two: HashSet<String>,
+/// }
+///
 /// get_typed_state(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyStateType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),

@@ -1,4 +1,5 @@
-use crate::*;
+use crate::{Address, Capability, LazyLoadBlob, ProcessId};
+use serde::{Deserialize, Serialize};
 
 /// The basic message type. A message is either a request or a response. Best
 /// practice when handling a message is to do this:
@@ -46,14 +47,16 @@ impl Message {
             Message::Response { metadata, .. } => metadata.as_ref().map(|s| s.as_str()),
         }
     }
-    /// Get the context of a message.
+    /// Get the context of a message. Always `None` for requests.
     pub fn context(&self) -> Option<&[u8]> {
         match self {
             Message::Request { .. } => None,
             Message::Response { context, .. } => context.as_ref().map(|s| s.as_slice()),
         }
     }
-    /// Get the blob of a message, if any.
+    /// Get the blob of a message, if any. This function must be called
+    /// by the process that received the message **before** receiving another
+    /// message! The blob can only be consumed immediately after receiving a message.
     pub fn blob(&self) -> Option<LazyLoadBlob> {
         crate::get_blob()
     }
@@ -66,10 +69,7 @@ impl Message {
     }
     /// Check if a message is a request. Returns `false` if it's a response.
     pub fn is_request(&self) -> bool {
-        match self {
-            Message::Request { .. } => true,
-            Message::Response { .. } => false,
-        }
+        matches!(self, Message::Request { .. })
     }
     /// Check if a message was sent by a local process. Returns `false` if the
     /// source node is not our local node.
@@ -79,6 +79,8 @@ impl Message {
             Message::Response { source, .. } => source.node == our.node,
         }
     }
+    /// Check the `ProcessId` of a message source against a given `ProcessId` or
+    /// something that can be checked for equality against a `ProcessId`.
     pub fn is_process<T>(&self, process: T) -> bool
     where
         ProcessId: PartialEq<T>,
@@ -90,63 +92,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendErrorKind {
-    Offline,
-    Timeout,
-}
-
-impl SendErrorKind {
-    pub fn is_offline(&self) -> bool {
-        matches!(self, SendErrorKind::Offline)
-    }
-    pub fn is_timeout(&self) -> bool {
-        matches!(self, SendErrorKind::Timeout)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SendError {
-    pub kind: SendErrorKind,
-    pub message: Message,
-    pub lazy_load_blob: Option<LazyLoadBlob>,
-    pub context: Option<Vec<u8>>,
-}
-
-impl SendError {
-    pub fn kind(&self) -> &SendErrorKind {
-        &self.kind
-    }
-    pub fn message(&self) -> &Message {
-        &self.message
-    }
-    pub fn blob(&self) -> Option<&LazyLoadBlob> {
-        self.lazy_load_blob.as_ref()
-    }
-    pub fn context(&self) -> Option<&[u8]> {
-        self.context.as_deref()
-    }
-}
-
-impl std::fmt::Display for SendError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            SendErrorKind::Offline => write!(f, "Offline"),
-            SendErrorKind::Timeout => write!(f, "Timeout"),
-        }
-    }
-}
-
-impl std::error::Error for SendError {
-    fn description(&self) -> &str {
-        match &self.kind {
-            SendErrorKind::Offline => "Offline",
-            SendErrorKind::Timeout => "Timeout",
-        }
-    }
-}
-
-pub fn wit_message_to_message(
+pub fn _wit_message_to_message(
     source: Address,
     message: crate::kinode::process::standard::Message,
 ) -> Message {

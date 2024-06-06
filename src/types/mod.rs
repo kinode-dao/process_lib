@@ -7,3 +7,4 @@ pub mod package_id;
 pub mod process_id;
 pub mod request;
 pub mod response;
+pub mod send_error;

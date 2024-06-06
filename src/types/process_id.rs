@@ -43,22 +43,23 @@ impl std::str::FromStr for ProcessId {
     /// valid usernames, which the `publisher_node` field of a `ProcessId` will
     /// always in practice be.
     fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
-        // split string on colons into 3 segments
-        let mut segments = input.split(':');
-        let process_name = segments
-            .next()
-            .ok_or(ProcessIdParseError::MissingField)?
-            .to_string();
-        let package_name = segments
-            .next()
-            .ok_or(ProcessIdParseError::MissingField)?
-            .to_string();
-        let publisher_node = segments
-            .next()
-            .ok_or(ProcessIdParseError::MissingField)?
-            .to_string();
-        if segments.next().is_some() {
+        let segments: Vec<&str> = input.split(':').collect();
+        if segments.len() < 3 {
+            return Err(ProcessIdParseError::MissingField);
+        } else if segments.len() > 3 {
             return Err(ProcessIdParseError::TooManyColons);
+        }
+        let process_name = segments[0].to_string();
+        if process_name.is_empty() {
+            return Err(ProcessIdParseError::MissingField);
+        }
+        let package_name = segments[1].to_string();
+        if package_name.is_empty() {
+            return Err(ProcessIdParseError::MissingField);
+        }
+        let publisher_node = segments[2].to_string();
+        if publisher_node.is_empty() {
+            return Err(ProcessIdParseError::MissingField);
         }
         Ok(ProcessId {
             process_name,
@@ -145,8 +146,8 @@ impl std::fmt::Display for ProcessIdParseError {
             f,
             "{}",
             match self {
-                ProcessIdParseError::TooManyColons => "Too many colons in ProcessId string",
-                ProcessIdParseError::MissingField => "Missing field in ProcessId string",
+                ProcessIdParseError::TooManyColons => "Too many colons",
+                ProcessIdParseError::MissingField => "Missing field",
             }
         )
     }
@@ -155,8 +156,8 @@ impl std::fmt::Display for ProcessIdParseError {
 impl std::error::Error for ProcessIdParseError {
     fn description(&self) -> &str {
         match self {
-            ProcessIdParseError::TooManyColons => "Too many colons in ProcessId string",
-            ProcessIdParseError::MissingField => "Missing field in ProcessId string",
+            ProcessIdParseError::TooManyColons => "Too many colons",
+            ProcessIdParseError::MissingField => "Missing field",
         }
     }
 }
