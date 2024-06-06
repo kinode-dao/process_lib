@@ -1,4 +1,5 @@
 use crate::{Message, Request as KiRequest};
+use alloy_json_rpc::ErrorPayload;
 pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
 pub use alloy_rpc_types::{
@@ -70,10 +71,10 @@ pub enum EthResponse {
     Err(EthError),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum EthError {
     /// RPC provider returned an error
-    RpcError(String),
+    RpcError(ErrorPayload),
     /// provider module cannot parse message
     MalformedRequest,
     /// No RPC provider for the chain
