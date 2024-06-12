@@ -64,11 +64,11 @@ impl OnExit {
         }
     }
     /// Add a request to this OnExit if it is Requests, fail otherwise
-    pub fn add_request(self, new: Request) -> anyhow::Result<()> {
+    pub fn add_request(&mut self, new: Request) -> anyhow::Result<()> {
         match self {
             OnExit::None => Err(anyhow::anyhow!("cannot add request to None")),
             OnExit::Restart => Err(anyhow::anyhow!("cannot add request to Restart")),
-            OnExit::Requests(mut reqs) => {
+            OnExit::Requests(ref mut reqs) => {
                 reqs.push(new);
                 Ok(())
             }
