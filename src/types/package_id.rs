@@ -30,17 +30,100 @@ impl Serialize for PackageId {
     where
         S: serde::ser::Serializer,
     {
-        format!("{}", self).serialize(serializer)
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("PackageId", 2)?;
+        state.serialize_field("package_name", &self.package_name)?;
+        state.serialize_field("publisher_node", &self.publisher_node)?;
+        state.end()
     }
 }
 
-impl<'a> Deserialize<'a> for PackageId {
-    fn deserialize<D>(deserializer: D) -> Result<PackageId, D::Error>
+impl<'de> Deserialize<'de> for PackageId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::de::Deserializer<'a>,
+        D: serde::de::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
+        use serde::de::{Deserialize, Visitor};
+        enum Field {
+            PackageName,
+            PublisherNode,
+        }
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::de::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`package_name` or `publisher_node`")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "package_name" => Ok(Field::PackageName),
+                            "publisher_node" => Ok(Field::PublisherNode),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+
+                const FIELDS: &'static [&'static str] = &["package_name", "publisher_node"];
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct PackageIdVisitor;
+
+        impl<'de> Visitor<'de> for PackageIdVisitor {
+            type Value = PackageId;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct PackageId")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PackageId, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut package_name = None;
+                let mut publisher_node = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::PackageName => {
+                            if package_name.is_some() {
+                                return Err(serde::de::Error::duplicate_field("package_name"));
+                            }
+                            package_name = Some(map.next_value()?);
+                        }
+                        Field::PublisherNode => {
+                            if publisher_node.is_some() {
+                                return Err(serde::de::Error::duplicate_field("publisher_node"));
+                            }
+                            publisher_node = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let package_name =
+                    package_name.ok_or_else(|| serde::de::Error::missing_field("package_name"))?;
+                let publisher_node = publisher_node
+                    .ok_or_else(|| serde::de::Error::missing_field("publisher_node"))?;
+                Ok(PackageId {
+                    package_name,
+                    publisher_node,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["package_name", "publisher_node"];
+        deserializer.deserialize_struct("PackageId", FIELDS, PackageIdVisitor)
     }
 }
 
