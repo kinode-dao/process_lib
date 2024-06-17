@@ -1,12 +1,12 @@
 use crate::{Message, Request as KiRequest};
-use alloy_json_rpc::ErrorPayload;
-pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
-pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
-pub use alloy_rpc_types::{
+use alloy::rpc::json_rpc::ErrorPayload;
+pub use alloy::rpc::types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
+pub use alloy::rpc::types::{
     request::{TransactionInput, TransactionRequest},
     Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
     TransactionReceipt,
 };
+pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 

@@ -8,10 +8,11 @@ homepage = "https://kinode.org"
 repository = "https://github.com/kinode-dao/process_lib"
 
 [dependencies]
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "cad7935" }
 alloy-primitives = "0.7.0"
-alloy-transport = { git = "https://github.com/alloy-rs/alloy.git", rev = "cad7935" }
-alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy.git", rev = "cad7935" }
+alloy = { version = "0.1.1", features = [
+    "json-rpc",
+    "rpc-types",
+] }
 anyhow = "1.0"
 bincode = "1.3.3"
 http = "1.0.0"
