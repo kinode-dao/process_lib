@@ -6,9 +6,13 @@ pub use alloy::rpc::types::{
     Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
     TransactionReceipt,
 };
+use alloy_primitives::FixedBytes;
 pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
+use alloy_sol_macro::sol;
+use alloy_sol_types::SolCall;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 
 //
 //  types mirrored from runtime module
@@ -178,6 +182,20 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
             NodeOrRpcUrl::RpcUrl(url) => url == other,
         }
     }
+}
+
+/// KiMap address. (simulation mode flag in process_lib?)
+const KIMAP: &str = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+
+// Sol structures for KiMap requests
+sol! {
+    function get (
+        bytes32 entryhash
+    ) external view returns (
+        address tokenBoundAccount,
+        address tokenOwner,
+        bytes memory note
+    );
 }
 
 /// An EVM chain provider. Create this object to start making RPC calls.
@@ -552,6 +570,38 @@ impl Provider {
         };
 
         self.send_request_and_parse_response::<Bytes>(action)
+    }
+
+    /// Gets an entry from the KiMap.
+    ///
+    /// # Parameters
+    /// - `entryhash`: The entry to get from the KiMap.
+    /// # Returns
+    /// A `Result<(Address, Address, Option<Bytes>), EthError>` representing the TBA, owner, and value if the entry is a note.
+    pub fn get(&self, entryhash: &str) -> Result<(Address, Address, Option<Bytes>), EthError> {
+        let get_call = getCall {
+            entryhash: FixedBytes::<32>::from_str(entryhash)
+                .map_err(|_| EthError::InvalidParams)?,
+        }
+        .abi_encode();
+
+        let tx_req = TransactionRequest::default()
+            .input(TransactionInput::new(get_call.into()))
+            .to(Address::from_str(KIMAP).unwrap());
+
+        let res_bytes = self.call(tx_req, None)?;
+
+        // note need new EthErrors for this! :)
+        let res = getCall::abi_decode_returns(&res_bytes, false)
+            .map_err(|_| EthError::RpcMalformedResponse)?;
+
+        let note_data = if res.note == Bytes::default() {
+            None
+        } else {
+            Some(res.note)
+        };
+
+        Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
     }
 
     /// Sends a raw transaction to the network.
