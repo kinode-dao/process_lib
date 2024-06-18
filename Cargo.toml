@@ -8,9 +8,9 @@ homepage = "https://kinode.org"
 repository = "https://github.com/kinode-dao/process_lib"
 
 [dependencies]
-alloy-primitives = "0.7.5"
-alloy-sol-macro = "0.7.5"
-alloy-sol-types = "0.7.5"
+alloy-primitives = "0.7.6"
+alloy-sol-macro = "0.7.6"
+alloy-sol-types = "0.7.6"
 alloy = { version = "0.1.1", features = [
     "json-rpc",
     "rpc-types",
