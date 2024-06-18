@@ -157,6 +157,26 @@ where
         })
 }
 
+/// get a kimap name from namehash
+pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> {
+    let res = Request::to(("our", "net", "distro", "sys"))
+        .body(rmp_serde::to_vec(&NetAction::GetName(namehash.to_string())).unwrap())
+        .send_and_await_response(timeout.unwrap_or(5))??;
+
+    let response = rmp_serde::from_slice::<NetResponse>(res.body())?;
+    if let NetResponse::Name(name) = response {
+        // is returning an option optimal?
+        // getting an error for send/malformatted hash/not found seems better
+        if let Some(name) = name {
+            return Ok(name);
+        } else {
+            return Err(anyhow::anyhow!("name not found"));
+        }
+    } else {
+        Err(anyhow::anyhow!("unexpected response: {:?}", response))
+    }
+}
+
 /// take a DNSwire-formatted node ID from chain and convert it to a String
 pub fn dnswire_decode(wire_format_bytes: &[u8]) -> Result<String, DnsDecodeError> {
     let mut i = 0;
