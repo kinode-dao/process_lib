@@ -1,4 +1,7 @@
-use crate::{get_blob, Address, NodeId, Request, SendError};
+use crate::{get_blob, println, Address, NodeId, Request, SendError};
+use alloy::{hex, primitives::keccak256};
+use alloy_primitives::B256;
+use alloy_sol_types::SolValue;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -177,6 +180,20 @@ pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> 
     } else {
         Err(anyhow::anyhow!("unexpected response: {:?}", response))
     }
+}
+
+/// namehash... kimap style
+pub fn namehash(name: &str) -> String {
+    let mut node = B256::default();
+
+    let mut labels: Vec<&str> = name.split('.').collect();
+    labels.reverse();
+
+    for label in labels.iter() {
+        let l = keccak256(label);
+        node = keccak256((node, l).abi_encode_packed());
+    }
+    format!("0x{}", hex::encode(node))
 }
 
 /// take a DNSwire-formatted node ID from chain and convert it to a String
