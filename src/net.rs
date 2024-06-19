@@ -52,6 +52,8 @@ pub enum NetAction {
     /// in the future could get from remote provider
     KnsUpdate(KnsUpdate),
     KnsBatchUpdate(Vec<KnsUpdate>),
+    /// add a (namehash -> name) to our representation of the PKI
+    AddName(String, String),
     /// get a list of peers we are connected to
     GetPeers,
     /// get the [`Identity`] struct for a single peer
