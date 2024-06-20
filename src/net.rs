@@ -1,4 +1,7 @@
-use crate::{get_blob, Address, NodeId, Request, SendError};
+use crate::{get_blob, println, Address, NodeId, Request, SendError};
+use alloy::{hex, primitives::keccak256};
+use alloy_primitives::B256;
+use alloy_sol_types::SolValue;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -52,6 +55,8 @@ pub enum NetAction {
     /// in the future could get from remote provider
     KnsUpdate(KnsUpdate),
     KnsBatchUpdate(Vec<KnsUpdate>),
+    /// add a (namehash -> name) to our representation of the PKI
+    AddName(String, String),
     /// get a list of peers we are connected to
     GetPeers,
     /// get the [`Identity`] struct for a single peer
@@ -155,6 +160,40 @@ where
             };
             valid
         })
+}
+
+/// get a kimap name from namehash
+pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> {
+    let res = Request::to(("our", "net", "distro", "sys"))
+        .body(rmp_serde::to_vec(&NetAction::GetName(namehash.to_string())).unwrap())
+        .send_and_await_response(timeout.unwrap_or(5))??;
+
+    let response = rmp_serde::from_slice::<NetResponse>(res.body())?;
+    if let NetResponse::Name(name) = response {
+        // is returning an option optimal?
+        // getting an error for send/malformatted hash/not found seems better
+        if let Some(name) = name {
+            return Ok(name);
+        } else {
+            return Err(anyhow::anyhow!("name not found"));
+        }
+    } else {
+        Err(anyhow::anyhow!("unexpected response: {:?}", response))
+    }
+}
+
+/// namehash... kimap style
+pub fn namehash(name: &str) -> String {
+    let mut node = B256::default();
+
+    let mut labels: Vec<&str> = name.split('.').collect();
+    labels.reverse();
+
+    for label in labels.iter() {
+        let l = keccak256(label);
+        node = keccak256((node, l).abi_encode_packed());
+    }
+    format!("0x{}", hex::encode(node))
 }
 
 /// take a DNSwire-formatted node ID from chain and convert it to a String
