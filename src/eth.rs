@@ -184,7 +184,7 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
     }
 }
 
-/// KiMap address. (simulation mode flag in process_lib?)
+/// KiMap default address
 const KIMAP: &str = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
 // Sol structures for KiMap requests
@@ -194,7 +194,7 @@ sol! {
     ) external view returns (
         address tokenBoundAccount,
         address tokenOwner,
-        bytes memory note
+        bytes data
     );
 }
 
@@ -718,10 +718,10 @@ impl<'a> KiMap<'a> {
         let res = getCall::abi_decode_returns(&res_bytes, false)
             .map_err(|_| EthError::RpcMalformedResponse)?;
 
-        let note_data = if res.note == Bytes::default() {
+        let note_data = if res.data == Bytes::default() {
             None
         } else {
-            Some(res.note)
+            Some(res.data)
         };
 
         Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
