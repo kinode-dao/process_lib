@@ -572,36 +572,14 @@ impl Provider {
         self.send_request_and_parse_response::<Bytes>(action)
     }
 
-    /// Gets an entry from the KiMap.
-    ///
-    /// # Parameters
-    /// - `entryhash`: The entry to get from the KiMap.
-    /// # Returns
-    /// A `Result<(Address, Address, Option<Bytes>), EthError>` representing the TBA, owner, and value if the entry is a note.
-    pub fn get(&self, entryhash: &str) -> Result<(Address, Address, Option<Bytes>), EthError> {
-        let get_call = getCall {
-            entryhash: FixedBytes::<32>::from_str(entryhash)
-                .map_err(|_| EthError::InvalidParams)?,
-        }
-        .abi_encode();
+    /// Returns a KiMap instance with the default address using this provider.
+    pub fn kimap(&self) -> KiMap {
+        KiMap::default(self)
+    }
 
-        let tx_req = TransactionRequest::default()
-            .input(TransactionInput::new(get_call.into()))
-            .to(Address::from_str(KIMAP).unwrap());
-
-        let res_bytes = self.call(tx_req, None)?;
-
-        // note need new EthErrors for this! :)
-        let res = getCall::abi_decode_returns(&res_bytes, false)
-            .map_err(|_| EthError::RpcMalformedResponse)?;
-
-        let note_data = if res.note == Bytes::default() {
-            None
-        } else {
-            Some(res.note)
-        };
-
-        Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
+    /// Returns a KiMap instance with a custom address using this provider.
+    pub fn kimap_with_address(&self, address: Address) -> KiMap {
+        KiMap::new(self, address)
     }
 
     /// Sends a raw transaction to the network.
@@ -686,5 +664,66 @@ impl Provider {
             },
             _ => Err(EthError::RpcMalformedResponse),
         }
+    }
+}
+
+/// Helper struct for the KiMap.
+pub struct KiMap<'a> {
+    provider: &'a Provider,
+    address: Address,
+}
+
+impl<'a> KiMap<'a> {
+    /// Creates a new KiMap instance with a specified address.
+    ///
+    /// # Arguments
+    /// * `provider` - A reference to the Provider.
+    /// * `address` - The address of the KiMap contract.
+    pub fn new(provider: &'a Provider, address: Address) -> Self {
+        Self { provider, address }
+    }
+
+    /// Creates a new KiMap instance with the default address.
+    ///
+    /// # Arguments
+    /// * `provider` - A reference to the Provider.
+    pub fn default(provider: &'a Provider) -> Self {
+        Self::new(provider, Self::default_address())
+    }
+
+    /// Returns the default KiMap contract address.
+    pub fn default_address() -> Address {
+        Address::from_str(KIMAP).unwrap()
+    }
+
+    /// Gets an entry from the KiMap.
+    ///
+    /// # Parameters
+    /// - `entryhash`: The entry to get from the KiMap.
+    /// # Returns
+    /// A `Result<(Address, Address, Option<Bytes>), EthError>` representing the TBA, owner, and value if the entry is a note.
+    pub fn get(&self, entryhash: &str) -> Result<(Address, Address, Option<Bytes>), EthError> {
+        let get_call = getCall {
+            entryhash: FixedBytes::<32>::from_str(entryhash)
+                .map_err(|_| EthError::InvalidParams)?,
+        }
+        .abi_encode();
+
+        let tx_req = TransactionRequest::default()
+            .input(TransactionInput::new(get_call.into()))
+            .to(self.address);
+
+        let res_bytes = self.provider.call(tx_req, None)?;
+
+        let res = getCall::abi_decode_returns(&res_bytes, false)
+            .map_err(|_| EthError::RpcMalformedResponse)?;
+
+        let note_data = if res.note == Bytes::default() {
+            None
+        } else {
+            Some(res.note)
+        };
+
+        Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
     }
 }
