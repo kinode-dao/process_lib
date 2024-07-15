@@ -1,6 +1,6 @@
 use crate::{get_blob, Address, NodeId, Request, SendError};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 //
 // Networking protocol types
@@ -52,14 +52,10 @@ pub enum NetAction {
     /// in the future could get from remote provider
     KnsUpdate(KnsUpdate),
     KnsBatchUpdate(Vec<KnsUpdate>),
-    /// add a (namehash -> name) to our representation of the PKI
-    AddName(String, String),
     /// get a list of peers we are connected to
     GetPeers,
     /// get the [`Identity`] struct for a single peer
     GetPeer(String),
-    /// get the [`NodeId`] associated with a given namehash, if any
-    NamehashToName(NamehashToNameRequest),
     /// get a user-readable diagnostics string containing networking inforamtion
     GetDiagnostics,
     /// sign the attached blob payload, sign with our node's networking key.
@@ -102,11 +98,46 @@ pub enum NetResponse {
 //
 // KNS parts of the networking protocol
 //
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerRequests {
+    NamehashToName(NamehashToNameRequest),
+    NodeInfo(NodeInfoRequest),
+    GetState(GetStateRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerResponses {
+    Name(Option<String>),
+    NodeInfo(Option<KnsUpdate>),
+    // necessary? printout similar
+    GetState(KnsState),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KnsState {
+    chain_id: u64,
+    contract_address: String,
+    names: HashMap<String, String>,
+    // include TBA in KnsUpdate? now that it's official struct in here too...
+    nodes: HashMap<String, KnsUpdate>,
+    block: u64,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct NamehashToNameRequest {
     pub hash: String,
     pub block: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NodeInfoRequest {
+    pub name: String,
+    pub block: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetStateRequest {
+    pub block: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -177,7 +208,7 @@ pub fn get_name(
 ) -> anyhow::Result<String> {
     let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
         .body(
-            serde_json::to_vec(&NetAction::NamehashToName(NamehashToNameRequest {
+            serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
                 hash: namehash.to_string(),
                 block: block,
             }))
@@ -185,10 +216,8 @@ pub fn get_name(
         )
         .send_and_await_response(timeout.unwrap_or(5))??;
 
-    let response = rmp_serde::from_slice::<NetResponse>(res.body())?;
-    if let NetResponse::Name(name) = response {
-        // is returning an option optimal?
-        // getting an error for send/malformatted hash/not found seems better
+    let response = serde_json::from_slice::<IndexerResponses>(res.body())?;
+    if let IndexerResponses::Name(name) = response {
         if let Some(name) = name {
             return Ok(name);
         } else {
