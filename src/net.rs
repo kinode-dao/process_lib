@@ -59,7 +59,7 @@ pub enum NetAction {
     /// get the [`Identity`] struct for a single peer
     GetPeer(String),
     /// get the [`NodeId`] associated with a given namehash, if any
-    GetName(String),
+    NamehashToName(NamehashToNameRequest),
     /// get a user-readable diagnostics string containing networking inforamtion
     GetDiagnostics,
     /// sign the attached blob payload, sign with our node's networking key.
@@ -97,6 +97,16 @@ pub enum NetResponse {
     /// cannot be found in our representation of PKI, this will return false,
     /// because we cannot find the networking public key to verify with.
     Verified(bool),
+}
+
+//
+// KNS parts of the networking protocol
+//
+
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct NamehashToNameRequest {
+    pub hash: String,
+    pub block: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -160,9 +170,19 @@ where
 }
 
 /// get a kimap name from namehash
-pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> {
-    let res = Request::to(("our", "net", "distro", "sys"))
-        .body(rmp_serde::to_vec(&NetAction::GetName(namehash.to_string())).unwrap())
+pub fn get_name(
+    namehash: &str,
+    block: Option<u64>,
+    timeout: Option<u64>,
+) -> anyhow::Result<String> {
+    let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
+        .body(
+            serde_json::to_vec(&NetAction::NamehashToName(NamehashToNameRequest {
+                hash: namehash.to_string(),
+                block: block,
+            }))
+            .unwrap(),
+        )
         .send_and_await_response(timeout.unwrap_or(5))??;
 
     let response = rmp_serde::from_slice::<NetResponse>(res.body())?;
