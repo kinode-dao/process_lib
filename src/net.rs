@@ -1,7 +1,4 @@
-use crate::{get_blob, println, Address, NodeId, Request, SendError};
-use alloy::{hex, primitives::keccak256};
-use alloy_primitives::B256;
-use alloy_sol_types::SolValue;
+use crate::{get_blob, Address, NodeId, Request, SendError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -179,66 +176,5 @@ pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> 
         }
     } else {
         Err(anyhow::anyhow!("unexpected response: {:?}", response))
-    }
-}
-
-/// namehash... kimap style
-pub fn namehash(name: &str) -> String {
-    let mut node = B256::default();
-
-    let mut labels: Vec<&str> = name.split('.').collect();
-    labels.reverse();
-
-    for label in labels.iter() {
-        let l = keccak256(label);
-        node = keccak256((node, l).abi_encode_packed());
-    }
-    format!("0x{}", hex::encode(node))
-}
-
-/// take a DNSwire-formatted node ID from chain and convert it to a String
-pub fn dnswire_decode(wire_format_bytes: &[u8]) -> Result<String, DnsDecodeError> {
-    let mut i = 0;
-    let mut result = Vec::new();
-
-    while i < wire_format_bytes.len() {
-        let len = wire_format_bytes[i] as usize;
-        if len == 0 {
-            break;
-        }
-        let end = i + len + 1;
-        let mut span = match wire_format_bytes.get(i + 1..end) {
-            Some(span) => span.to_vec(),
-            None => return Err(DnsDecodeError::FormatError),
-        };
-        span.push('.' as u8);
-        result.push(span);
-        i = end;
-    }
-
-    let flat: Vec<_> = result.into_iter().flatten().collect();
-
-    let name = String::from_utf8(flat).map_err(|e| DnsDecodeError::Utf8Error(e))?;
-
-    // Remove the trailing '.' if it exists (it should always exist)
-    if name.ends_with('.') {
-        Ok(name[0..name.len() - 1].to_string())
-    } else {
-        Ok(name)
-    }
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum DnsDecodeError {
-    Utf8Error(std::string::FromUtf8Error),
-    FormatError,
-}
-
-impl std::fmt::Display for DnsDecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            DnsDecodeError::Utf8Error(e) => write!(f, "UTF-8 error: {}", e),
-            DnsDecodeError::FormatError => write!(f, "Format error"),
-        }
     }
 }

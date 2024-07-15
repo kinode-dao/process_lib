@@ -37,6 +37,8 @@ pub mod http;
 /// be incompatible with WIT types in some cases, leading to annoying errors.
 /// Use only to interact with the kernel or runtime in certain ways.
 pub mod kernel_types;
+/// Interact with the kimap module
+pub mod kimap;
 /// Interact with the key_value module
 pub mod kv;
 /// Interact with the networking module

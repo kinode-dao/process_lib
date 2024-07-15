@@ -6,13 +6,9 @@ pub use alloy::rpc::types::{
     Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
     TransactionReceipt,
 };
-use alloy_primitives::FixedBytes;
 pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
-use alloy_sol_macro::sol;
-use alloy_sol_types::SolCall;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 
 //
 //  types mirrored from runtime module
@@ -182,20 +178,6 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
             NodeOrRpcUrl::RpcUrl(url) => url == other,
         }
     }
-}
-
-/// KiMap default address
-const KIMAP: &str = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
-
-// Sol structures for KiMap requests
-sol! {
-    function get (
-        bytes32 entryhash
-    ) external view returns (
-        address tokenBoundAccount,
-        address tokenOwner,
-        bytes data
-    );
 }
 
 /// An EVM chain provider. Create this object to start making RPC calls.
@@ -572,14 +554,14 @@ impl Provider {
         self.send_request_and_parse_response::<Bytes>(action)
     }
 
-    /// Returns a KiMap instance with the default address using this provider.
-    pub fn kimap(&self) -> KiMap {
-        KiMap::default(self)
+    /// Returns a Kimap instance with the default address using this provider.
+    pub fn kimap(&self) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::default(self.request_timeout)
     }
 
-    /// Returns a KiMap instance with a custom address using this provider.
-    pub fn kimap_with_address(&self, address: Address) -> KiMap {
-        KiMap::new(self, address)
+    /// Returns a Kimap instance with a custom address using this provider.
+    pub fn kimap_with_address(self, address: Address) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::new(self, address)
     }
 
     /// Sends a raw transaction to the network.
@@ -640,6 +622,24 @@ impl Provider {
         }
     }
 
+    /// Subscribe in a loop until successful
+    pub fn subscribe_loop(&self, sub_id: u64, filter: Filter) {
+        loop {
+            match self.subscribe(sub_id, filter.clone()) {
+                Ok(()) => break,
+                Err(_) => {
+                    crate::print_to_terminal(
+                        0,
+                        "failed to subscribe to chain! trying again in 5s...",
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    continue;
+                }
+            }
+        }
+        crate::print_to_terminal(0, "subscribed to logs successfully");
+    }
+
     /// Unsubscribes from a previously created subscription.
     ///
     /// # Parameters
@@ -664,66 +664,5 @@ impl Provider {
             },
             _ => Err(EthError::RpcMalformedResponse),
         }
-    }
-}
-
-/// Helper struct for the KiMap.
-pub struct KiMap<'a> {
-    provider: &'a Provider,
-    address: Address,
-}
-
-impl<'a> KiMap<'a> {
-    /// Creates a new KiMap instance with a specified address.
-    ///
-    /// # Arguments
-    /// * `provider` - A reference to the Provider.
-    /// * `address` - The address of the KiMap contract.
-    pub fn new(provider: &'a Provider, address: Address) -> Self {
-        Self { provider, address }
-    }
-
-    /// Creates a new KiMap instance with the default address.
-    ///
-    /// # Arguments
-    /// * `provider` - A reference to the Provider.
-    pub fn default(provider: &'a Provider) -> Self {
-        Self::new(provider, Self::default_address())
-    }
-
-    /// Returns the default KiMap contract address.
-    pub fn default_address() -> Address {
-        Address::from_str(KIMAP).unwrap()
-    }
-
-    /// Gets an entry from the KiMap.
-    ///
-    /// # Parameters
-    /// - `entryhash`: The entry to get from the KiMap.
-    /// # Returns
-    /// A `Result<(Address, Address, Option<Bytes>), EthError>` representing the TBA, owner, and value if the entry is a note.
-    pub fn get(&self, entryhash: &str) -> Result<(Address, Address, Option<Bytes>), EthError> {
-        let get_call = getCall {
-            entryhash: FixedBytes::<32>::from_str(entryhash)
-                .map_err(|_| EthError::InvalidParams)?,
-        }
-        .abi_encode();
-
-        let tx_req = TransactionRequest::default()
-            .input(TransactionInput::new(get_call.into()))
-            .to(self.address);
-
-        let res_bytes = self.provider.call(tx_req, None)?;
-
-        let res = getCall::abi_decode_returns(&res_bytes, false)
-            .map_err(|_| EthError::RpcMalformedResponse)?;
-
-        let note_data = if res.data == Bytes::default() {
-            None
-        } else {
-            Some(res.data)
-        };
-
-        Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
     }
 }
