@@ -1,6 +1,6 @@
 use crate::{get_blob, Address, NodeId, Request, SendError};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 //
 // Networking protocol types
@@ -82,8 +82,6 @@ pub enum NetResponse {
     Peers(Vec<Identity>),
     /// response to [`NetAction::GetPeer`]
     Peer(Option<Identity>),
-    /// response to [`NetAction::GetName`]
-    Name(Option<String>),
     /// response to [`NetAction::GetDiagnostics`]. a user-readable string.
     Diagnostics(String),
     /// response to [`NetAction::Sign`]. contains the signature in blob
@@ -98,29 +96,11 @@ pub enum NetResponse {
 //
 // KNS parts of the networking protocol
 //
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum IndexerRequests {
     NamehashToName(NamehashToNameRequest),
-    NodeInfo(NodeInfoRequest),
-    GetState(GetStateRequest),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum IndexerResponses {
-    Name(Option<String>),
-    NodeInfo(Option<KnsUpdate>),
-    // necessary? printout similar
-    GetState(KnsState),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KnsState {
-    chain_id: u64,
-    contract_address: String,
-    names: HashMap<String, String>,
-    // include TBA in KnsUpdate? now that it's official struct in here too...
-    nodes: HashMap<String, KnsUpdate>,
-    block: u64,
+    // other KNS requests are not used in process_lib, can be found in the kns api.
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -130,21 +110,15 @@ pub struct NamehashToNameRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct NodeInfoRequest {
-    pub name: String,
-    pub block: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GetStateRequest {
-    pub block: u64,
+pub enum IndexerResponses {
+    Name(Option<String>),
+    // other KNS responses are not used in process_lib, can be found in the kns api.
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct KnsUpdate {
-    pub name: String, // actual username / domain name
-    pub owner: String,
-    pub node: String, // hex namehash of node
+    pub name: String,
+    // tba and owner can be fetched with kimap.get(namehash(name))
     pub public_key: String,
     pub ips: Vec<String>,
     pub ports: BTreeMap<String, u16>,
@@ -216,14 +190,10 @@ pub fn get_name(
         )
         .send_and_await_response(timeout.unwrap_or(5))??;
 
-    let response = serde_json::from_slice::<IndexerResponses>(res.body())?;
-    if let IndexerResponses::Name(name) = response {
-        if let Some(name) = name {
-            return Ok(name);
-        } else {
-            return Err(anyhow::anyhow!("name not found"));
-        }
-    } else {
-        Err(anyhow::anyhow!("unexpected response: {:?}", response))
+    let response = serde_json::from_slice::<IndexerResponses>(res.body());
+    match response {
+        Ok(IndexerResponses::Name(Some(name))) => Ok(name),
+        Ok(IndexerResponses::Name(None)) => Err(anyhow::anyhow!("name not found")),
+        _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
     }
 }
