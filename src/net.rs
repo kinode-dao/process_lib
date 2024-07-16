@@ -52,14 +52,10 @@ pub enum NetAction {
     /// in the future could get from remote provider
     KnsUpdate(KnsUpdate),
     KnsBatchUpdate(Vec<KnsUpdate>),
-    /// add a (namehash -> name) to our representation of the PKI
-    AddName(String, String),
     /// get a list of peers we are connected to
     GetPeers,
     /// get the [`Identity`] struct for a single peer
     GetPeer(String),
-    /// get the [`NodeId`] associated with a given namehash, if any
-    GetName(String),
     /// get a user-readable diagnostics string containing networking inforamtion
     GetDiagnostics,
     /// sign the attached blob payload, sign with our node's networking key.
@@ -86,8 +82,6 @@ pub enum NetResponse {
     Peers(Vec<Identity>),
     /// response to [`NetAction::GetPeer`]
     Peer(Option<Identity>),
-    /// response to [`NetAction::GetName`]
-    Name(Option<String>),
     /// response to [`NetAction::GetDiagnostics`]. a user-readable string.
     Diagnostics(String),
     /// response to [`NetAction::Sign`]. contains the signature in blob
@@ -99,11 +93,32 @@ pub enum NetResponse {
     Verified(bool),
 }
 
+//
+// KNS parts of the networking protocol
+//
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerRequests {
+    NamehashToName(NamehashToNameRequest),
+    // other KNS requests are not used in process_lib, can be found in the kns api.
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct NamehashToNameRequest {
+    pub hash: String,
+    pub block: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerResponses {
+    Name(Option<String>),
+    // other KNS responses are not used in process_lib, can be found in the kns api.
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct KnsUpdate {
-    pub name: String, // actual username / domain name
-    pub owner: String,
-    pub node: String, // hex namehash of node
+    pub name: String,
+    // tba and owner can be fetched with kimap.get(namehash(name))
     pub public_key: String,
     pub ips: Vec<String>,
     pub ports: BTreeMap<String, u16>,
@@ -160,21 +175,25 @@ where
 }
 
 /// get a kimap name from namehash
-pub fn get_name(namehash: &str, timeout: Option<u64>) -> anyhow::Result<String> {
-    let res = Request::to(("our", "net", "distro", "sys"))
-        .body(rmp_serde::to_vec(&NetAction::GetName(namehash.to_string())).unwrap())
+pub fn get_name(
+    namehash: &str,
+    block: Option<u64>,
+    timeout: Option<u64>,
+) -> anyhow::Result<String> {
+    let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
+        .body(
+            serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
+                hash: namehash.to_string(),
+                block: block,
+            }))
+            .unwrap(),
+        )
         .send_and_await_response(timeout.unwrap_or(5))??;
 
-    let response = rmp_serde::from_slice::<NetResponse>(res.body())?;
-    if let NetResponse::Name(name) = response {
-        // is returning an option optimal?
-        // getting an error for send/malformatted hash/not found seems better
-        if let Some(name) = name {
-            return Ok(name);
-        } else {
-            return Err(anyhow::anyhow!("name not found"));
-        }
-    } else {
-        Err(anyhow::anyhow!("unexpected response: {:?}", response))
+    let response = serde_json::from_slice::<IndexerResponses>(res.body());
+    match response {
+        Ok(IndexerResponses::Name(Some(name))) => Ok(name),
+        Ok(IndexerResponses::Name(None)) => Err(anyhow::anyhow!("name not found")),
+        _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
     }
 }

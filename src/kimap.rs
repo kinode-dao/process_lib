@@ -51,6 +51,7 @@ pub fn namehash(name: &str) -> String {
 }
 
 /// Helper struct for the Kimap.
+#[derive(Clone)]
 pub struct Kimap {
     pub provider: Provider,
     address: Address,
