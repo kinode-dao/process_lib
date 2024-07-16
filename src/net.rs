@@ -56,8 +56,6 @@ pub enum NetAction {
     GetPeers,
     /// get the [`Identity`] struct for a single peer
     GetPeer(String),
-    /// get the [`NodeId`] associated with a given namehash, if any
-    GetName(String),
     /// get a user-readable diagnostics string containing networking inforamtion
     GetDiagnostics,
     /// sign the attached blob payload, sign with our node's networking key.
@@ -84,8 +82,6 @@ pub enum NetResponse {
     Peers(Vec<Identity>),
     /// response to [`NetAction::GetPeer`]
     Peer(Option<Identity>),
-    /// response to [`NetAction::GetName`]
-    Name(Option<String>),
     /// response to [`NetAction::GetDiagnostics`]. a user-readable string.
     Diagnostics(String),
     /// response to [`NetAction::Sign`]. contains the signature in blob
@@ -97,11 +93,32 @@ pub enum NetResponse {
     Verified(bool),
 }
 
+//
+// KNS parts of the networking protocol
+//
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerRequests {
+    NamehashToName(NamehashToNameRequest),
+    // other KNS requests are not used in process_lib, can be found in the kns api.
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+pub struct NamehashToNameRequest {
+    pub hash: String,
+    pub block: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IndexerResponses {
+    Name(Option<String>),
+    // other KNS responses are not used in process_lib, can be found in the kns api.
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct KnsUpdate {
-    pub name: String, // actual username / domain name
-    pub owner: String,
-    pub node: String, // hex namehash of node
+    pub name: String,
+    // tba and owner can be fetched with kimap.get(namehash(name))
     pub public_key: String,
     pub ips: Vec<String>,
     pub ports: BTreeMap<String, u16>,
@@ -157,49 +174,26 @@ where
         })
 }
 
-/// take a DNSwire-formatted node ID from chain and convert it to a String
-pub fn dnswire_decode(wire_format_bytes: &[u8]) -> Result<String, DnsDecodeError> {
-    let mut i = 0;
-    let mut result = Vec::new();
+/// get a kimap name from namehash
+pub fn get_name(
+    namehash: &str,
+    block: Option<u64>,
+    timeout: Option<u64>,
+) -> anyhow::Result<String> {
+    let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
+        .body(
+            serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
+                hash: namehash.to_string(),
+                block: block,
+            }))
+            .unwrap(),
+        )
+        .send_and_await_response(timeout.unwrap_or(5))??;
 
-    while i < wire_format_bytes.len() {
-        let len = wire_format_bytes[i] as usize;
-        if len == 0 {
-            break;
-        }
-        let end = i + len + 1;
-        let mut span = match wire_format_bytes.get(i + 1..end) {
-            Some(span) => span.to_vec(),
-            None => return Err(DnsDecodeError::FormatError),
-        };
-        span.push('.' as u8);
-        result.push(span);
-        i = end;
-    }
-
-    let flat: Vec<_> = result.into_iter().flatten().collect();
-
-    let name = String::from_utf8(flat).map_err(|e| DnsDecodeError::Utf8Error(e))?;
-
-    // Remove the trailing '.' if it exists (it should always exist)
-    if name.ends_with('.') {
-        Ok(name[0..name.len() - 1].to_string())
-    } else {
-        Ok(name)
-    }
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum DnsDecodeError {
-    Utf8Error(std::string::FromUtf8Error),
-    FormatError,
-}
-
-impl std::fmt::Display for DnsDecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            DnsDecodeError::Utf8Error(e) => write!(f, "UTF-8 error: {}", e),
-            DnsDecodeError::FormatError => write!(f, "Format error"),
-        }
+    let response = serde_json::from_slice::<IndexerResponses>(res.body());
+    match response {
+        Ok(IndexerResponses::Name(Some(name))) => Ok(name),
+        Ok(IndexerResponses::Name(None)) => Err(anyhow::anyhow!("name not found")),
+        _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
     }
 }

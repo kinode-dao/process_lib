@@ -1,12 +1,12 @@
 use crate::{Message, Request as KiRequest};
-use alloy_json_rpc::ErrorPayload;
-pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
-pub use alloy_rpc_types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
-pub use alloy_rpc_types::{
+use alloy::rpc::json_rpc::ErrorPayload;
+pub use alloy::rpc::types::pubsub::{Params, SubscriptionKind, SubscriptionResult};
+pub use alloy::rpc::types::{
     request::{TransactionInput, TransactionRequest},
     Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
     TransactionReceipt,
 };
+pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -184,6 +184,7 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
 /// Set the chain_id to determine which chain to call: requests will fail
 /// unless the node this process is running on has access to a provider
 /// for that chain.
+#[derive(Clone)]
 pub struct Provider {
     chain_id: u64,
     request_timeout: u64,
@@ -554,6 +555,16 @@ impl Provider {
         self.send_request_and_parse_response::<Bytes>(action)
     }
 
+    /// Returns a Kimap instance with the default address using this provider.
+    pub fn kimap(&self) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::default(self.request_timeout)
+    }
+
+    /// Returns a Kimap instance with a custom address using this provider.
+    pub fn kimap_with_address(self, address: Address) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::new(self, address)
+    }
+
     /// Sends a raw transaction to the network.
     ///
     /// # Parameters
@@ -610,6 +621,24 @@ impl Provider {
             }
             _ => Err(EthError::RpcMalformedResponse),
         }
+    }
+
+    /// Subscribe in a loop until successful
+    pub fn subscribe_loop(&self, sub_id: u64, filter: Filter) {
+        loop {
+            match self.subscribe(sub_id, filter.clone()) {
+                Ok(()) => break,
+                Err(_) => {
+                    crate::print_to_terminal(
+                        0,
+                        "failed to subscribe to chain! trying again in 5s...",
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    continue;
+                }
+            }
+        }
+        crate::print_to_terminal(0, "subscribed to logs successfully");
     }
 
     /// Unsubscribes from a previously created subscription.
