@@ -574,6 +574,10 @@ impl Provider {
 
     /// Subscribes to logs without waiting for a confirmation.
     ///
+    /// WARNING: some RPC providers will throw an error if a subscription filter
+    /// has the `from_block` parameter. Make sure to avoid this parameter for subscriptions
+    /// even while using it for getLogs.
+    ///
     /// # Parameters
     /// - `sub_id`: The subscription ID to be used for unsubscribing.
     /// - `filter`: The filter criteria for the logs.
