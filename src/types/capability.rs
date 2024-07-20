@@ -153,7 +153,8 @@ impl<'a> Deserialize<'a> for Capability {
 impl Hash for Capability {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.issuer.hash(state);
-        self.params.hash(state);
+        let params: serde_json::Value = serde_json::from_str(&self.params).unwrap_or_default();
+        params.hash(state);
     }
 }
 
@@ -161,7 +162,11 @@ impl Eq for Capability {}
 
 impl PartialEq for Capability {
     fn eq(&self, other: &Self) -> bool {
-        self.issuer == other.issuer && self.params == other.params
+        let self_json_params: serde_json::Value =
+            serde_json::from_str(&self.params).unwrap_or_default();
+        let other_json_params: serde_json::Value =
+            serde_json::from_str(&other.params).unwrap_or_default();
+        self.issuer == other.issuer && self_json_params == other_json_params
     }
 }
 
