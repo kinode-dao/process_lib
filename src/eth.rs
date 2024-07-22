@@ -184,7 +184,7 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
 /// Set the chain_id to determine which chain to call: requests will fail
 /// unless the node this process is running on has access to a provider
 /// for that chain.
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Provider {
     chain_id: u64,
     request_timeout: u64,

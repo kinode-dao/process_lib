@@ -67,6 +67,9 @@ pub mod timer;
 /// `vfs:distro:sys` to use this module.
 pub mod vfs;
 
+/// A set of types and macros for writing "script" processes.
+pub mod scripting;
+
 mod types;
 pub use types::{
     address::{Address, AddressParseError},
@@ -137,6 +140,14 @@ pub fn await_message() -> Result<Message, SendError> {
     match crate::receive() {
         Ok((source, message)) => Ok(_wit_message_to_message(source, message)),
         Err((send_err, context)) => Err(_wit_send_error_to_send_error(send_err, context)),
+    }
+}
+
+/// Get the next message body from the message queue, or propagate the error.
+pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
+    match await_message() {
+        Ok(msg) => Ok(msg.body().to_vec()),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -280,15 +291,4 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
         let cap_params = serde_json::from_str::<Value>(&cap.params).unwrap_or_default();
         cap.issuer == *issuer && params == cap_params
     })
-}
-
-/// Get the next message body from the message queue, or propagate the error
-pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
-    match await_message() {
-        Ok(msg) => Ok(match msg {
-            Message::Request { body, .. } => body,
-            Message::Response { body, .. } => body,
-        }),
-        Err(e) => Err(e),
-    }
 }
