@@ -1,4 +1,4 @@
-use crate::{Message, Request};
+use crate::Request;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -109,7 +109,6 @@ pub enum VfsError {
     CreateDirError { path: String, error: String },
 }
 
-#[allow(dead_code)]
 impl VfsError {
     pub fn kind(&self) -> &str {
         match *self {
@@ -126,41 +125,57 @@ impl VfsError {
     }
 }
 
+pub fn vfs_request<T>(path: T, action: VfsAction) -> Request
+where
+    T: Into<String>,
+{
+    Request::new().target(("our", "vfs", "distro", "sys")).body(
+        serde_json::to_vec(&VfsRequest {
+            path: path.into(),
+            action,
+        })
+        .expect("failed to serialize VfsRequest"),
+    )
+}
+
 /// Metadata of a path, returns file type and length.
-pub fn metadata(path: &str, timeout: Option<u64>) -> anyhow::Result<FileMetadata> {
+pub fn metadata(path: &str, timeout: Option<u64>) -> Result<FileMetadata, VfsError> {
     let timeout = timeout.unwrap_or(5);
 
-    let request = VfsRequest {
-        path: path.to_string(),
-        action: VfsAction::Metadata,
-    };
-    let message = Request::new()
-        .target(("our", "vfs", "distro", "sys"))
-        .body(serde_json::to_vec(&request)?)
-        .send_and_await_response(timeout)?;
+    let message = vfs_request(path, VfsAction::Metadata)
+        .send_and_await_response(timeout)
+        .unwrap()
+        .map_err(|e| VfsError::IOError {
+            error: e.to_string(),
+            path: path.to_string(),
+        })?;
 
-    match message {
-        Ok(Message::Response { body, .. }) => {
-            let response = serde_json::from_slice::<VfsResponse>(&body)?;
-            match response {
-                VfsResponse::Metadata(metadata) => Ok(metadata),
-                VfsResponse::Err(e) => Err(e.into()),
-                _ => Err(anyhow::anyhow!("vfs: unexpected response: {:?}", response)),
-            }
-        }
-        _ => Err(anyhow::anyhow!("vfs: unexpected message: {:?}", message)),
+    match parse_response(message.body())? {
+        VfsResponse::Metadata(metadata) => Ok(metadata),
+        VfsResponse::Err(e) => Err(e),
+        _ => Err(VfsError::ParseError {
+            error: "unexpected response".to_string(),
+            path: path.to_string(),
+        }),
     }
 }
 
 /// Removes a path, if it's either a directory or a file.
-pub fn remove_path(path: &str, timeout: Option<u64>) -> anyhow::Result<()> {
+pub fn remove_path(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
     let meta = metadata(path, timeout)?;
+
     match meta.file_type {
         FileType::Directory => remove_dir(path, timeout),
         FileType::File => remove_file(path, timeout),
-        _ => Err(anyhow::anyhow!(
-            "vfs: path is not a file or directory: {}",
-            path
-        )),
+        _ => Err(VfsError::ParseError {
+            error: "path is not a file or directory".to_string(),
+            path: path.to_string(),
+        }),
     }
+}
+
+pub fn parse_response(body: &[u8]) -> Result<VfsResponse, VfsError> {
+    serde_json::from_slice::<VfsResponse>(body).map_err(|e| VfsError::BadJson {
+        error: e.to_string(),
+    })
 }
