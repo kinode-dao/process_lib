@@ -67,6 +67,9 @@ pub mod timer;
 /// `vfs:distro:sys` to use this module.
 pub mod vfs;
 
+/// A set of types and macros for writing "script" processes.
+pub mod scripting;
+
 mod types;
 pub use types::{
     address::{Address, AddressParseError},
