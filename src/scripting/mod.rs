@@ -13,10 +13,27 @@ macro_rules! script {
         struct Component;
         impl Guest for Component {
             fn init(our: String) {
+                use kinode_process_lib::{await_message, println, Address, Message, Response};
                 let our: Address = our.parse().unwrap();
-                let body: Vec<u8> = await_next_message_body().unwrap();
-                let body_string = format!("{} {}", our.process(), String::from_utf8(body).unwrap());
-                $init_func(our, body);
+                let Message::Request {
+                    body,
+                    expects_response,
+                    ..
+                } = await_message().unwrap()
+                else {
+                    return;
+                };
+                let body_string =
+                    format!("{} {}", our.process(), std::str::from_utf8(&body).unwrap());
+                let response_string: String = $init_func(our, body_string);
+                if expects_response.is_some() {
+                    Response::new()
+                        .body(response_string.as_bytes())
+                        .send()
+                        .unwrap();
+                } else {
+                    println!("{response_string}");
+                }
             }
         }
         export!(Component);
