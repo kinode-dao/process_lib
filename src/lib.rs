@@ -49,6 +49,9 @@ pub mod timer;
 /// Interact with the virtual filesystem
 pub mod vfs;
 
+/// A set of types and macros for writing "script" processes.
+pub mod scripting;
+
 mod types;
 pub use types::{
     address::{Address, AddressParseError},
@@ -119,6 +122,14 @@ pub fn await_message() -> Result<Message, SendError> {
     match crate::receive() {
         Ok((source, message)) => Ok(_wit_message_to_message(source, message)),
         Err((send_err, context)) => Err(_wit_send_error_to_send_error(send_err, context)),
+    }
+}
+
+/// Get the next message body from the message queue, or propagate the error.
+pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
+    match await_message() {
+        Ok(msg) => Ok(msg.body().to_vec()),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -261,12 +272,4 @@ pub fn get_capability(our: &Address, params: &str) -> Option<Capability> {
             cap.issuer == *our && params == cap_params
         })
         .cloned()
-}
-
-/// Get the next message body from the message queue, or propagate the error
-pub fn await_next_message_body() -> Result<Vec<u8>, SendError> {
-    match await_message() {
-        Ok(msg) => Ok(msg.body().to_vec()),
-        Err(e) => Err(e.into()),
-    }
 }
