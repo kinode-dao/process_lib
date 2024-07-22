@@ -25,6 +25,23 @@ pub enum Message {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum BuildError {
+    NoBody,
+    NoTarget,
+}
+
+impl std::fmt::Display for BuildError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            BuildError::NoBody => write!(f, "no body set for message"),
+            BuildError::NoTarget => write!(f, "no target set for  message"),
+        }
+    }
+}
+
+impl std::error::Error for BuildError {}
+
 impl Message {
     /// Get the source of a message.
     pub fn source(&self) -> &Address {

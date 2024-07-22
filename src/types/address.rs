@@ -151,11 +151,12 @@ where
     }
 }
 
-impl<T> From<(&str, T)> for Address
+impl<T, U> From<(T, U)> for Address
 where
-    T: Into<ProcessId>,
+    T: Into<String>,
+    U: Into<ProcessId>,
 {
-    fn from(input: (&str, T)) -> Self {
+    fn from(input: (T, U)) -> Self {
         Address::new(input.0, input.1)
     }
 }

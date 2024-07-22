@@ -175,25 +175,27 @@ where
 }
 
 /// get a kimap name from namehash
-pub fn get_name(
-    namehash: &str,
-    block: Option<u64>,
-    timeout: Option<u64>,
-) -> anyhow::Result<String> {
+pub fn get_name<T>(namehash: T, block: Option<u64>, timeout: Option<u64>) -> Option<String>
+where
+    T: Into<String>,
+{
     let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
         .body(
             serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
-                hash: namehash.to_string(),
-                block: block,
+                hash: namehash.into(),
+                block,
             }))
             .unwrap(),
         )
-        .send_and_await_response(timeout.unwrap_or(5))??;
+        .send_and_await_response(timeout.unwrap_or(30))
+        .unwrap()
+        .ok()?;
 
-    let response = serde_json::from_slice::<IndexerResponses>(res.body());
-    match response {
-        Ok(IndexerResponses::Name(Some(name))) => Ok(name),
-        Ok(IndexerResponses::Name(None)) => Err(anyhow::anyhow!("name not found")),
-        _ => Err(anyhow::anyhow!("unexpected response: {:?}", response)),
-    }
+    let Ok(IndexerResponses::Name(maybe_name)) =
+        serde_json::from_slice::<IndexerResponses>(res.body())
+    else {
+        return None;
+    };
+
+    maybe_name
 }
