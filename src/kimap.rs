@@ -7,6 +7,7 @@ use alloy_primitives::B256;
 use alloy_primitives::{Address, Bytes};
 use alloy_sol_types::SolCall;
 use alloy_sol_types::SolValue;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 /// kimap deployment address on optimism
@@ -51,7 +52,7 @@ pub fn namehash(name: &str) -> String {
 }
 
 /// Helper struct for the Kimap.
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Kimap {
     pub provider: Provider,
     address: Address,
