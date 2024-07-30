@@ -39,3 +39,54 @@ macro_rules! script {
         export!(Component);
     };
 }
+
+#[macro_export]
+/// A macro for writing a process that serves a widget and completes.
+/// This process should be identified in your package `manifest.json` with `on_exit` set to `None`.
+///
+/// Make sure the process has requested capability to message `homepage:homepage:sys`!
+///
+/// Example:
+/// ```no_run
+/// wit_bindgen::generate!({
+///     path: "target/wit",
+///     world: "process-v0",
+/// });
+///
+/// kinode_process_lib::widget!("My widget", create_widget);
+///
+/// fn create_widget() -> String {
+///     return r#"<html>
+///         <head>
+///             <meta name="viewport" content="width=device-width, initial-scale=1">
+///             <link rel="stylesheet" href="/kinode.css">
+///         </head>
+///         <body>
+///             <h1>Hello World!</h1>
+///         </body>
+///     </html>"#.to_string();
+/// }
+/// ```
+macro_rules! widget {
+    ($widget_label:expr, $create_widget_func:ident) => {
+        struct Component;
+        impl Guest for Component {
+            fn init(_our: String) {
+                use kinode_process_lib::Request;
+                Request::to(("our", "homepage", "homepage", "sys"))
+                    .body(
+                        serde_json::json!({
+                            "Add": {
+                                "label": $widget_label,
+                                "widget": $create_widget_func(),
+                            }
+                        })
+                        .to_string(),
+                    )
+                    .send()
+                    .unwrap();
+            }
+        }
+        export!(Component);
+    };
+}
