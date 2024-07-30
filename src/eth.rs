@@ -10,10 +10,6 @@ pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128,
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-//
-//  types mirrored from runtime module
-//
-
 /// The Action and Request type that can be made to eth:distro:sys. Any process with messaging
 /// capabilities can send this action to the eth provider.
 ///

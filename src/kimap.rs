@@ -1,12 +1,10 @@
-use crate::eth::*;
+use crate::eth::{EthError, Provider};
 use crate::kimap::contract::getCall;
+use crate::net;
 use alloy::rpc::types::request::{TransactionInput, TransactionRequest};
 use alloy::{hex, primitives::keccak256};
-use alloy_primitives::FixedBytes;
-use alloy_primitives::B256;
-use alloy_primitives::{Address, Bytes};
-use alloy_sol_types::SolCall;
-use alloy_sol_types::SolValue;
+use alloy_primitives::{Address, Bytes, FixedBytes, B256};
+use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -26,7 +24,7 @@ pub mod contract {
 
     sol! {
         event Mint(bytes32 indexed parenthash, bytes32 indexed childhash, bytes indexed labelhash, bytes name);
-        event Note(bytes32 indexed nodehash, bytes32 indexed notehash, bytes indexed labelhash, bytes note, bytes data);
+        event Note(bytes32 indexed parenthash, bytes32 indexed notehash, bytes indexed labelhash, bytes note, bytes data);
 
         function get (
             bytes32 entryhash
@@ -38,6 +36,7 @@ pub mod contract {
     }
 }
 
+/// Produce a namehash from a kimap name.
 pub fn namehash(name: &str) -> String {
     let mut node = B256::default();
 
@@ -51,7 +50,23 @@ pub fn namehash(name: &str) -> String {
     format!("0x{}", hex::encode(node))
 }
 
-/// Helper struct for the Kimap.
+/// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the parent name
+/// of the new entry or note.
+pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
+    let parent_hash = log.topics()[1].to_string();
+    net::get_name(&parent_hash, log.block_number, timeout)
+}
+
+/// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the full name
+/// of the new entry or note.
+pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
+    let parent_hash = log.topics()[1].to_string();
+    let parent_name = net::get_name(&parent_hash, log.block_number, timeout)?;
+    let log_name = log.topics()[4].to_string();
+    Some(format!("{}.{}", log_name, parent_name))
+}
+
+/// Helper struct for reading from the kimap.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Kimap {
     pub provider: Provider,
@@ -141,5 +156,35 @@ impl Kimap {
         };
 
         Ok((res.tokenBoundAccount, res.tokenOwner, note_data))
+    }
+
+    /// Create a filter for all mint events.
+    pub fn mint_filter(&self) -> crate::eth::Filter {
+        crate::eth::Filter::new()
+            .address(self.address)
+            .event(contract::Mint::SIGNATURE)
+    }
+
+    /// Create a filter for all note events.
+    pub fn note_filter(&self) -> crate::eth::Filter {
+        crate::eth::Filter::new()
+            .address(self.address)
+            .event(contract::Note::SIGNATURE)
+    }
+
+    /// Create a filter for a given set of specific notes. This function will
+    /// hash the note labels and use them as the topic3 filter.
+    ///
+    /// Example:
+    /// ```rust
+    /// let filter = kimap.notes_filter(&["~note1", "~note2"]);
+    /// ```
+    pub fn notes_filter(&self, notes: &[&str]) -> crate::eth::Filter {
+        self.note_filter().topic3(
+            notes
+                .into_iter()
+                .map(|note| keccak256(note))
+                .collect::<Vec<_>>(),
+        )
     }
 }
