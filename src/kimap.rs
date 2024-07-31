@@ -53,6 +53,20 @@ pub struct Note {
     pub data: Bytes,
 }
 
+/// Errors that can occur when decoding a log from the kimap using
+/// [`decode_mint_log`] or [`decode_note_log`].
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum DecodeLogError {
+    /// The log's topic is not a mint or note event.
+    UnexpectedTopic(B256),
+    /// The name is not valid (according to [`valid_name`]).
+    InvalidName(String),
+    /// An error occurred while decoding the log.
+    DecodeError(String),
+    /// The parent name could not be resolved with `kns_indexer`.
+    UnresolvedParent(String),
+}
+
 /// Canonical function to determine if a kimap entry is valid. This should
 /// be used whenever reading a new kimap entry from a mints query, because
 /// while most frontends will enforce these rules, it is possible to post
@@ -95,38 +109,43 @@ pub fn namehash(name: &str) -> String {
 /// Decode a mint log from the kimap into a 'resolved' format.
 ///
 /// Uses `valid_name` to check if the name is valid.
-pub fn decode_mint_log(log: &crate::eth::Log) -> Option<Mint> {
+pub fn decode_mint_log(log: &crate::eth::Log) -> Result<Mint, DecodeLogError> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
-        return None;
+        return Err(DecodeLogError::UnexpectedTopic(log.topics()[0]));
     };
-    let decoded = contract::Mint::decode_log_data(log.data(), true).ok()?;
-    let name = decoded.name.to_string();
+    let decoded = contract::Mint::decode_log_data(log.data(), true)
+        .map_err(|e| DecodeLogError::DecodeError(e.to_string()))?;
+    let name = String::from_utf8_lossy(&decoded.name).to_string();
     if !valid_name(&name, false) {
-        return None;
+        return Err(DecodeLogError::InvalidName(name));
     }
-    Some(Mint {
-        name,
-        parent_path: resolve_parent(log, None)?,
-    })
+    match resolve_parent(log, None) {
+        Some(parent_path) => Ok(Mint { name, parent_path }),
+        None => Err(DecodeLogError::UnresolvedParent(name)),
+    }
 }
 
 /// Decode a note log from the kimap into a 'resolved' format.
 ///
 /// Uses `valid_name` to check if the name is valid.
-pub fn decode_note_log(log: &crate::eth::Log) -> Option<Note> {
+pub fn decode_note_log(log: &crate::eth::Log) -> Result<Note, DecodeLogError> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
-        return None;
+        return Err(DecodeLogError::UnexpectedTopic(log.topics()[0]));
     };
-    let decoded = contract::Note::decode_log_data(log.data(), true).ok()?;
-    let note = decoded.note.to_string();
+    let decoded = contract::Note::decode_log_data(log.data(), true)
+        .map_err(|e| DecodeLogError::DecodeError(e.to_string()))?;
+    let note = String::from_utf8_lossy(&decoded.note).to_string();
     if !valid_name(&note, true) {
-        return None;
+        return Err(DecodeLogError::InvalidName(note));
     }
-    Some(Note {
-        note,
-        parent_path: resolve_parent(log, None)?,
-        data: decoded.data,
-    })
+    match resolve_parent(log, None) {
+        Some(parent_path) => Ok(Note {
+            note,
+            parent_path,
+            data: decoded.data,
+        }),
+        None => Err(DecodeLogError::UnresolvedParent(note)),
+    }
 }
 
 /// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the parent name
