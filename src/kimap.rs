@@ -18,7 +18,7 @@ pub const KIMAP_FIRST_BLOCK: u64 = 114_923_786;
 pub const KIMAP_ROOT_HASH: &'static str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-// Sol structures for Kimap requests
+/// Sol structures for Kimap requests
 pub mod contract {
     use alloy_sol_macro::sol;
 
@@ -36,6 +36,21 @@ pub mod contract {
     }
 }
 
+/// A mint log from the kimap, converted to a 'resolved' format using
+/// namespace data saved in the kns_indexer.
+pub struct Mint {
+    pub name: String,
+    pub full_path: String,
+}
+
+/// A note log from the kimap, converted to a 'resolved' format using
+/// namespace data saved in the kns_indexer
+pub struct Note {
+    pub note: String,
+    pub full_path: String,
+    pub data: Bytes,
+}
+
 /// Produce a namehash from a kimap name.
 pub fn namehash(name: &str) -> String {
     let mut node = B256::default();
@@ -50,6 +65,31 @@ pub fn namehash(name: &str) -> String {
     format!("0x{}", hex::encode(node))
 }
 
+/// Decode a mint log from the kimap into a 'resolved' format.
+pub fn decode_mint_log(log: &crate::eth::Log) -> Option<Mint> {
+    let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
+        return None;
+    };
+    let decoded = contract::Mint::decode_log_data(log.data(), true).ok()?;
+    Some(Mint {
+        name: decoded.name.to_string(),
+        full_path: format!("{}.{}", decoded.name, resolve_parent(log, None)?),
+    })
+}
+
+/// Decode a note log from the kimap into a 'resolved' format.
+pub fn decode_note_log(log: &crate::eth::Log) -> Option<Note> {
+    let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
+        return None;
+    };
+    let decoded = contract::Note::decode_log_data(log.data(), true).ok()?;
+    Some(Note {
+        note: decoded.note.to_string(),
+        full_path: format!("{}.{}", decoded.note, resolve_parent(log, None)?),
+        data: decoded.data,
+    })
+}
+
 /// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the parent name
 /// of the new entry or note.
 pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
@@ -62,8 +102,22 @@ pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<Str
 pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
     let parent_hash = log.topics()[1].to_string();
     let parent_name = net::get_name(&parent_hash, log.block_number, timeout)?;
-    let log_name = log.topics()[3].to_string();
-    Some(format!("{}.{}", log_name, parent_name))
+    let log_name = match log.topics()[0] {
+        contract::Mint::SIGNATURE_HASH => {
+            let decoded = contract::Mint::decode_log_data(log.data(), true).unwrap();
+            decoded.name
+        }
+        contract::Note::SIGNATURE_HASH => {
+            let decoded = contract::Note::decode_log_data(log.data(), true).unwrap();
+            decoded.note
+        }
+        _ => return None,
+    };
+    Some(format!(
+        "{}.{}",
+        String::from_utf8_lossy(&log_name),
+        parent_name
+    ))
 }
 
 /// Helper struct for reading from the kimap.
