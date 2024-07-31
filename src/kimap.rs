@@ -38,6 +38,7 @@ pub mod contract {
 
 /// A mint log from the kimap, converted to a 'resolved' format using
 /// namespace data saved in the kns_indexer.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Mint {
     pub name: String,
     pub parent_path: String,
@@ -45,10 +46,36 @@ pub struct Mint {
 
 /// A note log from the kimap, converted to a 'resolved' format using
 /// namespace data saved in the kns_indexer
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Note {
     pub note: String,
     pub parent_path: String,
     pub data: Bytes,
+}
+
+/// Canonical function to determine if a kimap entry is valid. This should
+/// be used whenever reading a new kimap entry from a mints query, because
+/// while most frontends will enforce these rules, it is possible to post
+/// invalid names to the kimap contract.
+///
+/// This checks a **single name**, not the full path-name. A full path-name
+/// is comprised of valid names separated by `.`
+pub fn valid_name(name: &str, note: bool) -> bool {
+    if note {
+        name.is_ascii()
+            && name.len() >= 2
+            && name.chars().next() == Some('~')
+            && name
+                .chars()
+                .skip(1)
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    } else {
+        name.is_ascii()
+            && name.len() >= 1
+            && name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    }
 }
 
 /// Produce a namehash from a kimap name.
@@ -66,25 +93,37 @@ pub fn namehash(name: &str) -> String {
 }
 
 /// Decode a mint log from the kimap into a 'resolved' format.
+///
+/// Uses `valid_name` to check if the name is valid.
 pub fn decode_mint_log(log: &crate::eth::Log) -> Option<Mint> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
         return None;
     };
     let decoded = contract::Mint::decode_log_data(log.data(), true).ok()?;
+    let name = decoded.name.to_string();
+    if !valid_name(&name, false) {
+        return None;
+    }
     Some(Mint {
-        name: decoded.name.to_string(),
+        name,
         parent_path: resolve_parent(log, None)?,
     })
 }
 
 /// Decode a note log from the kimap into a 'resolved' format.
+///
+/// Uses `valid_name` to check if the name is valid.
 pub fn decode_note_log(log: &crate::eth::Log) -> Option<Note> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
         return None;
     };
     let decoded = contract::Note::decode_log_data(log.data(), true).ok()?;
+    let note = decoded.note.to_string();
+    if !valid_name(&note, true) {
+        return None;
+    }
     Some(Note {
-        note: decoded.note.to_string(),
+        note,
         parent_path: resolve_parent(log, None)?,
         data: decoded.data,
     })
@@ -99,6 +138,8 @@ pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<Str
 
 /// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the full name
 /// of the new entry or note.
+///
+/// Uses `valid_name` to check if the name is valid.
 pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
     let parent_hash = log.topics()[1].to_string();
     let parent_name = net::get_name(&parent_hash, log.block_number, timeout)?;
@@ -113,11 +154,11 @@ pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<
         }
         _ => return None,
     };
-    Some(format!(
-        "{}.{}",
-        String::from_utf8_lossy(&log_name),
-        parent_name
-    ))
+    let name = String::from_utf8_lossy(&log_name);
+    if !valid_name(&name, log.topics()[0] == contract::Note::SIGNATURE_HASH) {
+        return None;
+    }
+    Some(format!("{name}.{parent_name}"))
 }
 
 /// Helper struct for reading from the kimap.
