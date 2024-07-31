@@ -62,7 +62,7 @@ pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<Str
 pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
     let parent_hash = log.topics()[1].to_string();
     let parent_name = net::get_name(&parent_hash, log.block_number, timeout)?;
-    let log_name = log.topics()[4].to_string();
+    let log_name = log.topics()[3].to_string();
     Some(format!("{}.{}", log_name, parent_name))
 }
 
