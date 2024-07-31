@@ -40,14 +40,14 @@ pub mod contract {
 /// namespace data saved in the kns_indexer.
 pub struct Mint {
     pub name: String,
-    pub full_path: String,
+    pub parent_path: String,
 }
 
 /// A note log from the kimap, converted to a 'resolved' format using
 /// namespace data saved in the kns_indexer
 pub struct Note {
     pub note: String,
-    pub full_path: String,
+    pub parent_path: String,
     pub data: Bytes,
 }
 
@@ -73,7 +73,7 @@ pub fn decode_mint_log(log: &crate::eth::Log) -> Option<Mint> {
     let decoded = contract::Mint::decode_log_data(log.data(), true).ok()?;
     Some(Mint {
         name: decoded.name.to_string(),
-        full_path: format!("{}.{}", decoded.name, resolve_parent(log, None)?),
+        parent_path: resolve_parent(log, None)?,
     })
 }
 
@@ -85,7 +85,7 @@ pub fn decode_note_log(log: &crate::eth::Log) -> Option<Note> {
     let decoded = contract::Note::decode_log_data(log.data(), true).ok()?;
     Some(Note {
         note: decoded.note.to_string(),
-        full_path: format!("{}.{}", decoded.note, resolve_parent(log, None)?),
+        parent_path: resolve_parent(log, None)?,
         data: decoded.data,
     })
 }
