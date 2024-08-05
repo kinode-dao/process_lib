@@ -3,7 +3,7 @@ use crate::{
     get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
-pub use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -69,21 +69,18 @@ pub struct IncomingHttpRequest {
 }
 
 impl IncomingHttpRequest {
-    pub fn url(&self) -> anyhow::Result<url::Url> {
-        url::Url::parse(&self.url).map_err(|e| anyhow::anyhow!("couldn't parse url: {:?}", e))
+    pub fn url(&self) -> Result<url::Url, url::ParseError> {
+        url::Url::parse(&self.url)
     }
 
-    pub fn method(&self) -> anyhow::Result<http::Method> {
+    pub fn method(&self) -> Result<http::Method, http::method::InvalidMethod> {
         http::Method::from_bytes(self.method.as_bytes())
-            .map_err(|e| anyhow::anyhow!("couldn't parse method: {:?}", e))
     }
 
-    pub fn source_socket_addr(&self) -> anyhow::Result<std::net::SocketAddr> {
+    pub fn source_socket_addr(&self) -> Result<std::net::SocketAddr, std::net::AddrParseError> {
         match &self.source_socket_addr {
-            Some(addr) => addr
-                .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid format for socket address: {}", addr)),
-            None => Err(anyhow::anyhow!("No source socket address provided")),
+            Some(addr) => addr.parse(),
+            None => "".parse(),
         }
     }
 
@@ -99,15 +96,13 @@ impl IncomingHttpRequest {
         }
     }
 
-    pub fn path(&self) -> anyhow::Result<String> {
+    pub fn path(&self) -> Result<String, url::ParseError> {
         let url = url::Url::parse(&self.url)?;
         // skip the first path segment, which is the process ID.
-        let path = url
-            .path_segments()
-            .ok_or(anyhow::anyhow!("url path missing process ID!"))?
-            .skip(1)
-            .collect::<Vec<&str>>()
-            .join("/");
+        let Some(path) = url.path_segments() else {
+            return Err(url::ParseError::InvalidDomainCharacter);
+        };
+        let path = path.skip(1).collect::<Vec<&str>>().join("/");
         Ok(format!("/{}", path))
     }
 
@@ -240,6 +235,37 @@ pub struct HttpResponse {
     pub status: u16,
     pub headers: HashMap<String, String>,
     // BODY is stored in the lazy_load_blob, as bytes
+}
+
+impl HttpResponse {
+    pub fn new<T>(status: T) -> Self
+    where
+        T: Into<u16>,
+    {
+        Self {
+            status: status.into(),
+            headers: HashMap::new(),
+        }
+    }
+
+    pub fn set_status(mut self, status: u16) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn header<T, U>(mut self, key: T, value: U) -> Self
+    where
+        T: Into<String>,
+        U: Into<String>,
+    {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn set_headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = headers;
+        self
+    }
 }
 
 /// Part of the Response type issued by http_server
@@ -597,6 +623,48 @@ impl HttpServer {
         resp
     }
 
+    /// Register a new WebSocket path with the HTTP server. Any client connections
+    /// made on this path will be forwarded to this process.
+    ///
+    /// Instead of binding at just a path, this function tells the HTTP server to
+    /// generate a *subdomain* with our package ID (with non-ascii-alphanumeric
+    /// characters converted to `-`, although will not be needed if package ID is
+    /// a genuine kimap entry) and bind at that subdomain.
+    pub fn secure_bind_ws_path<T>(&mut self, path: T) -> Result<(), HttpServerError>
+    where
+        T: Into<String>,
+    {
+        let path: String = path.into();
+        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+            .body(
+                serde_json::to_vec(&HttpServerAction::WebSocketBind {
+                    path: path.clone(),
+                    authenticated: true,
+                    encrypted: false,
+                    extension: false,
+                })
+                .unwrap(),
+            )
+            .send_and_await_response(self.timeout);
+        let Ok(Message::Response { body, .. }) = res.unwrap() else {
+            return Err(HttpServerError::Timeout);
+        };
+        let Ok(resp) = serde_json::from_slice::<Result<(), HttpServerError>>(&body) else {
+            return Err(HttpServerError::UnexpectedResponse);
+        };
+        if resp.is_ok() {
+            self.ws_paths.insert(
+                path,
+                WsBindingConfig {
+                    authenticated: true,
+                    encrypted: false,
+                    extension: false,
+                },
+            );
+        }
+        resp
+    }
+
     /// Modify a previously-bound HTTP path.
     pub fn modify_http_path<T>(
         &mut self,
@@ -726,6 +794,8 @@ impl HttpServer {
 
     /// Serve a file from the given directory within our package drive at the given paths.
     ///
+    /// The directory is relative to the `pkg` folder within this package's drive.
+    ///
     /// The config `static_content` field will be ignored in favor of the file content.
     /// An error will be returned if the file does not exist.
     pub fn serve_file(
@@ -739,7 +809,7 @@ impl HttpServer {
             .body(
                 serde_json::to_vec(&VfsRequest {
                     path: format!(
-                        "/{}/{}",
+                        "/{}/pkg/{}",
                         our.package_id(),
                         file_path.trim_start_matches('/')
                     ),
@@ -763,6 +833,8 @@ impl HttpServer {
 
     /// Serve static files from a given directory by binding all of them
     /// in http_server to their filesystem path.
+    ///
+    /// The directory is relative to the `pkg` folder within this package's drive.
     ///
     /// The config `static_content` field will be ignored in favor of the files' contents.
     /// An error will be returned if the file does not exist.
@@ -845,12 +917,18 @@ impl HttpServer {
         });
     }
 
+    pub fn parse_request(&self, body: &[u8]) -> Result<HttpServerRequest, HttpServerError> {
+        let request = serde_json::from_slice::<HttpServerRequest>(body)
+            .map_err(|e| HttpServerError::BadRequest { req: e.to_string() })?;
+        Ok(request)
+    }
+
     /// Handle an incoming request from the HTTP server.
     pub fn handle_request(
         &mut self,
         server_request: HttpServerRequest,
-        http_handler: impl Fn(IncomingHttpRequest) -> (HttpResponse, Option<KiBlob>),
-        ws_handler: impl Fn((u32, WsMessageType, KiBlob)),
+        mut http_handler: impl FnMut(IncomingHttpRequest) -> (HttpResponse, Option<KiBlob>),
+        mut ws_handler: impl FnMut(u32, WsMessageType, KiBlob),
     ) {
         match server_request {
             HttpServerRequest::Http(http_request) => {
@@ -865,7 +943,7 @@ impl HttpServer {
             HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,
-            } => ws_handler((channel_id, message_type, get_blob().unwrap_or_default())),
+            } => ws_handler(channel_id, message_type, get_blob().unwrap_or_default()),
             HttpServerRequest::WebSocketOpen { path, channel_id } => {
                 self.handle_websocket_open(&path, channel_id);
             }
