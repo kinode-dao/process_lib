@@ -887,6 +887,7 @@ impl HttpServer {
         &mut self,
         our: &Address,
         directory: &str,
+        roots: Vec<&str>,
         config: HttpBindingConfig,
     ) -> Result<(), HttpServerError> {
         let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
@@ -929,11 +930,13 @@ impl HttpServer {
                         // if it's a file, serve it statically at its path
                         // if it's `index.html`, serve additionally as the root
                         if entry.path.ends_with("index.html") {
-                            self.serve_file_raw_path(
-                                &entry.path,
-                                vec!["/", &entry.path.replace(&initial_path, "")],
-                                config.clone(),
-                            )?;
+                            for root in &roots {
+                                self.serve_file_raw_path(
+                                    &entry.path,
+                                    vec![root, &entry.path.replace(&initial_path, "")],
+                                    config.clone(),
+                                )?;
+                            }
                         } else {
                             self.serve_file_raw_path(
                                 &entry.path,
