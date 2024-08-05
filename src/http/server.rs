@@ -472,11 +472,18 @@ impl HttpServer {
         let path: String = path.into();
         let cache = config.static_content.is_some();
         let req = KiRequest::to(("our", "http_server", "distro", "sys")).body(
-            serde_json::to_vec(&HttpServerAction::Bind {
-                path: path.clone(),
-                authenticated: config.authenticated,
-                local_only: config.local_only,
-                cache,
+            serde_json::to_vec(&if config.secure_subdomain {
+                HttpServerAction::SecureBind {
+                    path: path.clone(),
+                    cache,
+                }
+            } else {
+                HttpServerAction::Bind {
+                    path: path.clone(),
+                    authenticated: config.authenticated,
+                    local_only: config.local_only,
+                    cache,
+                }
             })
             .unwrap(),
         );
@@ -820,9 +827,47 @@ impl HttpServer {
             .send_and_await_response(self.timeout)
             .unwrap();
 
-        let Some(blob) = get_blob() else {
+        let Some(mut blob) = get_blob() else {
             return Err(HttpServerError::NoBlob);
         };
+
+        let content_type = get_mime_type(&file_path);
+        blob.mime = Some(content_type);
+
+        for path in paths {
+            self.bind_http_path(path, config.clone().static_content(Some(blob.clone())))?;
+        }
+
+        Ok(())
+    }
+
+    /// Serve a file from the given absolute directory.
+    ///
+    /// The config `static_content` field will be ignored in favor of the file content.
+    /// An error will be returned if the file does not exist.
+    pub fn serve_file_raw_path(
+        &mut self,
+        file_path: &str,
+        paths: Vec<&str>,
+        config: HttpBindingConfig,
+    ) -> Result<(), HttpServerError> {
+        let _res = KiRequest::to(("our", "vfs", "distro", "sys"))
+            .body(
+                serde_json::to_vec(&VfsRequest {
+                    path: file_path.to_string(),
+                    action: VfsAction::Read,
+                })
+                .map_err(|e| HttpServerError::BadRequest { req: e.to_string() })?,
+            )
+            .send_and_await_response(self.timeout)
+            .unwrap();
+
+        let Some(mut blob) = get_blob() else {
+            return Err(HttpServerError::NoBlob);
+        };
+
+        let content_type = get_mime_type(&file_path);
+        blob.mime = Some(content_type);
 
         for path in paths {
             self.bind_http_path(path, config.clone().static_content(Some(blob.clone())))?;
@@ -842,11 +887,8 @@ impl HttpServer {
         &mut self,
         our: &Address,
         directory: &str,
-        paths: Vec<&str>,
         config: HttpBindingConfig,
     ) -> Result<(), HttpServerError> {
-        self.serve_file(our, directory, paths, config.clone())?;
-
         let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
         let mut queue = std::collections::VecDeque::new();
@@ -872,7 +914,7 @@ impl HttpServer {
             let directory_body = serde_json::from_slice::<VfsResponse>(directory_response.body())
                 .map_err(|_e| HttpServerError::UnexpectedResponse)?;
 
-            // Determine if it's a file or a directory and handle appropriately
+            // determine if it's a file or a directory and handle appropriately
             let VfsResponse::ReadDir(directory_info) = directory_body else {
                 return Err(HttpServerError::UnexpectedResponse);
             };
@@ -880,17 +922,25 @@ impl HttpServer {
             for entry in directory_info {
                 match entry.file_type {
                     FileType::Directory => {
-                        // Push the directory onto the queue
+                        // push the directory onto the queue
                         queue.push_back(entry.path);
                     }
                     FileType::File => {
-                        // If it's a file, serve it statically
-                        self.serve_file(
-                            our,
-                            &entry.path,
-                            vec![&entry.path.replace(&initial_path, "")],
-                            config.clone(),
-                        )?;
+                        // if it's a file, serve it statically at its path
+                        // if it's `index.html`, serve additionally as the root
+                        if entry.path.ends_with("index.html") {
+                            self.serve_file_raw_path(
+                                &entry.path,
+                                vec!["/", &entry.path.replace(&initial_path, "")],
+                                config.clone(),
+                            )?;
+                        } else {
+                            self.serve_file_raw_path(
+                                &entry.path,
+                                vec![&entry.path.replace(&initial_path, "")],
+                                config.clone(),
+                            )?;
+                        }
                     }
                     _ => {
                         // ignore symlinks and other
