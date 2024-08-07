@@ -12,6 +12,14 @@ pub struct File {
 }
 
 impl File {
+    /// Create a new file-manager struct with the given path and timeout.
+    pub fn new<T: Into<String>>(path: T, timeout: u64) -> Self {
+        Self {
+            path: path.into(),
+            timeout,
+        }
+    }
+
     /// Reads the entire file, from start position.
     /// Returns a vector of bytes.
     pub fn read(&self) -> Result<Vec<u8>, VfsError> {
