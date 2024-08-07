@@ -23,7 +23,7 @@ macro_rules! script {
                 else {
                     return;
                 };
-                let body_string = String::from_utf8_lossy(&body);
+                let body_string = String::from_utf8_lossy(&body).to_string();
                 let response_string: String = $init_func(our, body_string);
                 if expects_response.is_some() {
                     Response::new()
