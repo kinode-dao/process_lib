@@ -23,8 +23,7 @@ macro_rules! script {
                 else {
                     return;
                 };
-                let body_string =
-                    format!("{} {}", our.process(), std::str::from_utf8(&body).unwrap());
+                let body_string = std::str::from_utf8_lossy(&body);
                 let response_string: String = $init_func(our, body_string);
                 if expects_response.is_some() {
                     Response::new()
