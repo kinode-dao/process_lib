@@ -13,7 +13,7 @@ pub const KIMAP_ADDRESS: &'static str = "0xAfA2e57D3cBA08169b416457C14eBA2D6021c
 /// optimism chain id
 pub const KIMAP_CHAIN_ID: u64 = 10;
 /// first block of kimap deployment on optimism
-pub const KIMAP_FIRST_BLOCK: u64 = 123_768_510;
+pub const KIMAP_FIRST_BLOCK: u64 = 123_768_000;
 /// the root hash of kimap, empty bytes32
 pub const KIMAP_ROOT_HASH: &'static str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
