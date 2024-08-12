@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 /// kimap deployment address on optimism
-pub const KIMAP_ADDRESS: &'static str = "0x947e5D04a28d6494601ce3b499884E7dAfB5443A";
+pub const KIMAP_ADDRESS: &'static str = "0x29C2D0002af050d230a2567Db5f9bf43a0503773";
 /// optimism chain id
 pub const KIMAP_CHAIN_ID: u64 = 10;
 /// first block of kimap deployment on optimism
-pub const KIMAP_FIRST_BLOCK: u64 = 123_768_000;
+pub const KIMAP_FIRST_BLOCK: u64 = 123_907_600;
 /// the root hash of kimap, empty bytes32
 pub const KIMAP_ROOT_HASH: &'static str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
