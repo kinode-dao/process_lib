@@ -2,6 +2,7 @@ use crate::kinode::process::standard as wit;
 use crate::{Address, ProcessId};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 //
 // process-facing kernel types, used for process
@@ -41,10 +42,53 @@ pub enum Message {
     Response((Response, Option<Context>)),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Capability {
     pub issuer: Address,
     pub params: String, // JSON-string
+}
+
+impl Eq for Capability {}
+
+impl PartialEq for Capability {
+    fn eq(&self, other: &Self) -> bool {
+        let self_json_params: serde_json::Value =
+            serde_json::from_str(&self.params).unwrap_or_default();
+        let other_json_params: serde_json::Value =
+            serde_json::from_str(&other.params).unwrap_or_default();
+        self.issuer == other.issuer && self_json_params == other_json_params
+    }
+}
+
+impl Hash for Capability {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.issuer.hash(state);
+        let params: serde_json::Value = serde_json::from_str(&self.params).unwrap_or_default();
+        params.hash(state);
+    }
+}
+
+impl Capability {
+    pub fn new<T, U>(issuer: T, params: U) -> Self
+    where
+        T: Into<Address>,
+        U: Into<String>,
+    {
+        Capability {
+            issuer: issuer.into(),
+            params: params.into(),
+        }
+    }
+
+    pub fn messaging<T>(issuer: T) -> Self
+    where
+        T: Into<Address>,
+    {
+        Capability {
+            issuer: issuer.into(),
+            params: "\"messaging\"".into(),
+        }
+    }
 }
 
 impl std::fmt::Display for Capability {
