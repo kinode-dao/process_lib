@@ -236,6 +236,15 @@ pub struct Note {
     pub data: Bytes,
 }
 
+/// A fact log from the kimap, converted to a 'resolved' format using
+/// namespace data saved in the kns_indexer
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Fact {
+    pub fact: String,
+    pub parent_path: String,
+    pub data: Bytes,
+}
+
 /// Errors that can occur when decoding a log from the kimap using
 /// [`decode_mint_log`] or [`decode_note_log`].
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -257,22 +266,45 @@ pub enum DecodeLogError {
 ///
 /// This checks a **single name**, not the full path-name. A full path-name
 /// is comprised of valid names separated by `.`
-pub fn valid_name(name: &str, note: bool) -> bool {
-    if note {
-        name.is_ascii()
-            && name.len() >= 2
-            && name.chars().next() == Some('~')
-            && name
-                .chars()
-                .skip(1)
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    } else {
-        name.is_ascii()
-            && name.len() >= 1
-            && name
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+pub fn valid_entry(entry: &str, note: bool, fact: bool) -> bool {
+    if note && fact {
+        return false;
     }
+    if note {
+        valid_note(entry)
+    } else if fact {
+        valid_fact(entry)
+    } else {
+        valid_name(entry)
+    }
+}
+
+pub fn valid_name(name: &str) -> bool {
+    name.is_ascii()
+        && name.len() >= 1
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+pub fn valid_note(note: &str) -> bool {
+    note.is_ascii()
+        && note.len() >= 2
+        && note.chars().next() == Some('~')
+        && note
+            .chars()
+            .skip(1)
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+pub fn valid_fact(fact: &str) -> bool {
+    fact.is_ascii()
+        && fact.len() >= 2
+        && fact.chars().next() == Some('!')
+        && fact
+            .chars()
+            .skip(1)
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Produce a namehash from a kimap name.
@@ -299,7 +331,7 @@ pub fn decode_mint_log(log: &crate::eth::Log) -> Result<Mint, DecodeLogError> {
     let decoded = contract::Mint::decode_log_data(log.data(), true)
         .map_err(|e| DecodeLogError::DecodeError(e.to_string()))?;
     let name = String::from_utf8_lossy(&decoded.label).to_string();
-    if !valid_name(&name, false) {
+    if !valid_name(&name) {
         return Err(DecodeLogError::InvalidName(name));
     }
     match resolve_parent(log, None) {
@@ -318,7 +350,7 @@ pub fn decode_note_log(log: &crate::eth::Log) -> Result<Note, DecodeLogError> {
     let decoded = contract::Note::decode_log_data(log.data(), true)
         .map_err(|e| DecodeLogError::DecodeError(e.to_string()))?;
     let note = String::from_utf8_lossy(&decoded.label).to_string();
-    if !valid_name(&note, true) {
+    if !valid_note(&note) {
         return Err(DecodeLogError::InvalidName(note));
     }
     match resolve_parent(log, None) {
@@ -328,6 +360,26 @@ pub fn decode_note_log(log: &crate::eth::Log) -> Result<Note, DecodeLogError> {
             data: decoded.data,
         }),
         None => Err(DecodeLogError::UnresolvedParent(note)),
+    }
+}
+
+pub fn decode_fact_log(log: &crate::eth::Log) -> Result<Fact, DecodeLogError> {
+    let contract::Fact::SIGNATURE_HASH = log.topics()[0] else {
+        return Err(DecodeLogError::UnexpectedTopic(log.topics()[0]));
+    };
+    let decoded = contract::Fact::decode_log_data(log.data(), true)
+        .map_err(|e| DecodeLogError::DecodeError(e.to_string()))?;
+    let fact = String::from_utf8_lossy(&decoded.label).to_string();
+    if !valid_fact(&fact) {
+        return Err(DecodeLogError::InvalidName(fact));
+    }
+    match resolve_parent(log, None) {
+        Some(parent_path) => Ok(Fact {
+            fact,
+            parent_path,
+            data: decoded.data,
+        }),
+        None => Err(DecodeLogError::UnresolvedParent(fact)),
     }
 }
 
@@ -354,10 +406,18 @@ pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<
             let decoded = contract::Note::decode_log_data(log.data(), true).unwrap();
             decoded.label
         }
+        contract::Fact::SIGNATURE_HASH => {
+            let decoded = contract::Fact::decode_log_data(log.data(), true).unwrap();
+            decoded.label
+        }
         _ => return None,
     };
     let name = String::from_utf8_lossy(&log_name);
-    if !valid_name(&name, log.topics()[0] == contract::Note::SIGNATURE_HASH) {
+    if !valid_entry(
+        &name,
+        log.topics()[0] == contract::Note::SIGNATURE_HASH,
+        log.topics()[0] == contract::Fact::SIGNATURE_HASH,
+    ) {
         return None;
     }
     Some(format!("{name}.{parent_name}"))
@@ -468,6 +528,13 @@ impl Kimap {
             .event(contract::Note::SIGNATURE)
     }
 
+    /// Create a filter for all fact events.
+    pub fn fact_filter(&self) -> crate::eth::Filter {
+        crate::eth::Filter::new()
+            .address(self.address)
+            .event(contract::Fact::SIGNATURE)
+    }
+
     /// Create a filter for a given set of specific notes. This function will
     /// hash the note labels and use them as the topic3 filter.
     ///
@@ -480,6 +547,22 @@ impl Kimap {
             notes
                 .into_iter()
                 .map(|note| keccak256(note))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Create a filter for a given set of specific facts. This function will
+    /// hash the fact labels and use them as the topic3 filter.
+    ///
+    /// Example:
+    /// ```rust
+    /// let filter = kimap.facts_filter(&["!fact1", "!fact2"]);
+    /// ```
+    pub fn facts_filter(&self, facts: &[&str]) -> crate::eth::Filter {
+        self.fact_filter().topic3(
+            facts
+                .into_iter()
+                .map(|fact| keccak256(fact))
                 .collect::<Vec<_>>(),
         )
     }
