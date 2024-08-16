@@ -1,4 +1,4 @@
-use crate::{Address, LazyLoadBlob, Request};
+use crate::{types::message::BuildError, Address, LazyLoadBlob, Request};
 
 #[derive(Clone, Debug)]
 pub enum OnExit {
@@ -63,24 +63,25 @@ impl OnExit {
             OnExit::Requests(reqs) => Some(reqs),
         }
     }
-    /// Add a request to this OnExit if it is Requests, fail otherwise
-    pub fn add_request(&mut self, new: Request) -> anyhow::Result<()> {
-        match self {
-            OnExit::None => Err(anyhow::anyhow!("cannot add request to None")),
-            OnExit::Restart => Err(anyhow::anyhow!("cannot add request to Restart")),
-            OnExit::Requests(ref mut reqs) => {
-                reqs.push(new);
-                Ok(())
-            }
+    /// Add a request to this OnExit if it is of variant `Requests`
+    pub fn add_request(&mut self, new: Request) {
+        if let OnExit::Requests(ref mut reqs) = self {
+            reqs.push(new);
         }
     }
-    /// Set the OnExit behavior for this process
-    pub fn set(self) -> anyhow::Result<()> {
+    /// Set the OnExit behavior for this process.
+    ///
+    /// Will return a [`BuildError`] if any requests within the `Requests` behavior are
+    /// not valid (by not having a `body` and/or `target` set).
+    pub fn set(self) -> Result<(), BuildError> {
         crate::kinode::process::standard::set_on_exit(&self._to_standard()?);
         Ok(())
     }
-    /// Convert this OnExit to the kernel's OnExit type
-    pub fn _to_standard(self) -> anyhow::Result<crate::kinode::process::standard::OnExit> {
+    /// Convert this OnExit to the kernel's OnExit type.
+    ///
+    /// Will return a [`BuildError`] if any requests within the `Requests` behavior are
+    /// not valid (by not having a `body` and/or `target` set).
+    pub fn _to_standard(self) -> Result<crate::kinode::process::standard::OnExit, BuildError> {
         match self {
             OnExit::None => Ok(crate::kinode::process::standard::OnExit::None),
             OnExit::Restart => Ok(crate::kinode::process::standard::OnExit::Restart),
@@ -92,14 +93,11 @@ impl OnExit {
                 )> = Vec::with_capacity(reqs.len());
                 for req in reqs {
                     kernel_reqs.push((
-                        req.target
-                            .ok_or(anyhow::anyhow!("request without target given"))?,
+                        req.target.ok_or(BuildError::NoTarget)?,
                         crate::kinode::process::standard::Request {
                             inherit: req.inherit,
                             expects_response: None,
-                            body: req
-                                .body
-                                .ok_or(anyhow::anyhow!("request without body given"))?,
+                            body: req.body.ok_or(BuildError::NoBody)?,
                             metadata: req.metadata,
                             capabilities: req.capabilities,
                         },

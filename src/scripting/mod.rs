@@ -23,8 +23,7 @@ macro_rules! script {
                 else {
                     return;
                 };
-                let body_string =
-                    format!("{} {}", our.process(), std::str::from_utf8(&body).unwrap());
+                let body_string = String::from_utf8_lossy(&body).to_string();
                 let response_string: String = $init_func(our, body_string);
                 if expects_response.is_some() {
                     Response::new()
@@ -32,8 +31,61 @@ macro_rules! script {
                         .send()
                         .unwrap();
                 } else {
-                    println!("{response_string}");
+                    if !response_string.is_empty() {
+                        println!("{response_string}");
+                    }
                 }
+            }
+        }
+        export!(Component);
+    };
+}
+
+#[macro_export]
+/// A macro for writing a process that serves a widget and completes.
+/// This process should be identified in your package `manifest.json` with `on_exit` set to `None`.
+///
+/// Make sure the process has requested capability to message `homepage:homepage:sys`!
+///
+/// Example:
+/// ```no_run
+/// wit_bindgen::generate!({
+///     path: "target/wit",
+///     world: "process-v0",
+/// });
+///
+/// kinode_process_lib::widget!("My widget", create_widget);
+///
+/// fn create_widget() -> String {
+///     return r#"<html>
+///         <head>
+///             <meta name="viewport" content="width=device-width, initial-scale=1">
+///             <link rel="stylesheet" href="/kinode.css">
+///         </head>
+///         <body>
+///             <h1>Hello World!</h1>
+///         </body>
+///     </html>"#.to_string();
+/// }
+/// ```
+macro_rules! widget {
+    ($widget_label:expr, $create_widget_func:ident) => {
+        struct Component;
+        impl Guest for Component {
+            fn init(_our: String) {
+                use kinode_process_lib::Request;
+                Request::to(("our", "homepage", "homepage", "sys"))
+                    .body(
+                        serde_json::json!({
+                            "Add": {
+                                "label": $widget_label,
+                                "widget": $create_widget_func(),
+                            }
+                        })
+                        .to_string(),
+                    )
+                    .send()
+                    .unwrap();
             }
         }
         export!(Component);

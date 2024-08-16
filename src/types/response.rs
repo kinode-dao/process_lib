@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{types::message::BuildError, Capability, LazyLoadBlob};
 
 /// Response builder. Use [`Response::new()`] to start a response, then build it,
 /// then call [`Response::send()`] on it to fire.
@@ -52,9 +52,10 @@ impl Response {
     /// type that's got an implementation of [`TryInto`] for `Vec<u8>`. It's best
     /// to define an IPC body type within your app, then implement TryFrom/TryInto for
     /// all IPC body serialization/deserialization.
-    pub fn try_body<T>(mut self, body: T) -> anyhow::Result<Self>
+    pub fn try_body<T, E>(mut self, body: T) -> Result<Self, E>
     where
-        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+        T: TryInto<Vec<u8>, Error = E>,
+        E: std::error::Error,
     {
         self.body = Some(body.try_into()?);
         Ok(self)
@@ -125,9 +126,10 @@ impl Response {
     }
     /// Set the blob's bytes with a type that implements `TryInto<Vec<u8>>`
     /// and may or may not successfully be set.
-    pub fn try_blob_bytes<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    pub fn try_blob_bytes<T, E>(mut self, bytes: T) -> Result<Self, E>
     where
-        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+        T: TryInto<Vec<u8>, Error = E>,
+        E: std::error::Error,
     {
         if self.blob.is_none() {
             self.blob = Some(LazyLoadBlob {
@@ -150,7 +152,7 @@ impl Response {
     }
     /// Attempt to send the response. This will only fail if the IPC body field of
     /// the response has not yet been set using `body()` or `try_body()`.
-    pub fn send(self) -> anyhow::Result<()> {
+    pub fn send(self) -> Result<(), BuildError> {
         if let Some(body) = self.body {
             crate::send_response(
                 &crate::kinode::process::standard::Response {
@@ -163,7 +165,7 @@ impl Response {
             );
             Ok(())
         } else {
-            Err(anyhow::anyhow!("missing IPC body"))
+            Err(BuildError::NoBody)
         }
     }
 }

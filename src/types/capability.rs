@@ -5,9 +5,9 @@ use std::hash::{Hash, Hasher};
 
 /// Capability is defined in the wit bindings, but constructors and methods here.
 /// A `Capability` is a combination of an Address and a set of Params (a serialized
-/// JSON string). Capabilities are attached to messages to either share that capability
-/// with the receiving process, or to prove that a process has authority to perform a
-/// certain action.
+/// JSON string by convention). Capabilities are attached to messages to either share
+/// that capability with the receiving process, or to prove that a process has
+/// authority to perform a certain action.
 impl Capability {
     /// Create a new `Capability`. Takes a node ID and a process ID.
     pub fn new<T, U>(address: T, params: U) -> Capability
@@ -172,15 +172,16 @@ impl PartialEq for Capability {
 
 impl From<&Capability> for Capability {
     fn from(input: &Capability) -> Self {
-        input.clone()
+        input.to_owned()
     }
 }
 
-impl<T> From<(T, &str)> for Capability
+impl<T, U> From<(T, U)> for Capability
 where
     T: Into<Address>,
+    U: Into<String>,
 {
-    fn from(input: (T, &str)) -> Self {
+    fn from(input: (T, U)) -> Self {
         Capability::new(input.0, input.1)
     }
 }
@@ -188,5 +189,32 @@ where
 impl std::fmt::Display for Capability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}({})", self.issuer, self.params)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ProcessId;
+
+    #[test]
+    fn test_capability() {
+        let cap = Capability::new(
+            Address::new("test", ProcessId::new(None, "test", "test")),
+            r#"{"test": "params"}"#,
+        );
+        let serialized = serde_json::to_string(&cap).unwrap();
+        let deserialized: Capability = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(cap, deserialized);
+    }
+
+    #[test]
+    fn test_capability_json() {
+        let cap = Capability::new(
+            Address::new("test", ProcessId::new(None, "test", "test")),
+            r#"{"test": "params"}"#,
+        );
+        let json = cap.params_json().unwrap();
+        assert_eq!(json, serde_json::json!({"test": "params"}));
     }
 }

@@ -10,10 +10,6 @@ pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128,
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-//
-//  types mirrored from runtime module
-//
-
 /// The Action and Request type that can be made to eth:distro:sys. Any process with messaging
 /// capabilities can send this action to the eth provider.
 ///
@@ -555,6 +551,16 @@ impl Provider {
         self.send_request_and_parse_response::<Bytes>(action)
     }
 
+    /// Returns a Kimap instance with the default address using this provider.
+    pub fn kimap(&self) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::default(self.request_timeout)
+    }
+
+    /// Returns a Kimap instance with a custom address using this provider.
+    pub fn kimap_with_address(self, address: Address) -> crate::kimap::Kimap {
+        crate::kimap::Kimap::new(self, address)
+    }
+
     /// Sends a raw transaction to the network.
     ///
     /// # Parameters
@@ -615,6 +621,24 @@ impl Provider {
             }
             _ => Err(EthError::RpcMalformedResponse),
         }
+    }
+
+    /// Subscribe in a loop until successful
+    pub fn subscribe_loop(&self, sub_id: u64, filter: Filter) {
+        loop {
+            match self.subscribe(sub_id, filter.clone()) {
+                Ok(()) => break,
+                Err(_) => {
+                    crate::print_to_terminal(
+                        0,
+                        "failed to subscribe to chain! trying again in 5s...",
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    continue;
+                }
+            }
+        }
+        crate::print_to_terminal(0, "subscribed to logs successfully");
     }
 
     /// Unsubscribes from a previously created subscription.

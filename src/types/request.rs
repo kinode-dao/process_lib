@@ -1,10 +1,10 @@
 use crate::{
     Address, Capability, LazyLoadBlob, Message, SendError, _wit_message_to_message,
-    _wit_send_error_to_send_error,
+    _wit_send_error_to_send_error, types::message::BuildError,
 };
 
-/// Request builder. Use [`Request::new()`] to start a request, then build it,
-/// then call [`Request::send()`] on it to fire.
+/// Request builder. Use [`Request::new()`] or [`Request::to()`] to start a request,
+/// then build it, then call [`Request::send()`] on it to fire.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub target: Option<Address>,
@@ -110,9 +110,10 @@ impl Request {
     /// type that's got an implementation of [`TryInto`] for `Vec<u8>`. It's best
     /// to define an IPC body type within your app, then implement TryFrom/TryInto for
     /// all IPC body serialization/deserialization.
-    pub fn try_body<T>(mut self, body: T) -> anyhow::Result<Self>
+    pub fn try_body<T, E>(mut self, body: T) -> Result<Self, E>
     where
-        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+        T: TryInto<Vec<u8>, Error = E>,
+        E: std::error::Error,
     {
         self.body = Some(body.try_into()?);
         Ok(self)
@@ -183,9 +184,10 @@ impl Request {
     }
     /// Set the blob's bytes with a type that implements `TryInto<Vec<u8>>`
     /// and may or may not successfully be set.
-    pub fn try_blob_bytes<T>(mut self, bytes: T) -> anyhow::Result<Self>
+    pub fn try_blob_bytes<T, E>(mut self, bytes: T) -> Result<Self, E>
     where
-        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+        T: TryInto<Vec<u8>, Error = E>,
+        E: std::error::Error,
     {
         if self.blob.is_none() {
             self.blob = Some(LazyLoadBlob {
@@ -219,9 +221,10 @@ impl Request {
     /// Attempt to set the context field of the request with a type that implements
     /// `TryInto<Vec<u8>>`. It's best to define a context type within your app,
     /// then implement TryFrom/TryInto for all context serialization/deserialization.
-    pub fn try_context<T>(mut self, context: T) -> anyhow::Result<Self>
+    pub fn try_context<T, E>(mut self, context: T) -> Result<Self, E>
     where
-        T: TryInto<Vec<u8>, Error = anyhow::Error>,
+        T: TryInto<Vec<u8>, Error = E>,
+        E: std::error::Error,
     {
         self.context = Some(context.try_into()?);
         Ok(self)
@@ -240,48 +243,52 @@ impl Request {
     }
     /// Attempt to send the request. This will only fail if the `target` or `body`
     /// fields have not been set.
-    pub fn send(self) -> anyhow::Result<()> {
-        if let (Some(target), Some(body)) = (self.target, self.body) {
-            crate::send_request(
-                &target,
-                &crate::kinode::process::standard::Request {
-                    inherit: self.inherit,
-                    expects_response: self.timeout,
-                    body,
-                    metadata: self.metadata,
-                    capabilities: self.capabilities,
-                },
-                self.context.as_ref(),
-                self.blob.as_ref(),
-            );
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("missing fields"))
-        }
+    pub fn send(self) -> Result<(), BuildError> {
+        let Some(target) = self.target else {
+            return Err(BuildError::NoTarget);
+        };
+        let Some(body) = self.body else {
+            return Err(BuildError::NoBody);
+        };
+        crate::send_request(
+            &target,
+            &crate::kinode::process::standard::Request {
+                inherit: self.inherit,
+                expects_response: self.timeout,
+                body,
+                metadata: self.metadata,
+                capabilities: self.capabilities,
+            },
+            self.context.as_ref(),
+            self.blob.as_ref(),
+        );
+        Ok(())
     }
     /// Attempt to send the request, then await its response or error (timeout, offline node).
     /// This will only fail if the `target` or `body` fields have not been set.
     pub fn send_and_await_response(
         self,
         timeout: u64,
-    ) -> anyhow::Result<Result<Message, SendError>> {
-        if let (Some(target), Some(body)) = (self.target, self.body) {
-            match crate::send_and_await_response(
-                &target,
-                &crate::kinode::process::standard::Request {
-                    inherit: self.inherit,
-                    expects_response: Some(timeout),
-                    body,
-                    metadata: self.metadata,
-                    capabilities: self.capabilities,
-                },
-                self.blob.as_ref(),
-            ) {
-                Ok((source, message)) => Ok(Ok(_wit_message_to_message(source, message))),
-                Err(send_err) => Ok(Err(_wit_send_error_to_send_error(send_err, self.context))),
-            }
-        } else {
-            Err(anyhow::anyhow!("missing fields"))
+    ) -> Result<Result<Message, SendError>, BuildError> {
+        let Some(target) = self.target else {
+            return Err(BuildError::NoTarget);
+        };
+        let Some(body) = self.body else {
+            return Err(BuildError::NoBody);
+        };
+        match crate::send_and_await_response(
+            &target,
+            &crate::kinode::process::standard::Request {
+                inherit: self.inherit,
+                expects_response: Some(timeout),
+                body,
+                metadata: self.metadata,
+                capabilities: self.capabilities,
+            },
+            self.blob.as_ref(),
+        ) {
+            Ok((source, message)) => Ok(Ok(_wit_message_to_message(source, message))),
+            Err(send_err) => Ok(Err(_wit_send_error_to_send_error(send_err, self.context))),
         }
     }
 }
