@@ -59,6 +59,7 @@ pub mod contract {
         /// - labelhash: The hash of only the label (the final entry in the path).
         /// - label: The label of the note.
         /// - data: The data stored at the note.
+        #[derive(std::hash::Hash, PartialEq, Eq)]
         event Note(
             bytes32 indexed parenthash,
             bytes32 indexed notehash,
