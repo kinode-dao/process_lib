@@ -67,7 +67,7 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
         });
     }
 
-    let message = vfs_request(path, VfsAction::CreateDir)
+    let message = vfs_request(path, VfsAction::CreateDirAll)
         .send_and_await_response(timeout)
         .unwrap()
         .map_err(|e| VfsError::IOError {
