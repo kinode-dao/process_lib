@@ -1,4 +1,4 @@
-use super::{parse_response, vfs_request, DirEntry, VfsAction, VfsError, VfsResponse};
+use super::{parse_response, vfs_request, DirEntry, FileType, VfsAction, VfsError, VfsResponse};
 
 /// Vfs helper struct for a directory.
 /// Opening or creating a directory will give you a Result<Directory>.
@@ -36,6 +36,31 @@ impl Directory {
 pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Directory, VfsError> {
     let timeout = timeout.unwrap_or(5);
     if !create {
+        let message = vfs_request(path, VfsAction::Metadata)
+            .send_and_await_response(timeout)
+            .unwrap()
+            .map_err(|e| VfsError::IOError {
+                error: e.to_string(),
+                path: path.to_string(),
+            })?;
+        match parse_response(message.body())? {
+            VfsResponse::Metadata(m) => {
+                if m.file_type != FileType::Directory {
+                    return Err(VfsError::IOError {
+                        error: "Entry at path not a directory".to_string(),
+                        path: path.to_string(),
+                    });
+                }
+            }
+            VfsResponse::Err(e) => return Err(e),
+            _ => {
+                return Err(VfsError::ParseError {
+                    error: "unexpected response".to_string(),
+                    path: path.to_string(),
+                })
+            }
+        }
+
         return Ok(Directory {
             path: path.to_string(),
             timeout,
