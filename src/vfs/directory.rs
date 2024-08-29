@@ -67,7 +67,7 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
         });
     }
 
-    let message = vfs_request(path, VfsAction::CreateDir)
+    let message = vfs_request(path, VfsAction::CreateDirAll)
         .send_and_await_response(timeout)
         .unwrap()
         .map_err(|e| VfsError::IOError {
@@ -85,17 +85,6 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
             error: "unexpected response".to_string(),
             path: path.to_string(),
         }),
-    }
-}
-
-/// Open or create a directory at path.
-pub fn open_or_create_dir(path: &str) -> Result<Directory, VfsError> {
-    match open_dir(path, false, None) {
-        Ok(dir) => Ok(dir),
-        Err(_) => match open_dir(path, true, None) {
-            Ok(dir) => Ok(dir),
-            Err(e) => Err(e),
-        },
     }
 }
 
