@@ -88,6 +88,17 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
     }
 }
 
+/// Open or create a directory at path.
+pub fn open_or_create_dir(path: &str) -> Result<Directory, VfsError> {
+    match open_dir(path, false, None) {
+        Ok(dir) => Ok(dir),
+        Err(_) => match open_dir(path, true, None) {
+            Ok(dir) => Ok(dir),
+            Err(e) => Err(e),
+        },
+    }
+}
+
 /// Removes a dir at path, errors if path not found or path is not a directory.
 pub fn remove_dir(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
     let timeout = timeout.unwrap_or(5);

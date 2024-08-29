@@ -377,6 +377,17 @@ pub fn open_file(path: &str, create: bool, timeout: Option<u64>) -> Result<File,
     }
 }
 
+/// Open or create a file at path.
+pub fn open_or_create_file(path: &str) -> Result<File, VfsError> {
+    match open_file(path, false, None) {
+        Ok(file) => Ok(file),
+        Err(_) => match open_file(path, true, None) {
+            Ok(file) => Ok(file),
+            Err(e) => Err(e),
+        },
+    }
+}
+
 /// Creates a file at path, if file found at path, truncates it to 0.
 pub fn create_file(path: &str, timeout: Option<u64>) -> Result<File, VfsError> {
     let timeout = timeout.unwrap_or(5);
