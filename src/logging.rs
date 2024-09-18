@@ -75,8 +75,19 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalPrinterMaker {
     }
 }
 
-pub fn init_logging(our: &Address, level: Level) {
-    let file_filter = EnvFilter::new(level.as_str());
+/// Initialize `tracing`-based logging for the given process at the given level.
+///
+/// To write to logs, import the re-exported `debug!`, `info!`, `warn!`, `error!`
+/// macros and use as usual. Logs will be printed to terminal as appropriate depending
+/// on given level. Logs will be logged into the logging file as appropriate depending
+/// on the given level.
+///
+/// The logging file lives in the node's `vfs/` directory, specifically at
+/// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home
+/// directory, `package` is the package name, `publisher.os` is the publisher of the
+/// package, and `process` is the process name of the process doing the logging.
+pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) {
+    let file_filter = EnvFilter::new(file_level.as_str());
     let error_filter = tracing_subscriber::filter::filter_fn(|metadata: &tracing::Metadata<'_>| {
         metadata.level() == &Level::ERROR
     });
@@ -121,7 +132,7 @@ pub fn init_logging(our: &Address, level: Level) {
         );
 
     // TODO: can we DRY?
-    if level >= Level::DEBUG {
+    if terminal_level >= Level::DEBUG {
         sub.with(
             fmt::layer()
                 .without_time()
@@ -153,7 +164,7 @@ pub fn init_logging(our: &Address, level: Level) {
                 .with_filter(debug_filter),
         )
         .init();
-    } else if level >= Level::INFO {
+    } else if terminal_level >= Level::INFO {
         sub.with(
             fmt::layer()
                 .without_time()
@@ -175,7 +186,7 @@ pub fn init_logging(our: &Address, level: Level) {
                 .with_filter(info_filter),
         )
         .init();
-    } else if level >= Level::WARN {
+    } else if terminal_level >= Level::WARN {
         sub.with(
             fmt::layer()
                 .without_time()
