@@ -46,6 +46,8 @@ pub mod kimap;
 /// Your process must have the capability to message and receive messages from
 /// `kv:distro:sys` to use this module.
 pub mod kv;
+#[cfg(feature = "logging")]
+pub mod logging;
 /// Interact with the networking module
 /// For configuration, debugging, and creating signatures with networking key.
 ///
