@@ -1,42 +1,38 @@
-use std::io::BufWriter;
-
 pub use tracing::{debug, error, info, warn, Level};
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     fmt, layer::SubscriberExt, prelude::*, util::SubscriberInitExt, EnvFilter,
 };
 
-use crate::{print_to_terminal, Address};
+use crate::{
+    print_to_terminal,
+    vfs::{create_drive, open_file, File},
+    Address,
+};
 
-pub struct FilePrinter {
-    pub our: Address,
+pub struct FileWriter {
+    pub file: File,
 }
 
-pub struct FilePrinterMaker {
-    pub our: Address,
+pub struct FileWriterMaker {
+    pub file: File,
 }
 
-pub struct TerminalPrinter {
+pub struct TerminalWriter {
     pub level: u8,
 }
 
-pub struct TerminalPrinterMaker {
+pub struct TerminalWriterMaker {
     pub level: u8,
 }
 
-impl std::io::Write for FilePrinter {
+impl std::io::Write for FileWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        // TODO: change to use vfs?
-        let log_file_name = format!("{}.log", self.our.process());
-        let log_path =
-            std::path::PathBuf::from(std::env::var("LOGDIR").unwrap()).join(log_file_name);
-        let file = std::fs::File::options()
-            .append(true)
-            .create(true)
-            .open(&log_path)
-            .unwrap();
-        let mut writer = BufWriter::new(file);
-        writer.write(buf)
+        // TODO: use non-blocking call instead? (.append() `send_and_await()`s)
+        self.file
+            .append(buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -44,17 +40,17 @@ impl std::io::Write for FilePrinter {
     }
 }
 
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for FilePrinterMaker {
-    type Writer = FilePrinter;
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for FileWriterMaker {
+    type Writer = FileWriter;
 
     fn make_writer(&'a self) -> Self::Writer {
-        FilePrinter {
-            our: self.our.clone(),
+        FileWriter {
+            file: File::new(self.file.path.clone(), self.file.timeout),
         }
     }
 }
 
-impl std::io::Write for TerminalPrinter {
+impl std::io::Write for TerminalWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let string = String::from_utf8(buf.to_vec())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -67,11 +63,11 @@ impl std::io::Write for TerminalPrinter {
     }
 }
 
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalPrinterMaker {
-    type Writer = TerminalPrinter;
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
+    type Writer = TerminalWriter;
 
     fn make_writer(&'a self) -> Self::Writer {
-        TerminalPrinter { level: self.level }
+        TerminalWriter { level: self.level }
     }
 }
 
@@ -86,7 +82,11 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalPrinterMaker {
 /// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home
 /// directory, `package` is the package name, `publisher.os` is the publisher of the
 /// package, and `process` is the process name of the process doing the logging.
-pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) {
+pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> anyhow::Result<()> {
+    let log_dir_path = create_drive(our.package_id(), "log", None)?;
+    let log_file_path = format!("{log_dir_path}/{}.log", our.process());
+    let log_file = open_file(&log_file_path, true, None)?;
+
     let file_filter = EnvFilter::new(file_level.as_str());
     let error_filter = tracing_subscriber::filter::filter_fn(|metadata: &tracing::Metadata<'_>| {
         metadata.level() == &Level::ERROR
@@ -100,11 +100,11 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) {
     let debug_filter = tracing_subscriber::filter::filter_fn(|metadata: &tracing::Metadata<'_>| {
         metadata.level() == &Level::DEBUG
     });
-    let file_printer_maker = FilePrinterMaker { our: our.clone() };
-    let error_terminal_printer_maker = TerminalPrinterMaker { level: 0 };
-    let warn_terminal_printer_maker = TerminalPrinterMaker { level: 1 };
-    let info_terminal_printer_maker = TerminalPrinterMaker { level: 2 };
-    let debug_terminal_printer_maker = TerminalPrinterMaker { level: 3 };
+    let file_printer_maker = FileWriterMaker { file: log_file };
+    let error_terminal_printer_maker = TerminalWriterMaker { level: 0 };
+    let warn_terminal_printer_maker = TerminalWriterMaker { level: 1 };
+    let info_terminal_printer_maker = TerminalWriterMaker { level: 2 };
+    let debug_terminal_printer_maker = TerminalWriterMaker { level: 3 };
 
     let sub = tracing_subscriber::registry()
         .with(ErrorLayer::default())
@@ -199,4 +199,6 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) {
         )
         .init();
     }
+
+    Ok(())
 }
