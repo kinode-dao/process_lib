@@ -10,6 +10,19 @@ use crate::{
     Address,
 };
 
+pub struct RemoteLogSettings {
+    pub target: Address,
+    pub level: u8,
+}
+
+pub struct RemoteWriter {
+    pub target: Address,
+}
+
+pub struct RemoteWriterMaker {
+    pub target: Address,
+}
+
 pub struct FileWriter {
     pub file: File,
 }
@@ -24,6 +37,31 @@ pub struct TerminalWriter {
 
 pub struct TerminalWriterMaker {
     pub level: u8,
+}
+
+impl std::io::Write for RemoteWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Request::to(self.target)
+            .body(buf)
+            .send()
+            .unwrap()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RemoteWriterMaker {
+    type Writer = FileWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        FileWriter {
+            file: File::new(self.file.path.clone(), self.file.timeout),
+        }
+    }
 }
 
 impl std::io::Write for FileWriter {
@@ -82,7 +120,12 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
 /// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home
 /// directory, `package` is the package name, `publisher.os` is the publisher of the
 /// package, and `process` is the process name of the process doing the logging.
-pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> anyhow::Result<()> {
+pub fn init_logging(
+    our: &Address,
+    file_level: Level,
+    terminal_level: Level,
+    remote: Option<RemoteLogSettings>,
+) -> anyhow::Result<()> {
     let log_dir_path = create_drive(our.package_id(), "log", None)?;
     let log_file_path = format!("{log_dir_path}/{}.log", our.process());
     let log_file = open_file(&log_file_path, true, None)?;
@@ -100,11 +143,11 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
     let debug_filter = tracing_subscriber::filter::filter_fn(|metadata: &tracing::Metadata<'_>| {
         metadata.level() == &Level::DEBUG
     });
-    let file_printer_maker = FileWriterMaker { file: log_file };
-    let error_terminal_printer_maker = TerminalWriterMaker { level: 0 };
-    let warn_terminal_printer_maker = TerminalWriterMaker { level: 1 };
-    let info_terminal_printer_maker = TerminalWriterMaker { level: 2 };
-    let debug_terminal_printer_maker = TerminalWriterMaker { level: 3 };
+    let file_writer_maker = FileWriterMaker { file: log_file };
+    let error_terminal_writer_maker = TerminalWriterMaker { level: 0 };
+    let warn_terminal_writer_maker = TerminalWriterMaker { level: 1 };
+    let info_terminal_writer_maker = TerminalWriterMaker { level: 2 };
+    let debug_terminal_writer_maker = TerminalWriterMaker { level: 3 };
 
     let sub = tracing_subscriber::registry()
         .with(ErrorLayer::default())
@@ -112,7 +155,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
             fmt::layer()
                 .with_file(true)
                 .with_line_number(true)
-                .with_writer(file_printer_maker)
+                .with_writer(file_writer_maker)
                 .with_ansi(false)
                 .with_target(false)
                 .json()
@@ -123,7 +166,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
                 .with_file(true)
                 .with_line_number(true)
                 .without_time()
-                .with_writer(error_terminal_printer_maker)
+                .with_writer(error_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -132,11 +175,94 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         );
 
     // TODO: can we DRY?
+    let Some(remote) = remote else {
+        let remote_filter = EnvFilter::new(remote.level.as_str());
+        let sub = sub.with(
+            fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .with_writer(remote_writer_maker)
+                .with_ansi(false)
+                .with_target(false)
+                .json()
+                .with_filter(remote_filter),
+        );
+        if terminal_level >= Level::DEBUG {
+            sub.with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(warn_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(warn_filter),
+            )
+            .with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(info_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(info_filter),
+            )
+            .with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(debug_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(debug_filter),
+            )
+            .init();
+        } else if terminal_level >= Level::INFO {
+            sub.with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(warn_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(warn_filter),
+            )
+            .with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(info_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(info_filter),
+            )
+            .init();
+        } else if terminal_level >= Level::WARN {
+            sub.with(
+                fmt::layer()
+                    .without_time()
+                    .with_writer(warn_terminal_writer_maker)
+                    .with_ansi(true)
+                    .with_level(true)
+                    .with_target(true)
+                    .fmt_fields(fmt::format::PrettyFields::new())
+                    .with_filter(warn_filter),
+            )
+            .init();
+        }
+
+        return Ok(());
+    };
+
     if terminal_level >= Level::DEBUG {
         sub.with(
             fmt::layer()
                 .without_time()
-                .with_writer(warn_terminal_printer_maker)
+                .with_writer(warn_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -146,7 +272,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         .with(
             fmt::layer()
                 .without_time()
-                .with_writer(info_terminal_printer_maker)
+                .with_writer(info_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -156,7 +282,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         .with(
             fmt::layer()
                 .without_time()
-                .with_writer(debug_terminal_printer_maker)
+                .with_writer(debug_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -168,7 +294,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         sub.with(
             fmt::layer()
                 .without_time()
-                .with_writer(warn_terminal_printer_maker)
+                .with_writer(warn_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -178,7 +304,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         .with(
             fmt::layer()
                 .without_time()
-                .with_writer(info_terminal_printer_maker)
+                .with_writer(info_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
@@ -190,7 +316,7 @@ pub fn init_logging(our: &Address, file_level: Level, terminal_level: Level) -> 
         sub.with(
             fmt::layer()
                 .without_time()
-                .with_writer(warn_terminal_printer_maker)
+                .with_writer(warn_terminal_writer_maker)
                 .with_ansi(true)
                 .with_level(true)
                 .with_target(true)
