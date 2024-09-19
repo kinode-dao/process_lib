@@ -7,12 +7,12 @@ use tracing_subscriber::{
 use crate::{
     print_to_terminal,
     vfs::{create_drive, open_file, File},
-    Address,
+    Address, Request,
 };
 
 pub struct RemoteLogSettings {
     pub target: Address,
-    pub level: u8,
+    pub level: Level,
 }
 
 pub struct RemoteWriter {
@@ -41,11 +41,7 @@ pub struct TerminalWriterMaker {
 
 impl std::io::Write for RemoteWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Request::to(self.target)
-            .body(buf)
-            .send()
-            .unwrap()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Request::to(&self.target).body(buf).send().unwrap();
         Ok(buf.len())
     }
 
@@ -55,11 +51,11 @@ impl std::io::Write for RemoteWriter {
 }
 
 impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RemoteWriterMaker {
-    type Writer = FileWriter;
+    type Writer = RemoteWriter;
 
     fn make_writer(&'a self) -> Self::Writer {
-        FileWriter {
-            file: File::new(self.file.path.clone(), self.file.timeout),
+        RemoteWriter {
+            target: self.target.clone(),
         }
     }
 }
@@ -176,17 +172,6 @@ pub fn init_logging(
 
     // TODO: can we DRY?
     let Some(remote) = remote else {
-        let remote_filter = EnvFilter::new(remote.level.as_str());
-        let sub = sub.with(
-            fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .with_writer(remote_writer_maker)
-                .with_ansi(false)
-                .with_target(false)
-                .json()
-                .with_filter(remote_filter),
-        );
         if terminal_level >= Level::DEBUG {
             sub.with(
                 fmt::layer()
@@ -258,6 +243,20 @@ pub fn init_logging(
         return Ok(());
     };
 
+    let remote_filter = EnvFilter::new(remote.level.as_str());
+    let remote_writer_maker = RemoteWriterMaker {
+        target: remote.target,
+    };
+    let sub = sub.with(
+        fmt::layer()
+            .with_file(true)
+            .with_line_number(true)
+            .with_writer(remote_writer_maker)
+            .with_ansi(false)
+            .with_target(false)
+            .json()
+            .with_filter(remote_filter),
+    );
     if terminal_level >= Level::DEBUG {
         sub.with(
             fmt::layer()
