@@ -41,7 +41,9 @@ pub struct TerminalWriterMaker {
 
 impl std::io::Write for RemoteWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Request::to(&self.target).body(buf).send().unwrap();
+        let body = serde_json::json!({"Log": buf});
+        let body = serde_json::to_vec(&body).unwrap();
+        Request::to(&self.target).body(body).send().unwrap();
         Ok(buf.len())
     }
 
