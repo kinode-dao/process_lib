@@ -46,6 +46,8 @@ pub mod kimap;
 /// Your process must have the capability to message and receive messages from
 /// `kv:distro:sys` to use this module.
 pub mod kv;
+#[cfg(feature = "logging")]
+pub mod logging;
 /// Interact with the networking module
 /// For configuration, debugging, and creating signatures with networking key.
 ///
@@ -106,6 +108,19 @@ macro_rules! call_init {
 /// the verbosity, use the `print_to_terminal` function directly.
 #[macro_export]
 macro_rules! println {
+    () => {
+        $crate::print_to_terminal(0, "\n");
+    };
+    ($($arg:tt)*) => {{
+        $crate::print_to_terminal(0, &format!($($arg)*));
+    }};
+}
+
+/// Uses the `print_to_terminal` function from the WIT interface on maximally-verbose
+/// mode, i.e., this print will always show up in the terminal. To control
+/// the verbosity, use the `print_to_terminal` function directly.
+#[macro_export]
+macro_rules! kiprintln {
     () => {
         $crate::print_to_terminal(0, "\n");
     };
