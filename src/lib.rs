@@ -236,7 +236,7 @@ where
 ///   field_two: HashSet<String>,
 /// }
 ///
-/// get_typed_blob(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyType {
+/// get_typed_blob(|bytes| bincode::deserialize(bytes)).unwrap_or(MyType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),
 /// });
@@ -272,7 +272,7 @@ where
 ///    field_two: HashSet<String>,
 /// }
 ///
-/// get_typed_state(|bytes| Ok(bincode::deserialize(bytes)?)).unwrap_or(MyStateType {
+/// get_typed_state(|bytes| bincode::deserialize(bytes)).unwrap_or(MyStateType {
 ///     field: HashMap::new(),
 ///     field_two: HashSet::new(),
 /// });
