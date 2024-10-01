@@ -323,6 +323,14 @@ impl File {
     }
 }
 
+impl Drop for File {
+    fn drop(&mut self) {
+        vfs_request(&self.path, VfsAction::CloseFile)
+            .send()
+            .unwrap();
+    }
+}
+
 /// Creates a drive with path "/package_id/drive", gives you read and write caps.
 /// Will only work on the same package_id as you're calling it from, unless you
 /// have root capabilities.
