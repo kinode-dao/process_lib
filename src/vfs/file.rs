@@ -20,6 +20,12 @@ impl File {
         }
     }
 
+    fn drop(&self) {
+        vfs_request(&self.path, VfsAction::CloseFile)
+            .send()
+            .unwrap();
+    }
+
     /// Reads the entire file, from start position.
     /// Returns a vector of bytes.
     pub fn read(&self) -> Result<Vec<u8>, VfsError> {
