@@ -403,9 +403,10 @@ impl HttpBindingConfig {
 /// not use the WebSocket extension protocol to connect with a runtime extension.
 #[derive(Clone, Copy, Debug)]
 pub struct WsBindingConfig {
-    pub authenticated: bool,
-    pub encrypted: bool,
-    pub extension: bool,
+    authenticated: bool,
+    secure_subdomain: bool,
+    encrypted: bool,
+    extension: bool,
 }
 
 impl WsBindingConfig {
@@ -415,15 +416,22 @@ impl WsBindingConfig {
     pub fn default() -> Self {
         Self {
             authenticated: true,
+            secure_subdomain: false,
             encrypted: false,
             extension: false,
         }
     }
 
     /// Create a new WsBindingConfig with the given values.
-    pub fn new(authenticated: bool, encrypted: bool, extension: bool) -> Self {
+    pub fn new(
+        authenticated: bool,
+        secure_subdomain: bool,
+        encrypted: bool,
+        extension: bool,
+    ) -> Self {
         Self {
             authenticated,
+            secure_subdomain,
             encrypted,
             extension,
         }
@@ -432,6 +440,12 @@ impl WsBindingConfig {
     /// Set whether the WebSocket server will require a valid login cookie to access this path.
     pub fn authenticated(mut self, authenticated: bool) -> Self {
         self.authenticated = authenticated;
+        self
+    }
+
+    /// Set whether the WebSocket server will be bound on a secure subdomain.
+    pub fn secure_subdomain(mut self, secure_subdomain: bool) -> Self {
+        self.secure_subdomain = secure_subdomain;
         self
     }
 
@@ -516,15 +530,22 @@ impl HttpServer {
     {
         let path: String = path.into();
         let res = KiRequest::to(("our", "http_server", "distro", "sys"))
-            .body(
+            .body(if config.secure_subdomain {
+                serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
+                    path: path.clone(),
+                    encrypted: config.encrypted,
+                    extension: config.extension,
+                })
+                .unwrap()
+            } else {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.clone(),
                     authenticated: config.authenticated,
                     encrypted: config.encrypted,
                     extension: config.extension,
                 })
-                .unwrap(),
-            )
+                .unwrap()
+            })
             .send_and_await_response(self.timeout);
         let Ok(Message::Response { body, .. }) = res.unwrap() else {
             return Err(HttpServerError::Timeout);
@@ -532,6 +553,9 @@ impl HttpServer {
         let Ok(resp) = serde_json::from_slice::<Result<(), HttpServerError>>(&body) else {
             return Err(HttpServerError::UnexpectedResponse);
         };
+        if resp.is_ok() {
+            self.ws_paths.insert(path, config);
+        }
         resp
     }
 
@@ -644,9 +668,8 @@ impl HttpServer {
         let path: String = path.into();
         let res = KiRequest::to(("our", "http_server", "distro", "sys"))
             .body(
-                serde_json::to_vec(&HttpServerAction::WebSocketBind {
+                serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
-                    authenticated: true,
                     encrypted: false,
                     extension: false,
                 })
@@ -664,6 +687,7 @@ impl HttpServer {
                 path,
                 WsBindingConfig {
                     authenticated: true,
+                    secure_subdomain: true,
                     encrypted: false,
                     extension: false,
                 },
@@ -727,15 +751,22 @@ impl HttpServer {
                 error: "path not found".to_string(),
             })?;
         let res = KiRequest::to(("our", "http_server", "distro", "sys"))
-            .body(
+            .body(if entry.secure_subdomain {
+                serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
+                    path: path.to_string(),
+                    encrypted: config.encrypted,
+                    extension: config.extension,
+                })
+                .unwrap()
+            } else {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.to_string(),
                     authenticated: config.authenticated,
                     encrypted: config.encrypted,
                     extension: config.extension,
                 })
-                .unwrap(),
-            )
+                .unwrap()
+            })
             .send_and_await_response(self.timeout)
             .unwrap();
         let Ok(Message::Response { body, .. }) = res else {
@@ -746,6 +777,7 @@ impl HttpServer {
         };
         if resp.is_ok() {
             entry.authenticated = config.authenticated;
+            entry.secure_subdomain = config.secure_subdomain;
             entry.encrypted = config.encrypted;
             entry.extension = config.extension;
         }
