@@ -118,7 +118,7 @@ impl Request {
         self.body = Some(body.try_into()?);
         Ok(self)
     }
-    /// Set the metdata field for this request. Metadata is simply a [`String`].
+    /// Set the metadata field for this request. Metadata is simply a [`String`].
     /// Metadata should usually be used for middleware and other message-passing
     /// situations that require the original IPC body and blob to be preserved.
     /// As such, metadata should not always be expected to reach the final destination
