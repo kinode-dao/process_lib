@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 /// that capability with the receiving process, or to prove that a process has
 /// authority to perform a certain action.
 impl Capability {
-    /// Create a new `Capability`. Takes a node ID and a process ID.
+    /// Create a new [`Capability`]. Takes an [`Address`] and a parameter, which is a JSON string.
     pub fn new<T, U>(address: T, params: U) -> Capability
     where
         T: Into<Address>,
