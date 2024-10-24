@@ -76,6 +76,7 @@ pub enum SqliteError {
 /// Sqlite helper struct for a db.
 /// Opening or creating a db will give you a Result<sqlite>.
 /// You can call it's impl functions to interact with it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sqlite {
     pub package_id: PackageId,
     pub db: String,
