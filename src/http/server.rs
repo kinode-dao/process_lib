@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-/// HTTP Request received from the `http_server:distro:sys` service as a
+/// HTTP Request received from the `http-server:distro:sys` service as a
 /// result of either an HTTP or WebSocket binding, created via [`HttpServerAction`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
@@ -144,7 +144,7 @@ pub enum WsMessageType {
     Close,
 }
 
-/// Request type sent to `http_server:distro:sys` in order to configure it.
+/// Request type sent to `http-server:distro:sys` in order to configure it.
 ///
 /// If a response is expected, all actions will return a Response
 /// with the shape `Result<(), HttpServerActionError>` serialized to JSON.
@@ -213,8 +213,8 @@ pub enum HttpServerAction {
         desired_reply_type: MessageType,
     },
     /// For communicating with the ext.
-    /// Kinode's http_server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
-    /// Upon receiving reply with this type from ext, http_server parses, setting:
+    /// Kinode's http-server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
+    /// Upon receiving reply with this type from ext, http-server parses, setting:
     /// * id as given,
     /// * message type as given (Request or Response),
     /// * body as HttpServerRequest::WebSocketPush,
@@ -268,7 +268,7 @@ impl HttpResponse {
     }
 }
 
-/// Part of the Response type issued by http_server
+/// Part of the Response type issued by http-server
 #[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum HttpServerError {
     #[error("request could not be parsed to HttpServerAction: {req}.")]
@@ -279,11 +279,11 @@ pub enum HttpServerError {
     PathBindError { error: String },
     #[error("WebSocket error: {error}")]
     WebSocketPushError { error: String },
-    /// Not actually issued by `http_server:distro:sys`, just this library
+    /// Not actually issued by `http-server:distro:sys`, just this library
     #[error("timeout")]
     Timeout,
-    /// Not actually issued by `http_server:distro:sys`, just this library
-    #[error("unexpected response from http_server")]
+    /// Not actually issued by `http-server:distro:sys`, just this library
+    #[error("unexpected response from http-server")]
     UnexpectedResponse,
 }
 
@@ -301,7 +301,7 @@ pub struct HttpServer {
     ws_paths: HashMap<String, WsBindingConfig>,
     /// A mapping of WebSocket paths to the channels that are open on them.
     ws_channels: HashMap<String, HashSet<u32>>,
-    /// The timeout given for `http_server:distro:sys` to respond to a configuration request.
+    /// The timeout given for `http-server:distro:sys` to respond to a configuration request.
     pub timeout: u64,
 }
 
@@ -485,7 +485,7 @@ impl HttpServer {
     {
         let path: String = path.into();
         let cache = config.static_content.is_some();
-        let req = KiRequest::to(("our", "http_server", "distro", "sys")).body(
+        let req = KiRequest::to(("our", "http-server", "distro", "sys")).body(
             serde_json::to_vec(&if config.secure_subdomain {
                 HttpServerAction::SecureBind {
                     path: path.clone(),
@@ -529,7 +529,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(if config.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
@@ -573,7 +573,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::Bind {
                     path: path.clone(),
@@ -624,7 +624,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::SecureBind {
                     path: path.clone(),
@@ -666,7 +666,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
@@ -711,7 +711,7 @@ impl HttpServer {
             .ok_or(HttpServerError::PathBindError {
                 error: "path not found".to_string(),
             })?;
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::Bind {
                     path: path.to_string(),
@@ -750,7 +750,7 @@ impl HttpServer {
             .ok_or(HttpServerError::PathBindError {
                 error: "path not found".to_string(),
             })?;
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(if entry.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.to_string(),
@@ -790,7 +790,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(serde_json::to_vec(&HttpServerAction::Unbind { path: path.clone() }).unwrap())
             .send_and_await_response(self.timeout)
             .unwrap();
@@ -812,7 +812,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::WebSocketUnbind { path: path.clone() })
                     .unwrap(),
@@ -909,7 +909,7 @@ impl HttpServer {
     }
 
     /// Serve static files from a given directory by binding all of them
-    /// in http_server to their filesystem path.
+    /// in http-server to their filesystem path.
     ///
     /// The directory is relative to the `pkg` folder within this package's drive.
     ///
@@ -1065,7 +1065,7 @@ pub fn send_response(status: StatusCode, headers: Option<HashMap<String, String>
 
 /// Send a WebSocket push message on an open WebSocket channel.
 pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
-    KiRequest::to(("our", "http_server", "distro", "sys"))
+    KiRequest::to(("our", "http-server", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpServerRequest::WebSocketPush {
                 channel_id,

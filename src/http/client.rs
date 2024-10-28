@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Request type sent to the `http_client:distro:sys` service in order to open a
+/// Request type sent to the `http-client:distro:sys` service in order to open a
 /// WebSocket connection, send a WebSocket message on an existing connection, or
 /// send an HTTP request.
 ///
@@ -31,7 +31,7 @@ pub enum HttpClientAction {
 }
 
 /// HTTP Request type that can be shared over Wasm boundary to apps.
-/// This is the one you send to the `http_client:distro:sys` service.
+/// This is the one you send to the `http-client:distro:sys` service.
 ///
 /// BODY is stored in the lazy_load_blob, as bytes
 ///
@@ -48,7 +48,7 @@ pub struct OutgoingHttpRequest {
 }
 
 /// Request that comes from an open WebSocket client connection in the
-/// `http_client:distro:sys` service. Be prepared to receive these after
+/// `http-client:distro:sys` service. Be prepared to receive these after
 /// using a [`HttpClientAction::WebSocketOpen`] to open a connection.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum HttpClientRequest {
@@ -61,7 +61,7 @@ pub enum HttpClientRequest {
     },
 }
 
-/// Response type received from the `http_client:distro:sys` service after
+/// Response type received from the `http-client:distro:sys` service after
 /// sending a successful [`HttpClientAction`] to it.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {
@@ -72,15 +72,15 @@ pub enum HttpClientResponse {
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum HttpClientError {
     // HTTP errors
-    #[error("http_client: request is not valid HttpClientRequest: {req}.")]
+    #[error("http-client: request is not valid HttpClientRequest: {req}.")]
     BadRequest { req: String },
-    #[error("http_client: http method not supported: {method}.")]
+    #[error("http-client: http method not supported: {method}.")]
     BadMethod { method: String },
-    #[error("http_client: url could not be parsed: {url}.")]
+    #[error("http-client: url could not be parsed: {url}.")]
     BadUrl { url: String },
-    #[error("http_client: http version not supported: {version}.")]
+    #[error("http-client: http version not supported: {version}.")]
     BadVersion { version: String },
-    #[error("http_client: failed to execute request {error}.")]
+    #[error("http-client: failed to execute request {error}.")]
     RequestFailed { error: String },
 
     // WebSocket errors
@@ -105,7 +105,7 @@ pub fn send_request(
     timeout: Option<u64>,
     body: Vec<u8>,
 ) {
-    let req = KiRequest::to(("our", "http_client", "distro", "sys"))
+    let req = KiRequest::to(("our", "http-client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
@@ -123,7 +123,7 @@ pub fn send_request(
     }
 }
 
-/// Make an HTTP request using http_client and await its response.
+/// Make an HTTP request using http-client and await its response.
 ///
 /// Returns [`Response`] from the `http` crate if successful, with the body type as bytes.
 pub fn send_request_await_response(
@@ -133,7 +133,7 @@ pub fn send_request_await_response(
     timeout: u64,
     body: Vec<u8>,
 ) -> std::result::Result<http::Response<Vec<u8>>, HttpClientError> {
-    let res = KiRequest::to(("our", "http_client", "distro", "sys"))
+    let res = KiRequest::to(("our", "http-client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::Http(OutgoingHttpRequest {
                 method: method.to_string(),
@@ -150,7 +150,7 @@ pub fn send_request_await_response(
         .unwrap();
     let Ok(Message::Response { body, .. }) = res else {
         return Err(HttpClientError::RequestFailed {
-            error: "http_client timed out".to_string(),
+            error: "http-client timed out".to_string(),
         });
     };
     let resp = match serde_json::from_slice::<
@@ -160,13 +160,13 @@ pub fn send_request_await_response(
         Ok(Ok(HttpClientResponse::Http(resp))) => resp,
         Ok(Ok(HttpClientResponse::WebSocketAck)) => {
             return Err(HttpClientError::RequestFailed {
-                error: "http_client gave unexpected response".to_string(),
+                error: "http-client gave unexpected response".to_string(),
             })
         }
         Ok(Err(e)) => return Err(e),
         Err(e) => {
             return Err(HttpClientError::RequestFailed {
-                error: format!("http_client gave invalid response: {e:?}"),
+                error: format!("http-client gave invalid response: {e:?}"),
             })
         }
     };
@@ -176,12 +176,12 @@ pub fn send_request_await_response(
     for (key, value) in &resp.headers {
         let Ok(key) = http::header::HeaderName::from_str(key) else {
             return Err(HttpClientError::RequestFailed {
-                error: format!("http_client gave invalid header key: {key}"),
+                error: format!("http-client gave invalid header key: {key}"),
             });
         };
         let Ok(value) = http::header::HeaderValue::from_str(value) else {
             return Err(HttpClientError::RequestFailed {
-                error: format!("http_client gave invalid header value: {value}"),
+                error: format!("http-client gave invalid header value: {value}"),
             });
         };
         headers.insert(key, value);
@@ -197,7 +197,7 @@ pub fn open_ws_connection(
     channel_id: u32,
 ) -> std::result::Result<(), HttpClientError> {
     let Ok(Ok(Message::Response { body, .. })) =
-        KiRequest::to(("our", "http_client", "distro", "sys"))
+        KiRequest::to(("our", "http-client", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpClientAction::WebSocketOpen {
                     url: url.clone(),
@@ -219,7 +219,7 @@ pub fn open_ws_connection(
 
 /// Send a WebSocket push message on an open WebSocket channel.
 pub fn send_ws_client_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
-    KiRequest::to(("our", "http_client", "distro", "sys"))
+    KiRequest::to(("our", "http-client", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpClientAction::WebSocketPush {
                 channel_id,
@@ -235,7 +235,7 @@ pub fn send_ws_client_push(channel_id: u32, message_type: WsMessageType, blob: K
 /// Close a WebSocket connection.
 pub fn close_ws_connection(channel_id: u32) -> std::result::Result<(), HttpClientError> {
     let Ok(Ok(Message::Response { body, .. })) =
-        KiRequest::to(("our", "http_client", "distro", "sys"))
+        KiRequest::to(("our", "http-client", "distro", "sys"))
             .body(
                 serde_json::json!(HttpClientAction::WebSocketClose { channel_id })
                     .to_string()
