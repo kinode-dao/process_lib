@@ -1504,7 +1504,7 @@ dependencies = [
 
 [[package]]
 name = "kinode_process_lib"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "alloy",
  "alloy-primitives",
