@@ -3,7 +3,8 @@ use crate::{
     get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
-use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+pub use http::StatusCode;
+use http::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
