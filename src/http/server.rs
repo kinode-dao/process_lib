@@ -1041,7 +1041,7 @@ impl HttpServer {
 
     /// Push a WebSocket message to all channels on a given path.
     pub fn ws_push_all_channels(&self, path: &str, message_type: WsMessageType, blob: KiBlob) {
-        ws_push_all_channels(self.ws_channels, path, message_type, blob);
+        ws_push_all_channels(&self.ws_channels, path, message_type, blob);
     }
 
     pub fn get_ws_channels(&self) -> HashMap<String, HashSet<u32>> {
@@ -1080,7 +1080,7 @@ pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) 
 }
 
 pub fn ws_push_all_channels(
-    ws_channels: HashMap<String, HashSet<u32>>,
+    ws_channels: &HashMap<String, HashSet<u32>>,
     path: &str,
     message_type: WsMessageType,
     blob: KiBlob,
