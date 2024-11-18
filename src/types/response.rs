@@ -1,6 +1,6 @@
 use crate::{types::message::BuildError, Capability, LazyLoadBlob};
 
-/// Response builder. Use [`Response::new()`] to start a response, then build it,
+/// `Response` builder. Use [`Response::new()`] to start a `Response`, then build it,
 /// then call [`Response::send()`] on it to fire.
 pub struct Response {
     inherit: bool,
@@ -11,8 +11,8 @@ pub struct Response {
 }
 
 impl Response {
-    /// Start building a new response. Attempting to send this response will
-    /// not succeed until its `body` has been set with `body()` or `try_body()`.
+    /// Start building a new `Response`. Attempting to send this `Response` will not succeed
+    /// until its `body` has been set with [`Response::body()` or [`Response::try_body()`].
     pub fn new() -> Self {
         Response {
             inherit: false,
@@ -22,12 +22,12 @@ impl Response {
             capabilities: vec![],
         }
     }
-    /// Set whether this response will "inherit" the blob of the request
-    /// that this process most recently received. Unlike with requests, the
-    /// inherit field of a response only deals with blob attachment, since
-    /// responses don't themselves have to consider responses or contexts.
+    /// Set whether this `Response` will "inherit" the blob of the [`crate::Request`]
+    /// that this process most recently received. Unlike with [`crate::Request`]s, the
+    /// inherit field of a `Response` only deals with blob attachment, since
+    /// `Response`s don't themselves have to consider `Response`s or contexts.
     ///
-    /// *Note that if the blob is set for this response, this flag will not
+    /// *Note that if the blob is set for this `Response`, this flag will not
     /// override it.*
     pub fn inherit(mut self, inherit: bool) -> Self {
         self.inherit = inherit;
@@ -40,7 +40,7 @@ impl Response {
     /// a JSON spec that gets stored in bytes as a UTF-8 string.
     ///
     /// If the serialization strategy is complex, it's best to define it as an impl
-    /// of [`TryInto`] on your IPC body type, then use `try_body()` instead of this.
+    /// of [`TryInto`] on your IPC body type, then use [`Response::try_body()`] instead of this.
     pub fn body<T>(mut self, body: T) -> Self
     where
         T: Into<Vec<u8>>,
@@ -50,7 +50,7 @@ impl Response {
     }
     /// Set the IPC body (Inter-Process Communication) value for this message, using a
     /// type that's got an implementation of [`TryInto`] for `Vec<u8>`. It's best
-    /// to define an IPC body type within your app, then implement TryFrom/TryInto for
+    /// to define an IPC body type within your app, then implement [`TryFrom`]/[`TryInto`] for
     /// all IPC body serialization/deserialization.
     pub fn try_body<T, E>(mut self, body: T) -> Result<Self, E>
     where
@@ -74,11 +74,11 @@ impl Response {
     /// MIME type.
     ///
     /// The purpose of having a blob field distinct from the IPC body field is to enable
-    /// performance optimizations in all sorts of situations. LazyLoadBlobs are only brought
+    /// performance optimizations in all sorts of situations. [`LazyLoadBlob`]s are only brought
     /// across the runtime<>Wasm boundary if the process calls `get_blob()`, and this
     /// saves lots of work in data-intensive pipelines.
     ///
-    /// LazyLoadBlobs also provide a place for less-structured data, such that an IPC body type
+    /// [`LazyLoadBlob`]s also provide a place for less-structured data, such that an IPC body type
     /// can be quickly locked in and upgraded within an app-protocol without breaking
     /// changes, while still allowing freedom to adjust the contents and shape of a
     /// blob. IPC body formats should be rigorously defined.
@@ -86,7 +86,7 @@ impl Response {
         self.blob = Some(blob);
         self
     }
-    /// Set the blob's MIME type. If a blob has not been set, it will be set here
+    /// Set the [`LazyLoadBlob`]s MIME type. If a blob has not been set, it will be set here
     /// as an empty vector of bytes. If it has been set, the MIME type will be replaced
     /// or created.
     pub fn blob_mime(mut self, mime: &str) -> Self {
@@ -104,7 +104,7 @@ impl Response {
             self
         }
     }
-    /// Set the blob's bytes. If a blob has not been set, it will be set here with
+    /// Set the [`LazyLoadBlob`]s bytes. If a blob has not been set, it will be set here with
     /// no MIME type. If it has been set, the bytes will be replaced with these bytes.
     pub fn blob_bytes<T>(mut self, bytes: T) -> Self
     where
@@ -124,7 +124,7 @@ impl Response {
             self
         }
     }
-    /// Set the blob's bytes with a type that implements `TryInto<Vec<u8>>`
+    /// Set the [`LazyLoadBlob`]s bytes with a type that implements `TryInto<Vec<u8>>`
     /// and may or may not successfully be set.
     pub fn try_blob_bytes<T, E>(mut self, bytes: T) -> Result<Self, E>
     where
@@ -145,13 +145,13 @@ impl Response {
             Ok(self)
         }
     }
-    /// Add capabilities to this response. Capabilities are a way to pass
+    /// Attach capabilities to this next `Response`.
     pub fn capabilities(mut self, capabilities: Vec<Capability>) -> Self {
         self.capabilities = capabilities;
         self
     }
-    /// Attempt to send the response. This will only fail if the IPC body field of
-    /// the response has not yet been set using `body()` or `try_body()`.
+    /// Attempt to send the `Response`. This will only fail if the IPC body field of
+    /// the `Response` has not yet been set using `body()` or `try_body()`.
     pub fn send(self) -> Result<(), BuildError> {
         if let Some(body) = self.body {
             crate::send_response(

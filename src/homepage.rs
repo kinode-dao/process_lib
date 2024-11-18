@@ -1,7 +1,7 @@
 use crate::Request;
 
 /// Add a new icon and/or widget to the Kinode homepage. Note that the process calling this
-/// function must have the `homepage:homepage:sys` messaging capability.
+/// function must have the `homepage:homepage:sys` messaging [`crate::Capability`].
 ///
 /// This should be called upon process startup to ensure that the process is added to the homepage.
 ///
@@ -30,7 +30,7 @@ pub fn add_to_homepage(label: &str, icon: Option<&str>, path: Option<&str>, widg
 }
 
 /// Remove the caller process from the Kinode homepage. Note that the process calling this function
-/// must have the `homepage:homepage:sys` messaging capability.
+/// must have the `homepage:homepage:sys` messaging [`crate::Capability`].
 ///
 /// This usually isn't necessary as processes are not persisted on homepage between boots.
 pub fn remove_from_homepage() {

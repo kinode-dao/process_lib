@@ -5,7 +5,7 @@
 /// 1. Parse the `our` string into an `Address` object.
 /// 2. Wait for the first message to be sent to the process.
 /// 3. Convert the message body into a string.
-/// 4. Call the `init` function you provide with the `Address` and the message body string.
+/// 4. Call the `init` function you provide with the [`crate::Address`] and the message body string.
 ///
 /// This is best used by then using `clap` to create a `Command` and parsing the body string with it.
 macro_rules! script {

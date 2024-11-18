@@ -34,7 +34,7 @@ pub enum EthAction {
     },
 }
 
-/// Incoming `Request` containing subscription updates or errors that processes will receive.
+/// Incoming [`crate::Request`] containing subscription updates or errors that processes will receive.
 /// Can deserialize all incoming requests from eth:distro:sys to this type.
 ///
 /// Will be serialized and deserialized using `serde_json::to_vec` and `serde_json::from_slice`.
@@ -54,7 +54,7 @@ pub struct EthSubError {
     pub error: String,
 }
 
-/// The Response type which a process will get from requesting with an [`EthAction`] will be
+/// The [`crate::Response`] type which a process will get from requesting with an [`EthAction`] will be
 /// of this type, serialized and deserialized using `serde_json::to_vec`
 /// and `serde_json::from_slice`.
 ///
@@ -90,7 +90,7 @@ pub enum EthError {
 }
 
 /// The action type used for configuring eth:distro:sys. Only processes which have the "root"
-/// capability from eth:distro:sys can successfully send this action.
+/// [`crate::Capability`] from eth:distro:sys can successfully send this action.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EthConfigAction {
     /// Add a new provider to the list of providers.
@@ -126,12 +126,12 @@ pub enum EthConfigAction {
 pub enum EthConfigResponse {
     Ok,
     /// Response from a GetProviders request.
-    /// Note the [`crate::kernel_types::KnsUpdate`] will only have the correct `name` field.
+    /// Note the [`crate::net::KnsUpdate`] will only have the correct `name` field.
     /// The rest of the Update is not saved in this module.
     Providers(SavedConfigs),
     /// Response from a GetAccessSettings request.
     AccessSettings(AccessSettings),
-    /// Permission denied due to missing capability
+    /// Permission denied due to missing [`crate::Capability`]
     PermissionDenied,
     /// Response from a GetState request
     State {
@@ -194,11 +194,11 @@ impl Provider {
             request_timeout,
         }
     }
-    /// Sends a request based on the specified `EthAction` and parses the response.
+    /// Sends a request based on the specified [`EthAction`] and parses the response.
     ///
-    /// This function constructs a request targeting the Ethereum distribution system, serializes the provided `EthAction`,
+    /// This function constructs a request targeting the Ethereum distribution system, serializes the provided [`EthAction`],
     /// and sends it. It awaits a response with a specified timeout, then attempts to parse the response into the expected
-    /// type `T`. This method is generic and can be used for various Ethereum actions by specifying the appropriate `EthAction`
+    /// type `T`. This method is generic and can be used for various Ethereum actions by specifying the appropriate [`EthAction`]
     /// and return type `T`.
     pub fn send_request_and_parse_response<T: serde::de::DeserializeOwned>(
         &self,

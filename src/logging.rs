@@ -107,12 +107,12 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
     }
 }
 
-/// Initialize `tracing`-based logging for the given process at the given level.
+/// Initialize [`tracing`](https://docs.rs/tracing)-based logging for the given process at the given level.
 ///
-/// To write to logs, import the re-exported `debug!`, `info!`, `warn!`, `error!`
-/// macros and use as usual. Logs will be printed to terminal as appropriate depending
-/// on given level. Logs will be logged into the logging file as appropriate depending
-/// on the given level.
+/// To write to logs, import the re-exported [`debug!()`], [`info!()`],
+/// [`warn!()`], [`error!()`] macros and use as usual.
+/// Logs will be printed to terminal as appropriate depending on given level.
+/// Logs will be logged into the logging file as appropriate depending on the given level.
 ///
 /// The logging file lives in the node's `vfs/` directory, specifically at
 /// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home

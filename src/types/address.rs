@@ -1,10 +1,10 @@
-pub use crate::{Address, ProcessId};
+pub use crate::{Address, ProcessId, Request};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
 /// Address is defined in `kinode.wit`, but constructors and methods here.
-/// An `Address` is a combination of a node ID (string) and a [`ProcessId`]. It is
-/// used in the Request/Response pattern to indicate which process on a given node
+/// An Address is a combination of a node ID (string) and a [`ProcessId`]. It is
+/// used in the [`Request`]/[`crate::Response`] pattern to indicate which process on a given node
 /// in the network to direct the message to. The formatting structure for
 /// an Address is `node@process_name:package_name:publisher_node`
 impl Address {
