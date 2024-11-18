@@ -8,7 +8,7 @@ pub enum OnExit {
 }
 
 impl OnExit {
-    /// Call the kernel to get the current set OnExit behavior
+    /// Call the kernel to get the current set `OnExit` behavior.
     pub fn get() -> Self {
         match crate::kinode::process::standard::get_on_exit() {
             crate::kinode::process::standard::OnExit::None => OnExit::None,
@@ -31,7 +31,7 @@ impl OnExit {
             }
         }
     }
-    /// Check if this OnExit is None
+    /// Check if this `OnExit` is [`OnExit::None`].
     pub fn is_none(&self) -> bool {
         match self {
             OnExit::None => true,
@@ -39,7 +39,7 @@ impl OnExit {
             OnExit::Requests(_) => false,
         }
     }
-    /// Check if this OnExit is Restart
+    /// Check if this `OnExit` is [`OnExit::Restart`].
     pub fn is_restart(&self) -> bool {
         match self {
             OnExit::None => false,
@@ -47,7 +47,7 @@ impl OnExit {
             OnExit::Requests(_) => false,
         }
     }
-    /// Check if this OnExit is Requests
+    /// Check if this `OnExit` is [`OnExit::Requests`].
     pub fn is_requests(&self) -> bool {
         match self {
             OnExit::None => false,
@@ -55,7 +55,7 @@ impl OnExit {
             OnExit::Requests(_) => true,
         }
     }
-    /// Get the Requests variant of this OnExit, if it is one
+    /// Get the [`OnExit::Requests`] variant of this `OnExit`, if it is one.
     pub fn get_requests(&self) -> Option<&[Request]> {
         match self {
             OnExit::None => None,
@@ -63,23 +63,23 @@ impl OnExit {
             OnExit::Requests(reqs) => Some(reqs),
         }
     }
-    /// Add a request to this OnExit if it is of variant `Requests`
+    /// Add a [`Request`] to this `OnExit` if it is of variant [`OnExit::Requests`].
     pub fn add_request(&mut self, new: Request) {
         if let OnExit::Requests(ref mut reqs) = self {
             reqs.push(new);
         }
     }
-    /// Set the OnExit behavior for this process.
+    /// Set the `OnExit` behavior for this process.
     ///
-    /// Will return a [`BuildError`] if any requests within the `Requests` behavior are
+    /// Will return a [`BuildError`] if any requests within the [`OnExit::Requests`] behavior are
     /// not valid (by not having a `body` and/or `target` set).
     pub fn set(self) -> Result<(), BuildError> {
         crate::kinode::process::standard::set_on_exit(&self._to_standard()?);
         Ok(())
     }
-    /// Convert this OnExit to the kernel's OnExit type.
+    /// Convert this `OnExit` to the kernel's `OnExit` type.
     ///
-    /// Will return a [`BuildError`] if any requests within the `Requests` behavior are
+    /// Will return a [`BuildError`] if any requests within the [`OnExit::Requests`] behavior are
     /// not valid (by not having a `body` and/or `target` set).
     pub fn _to_standard(self) -> Result<crate::kinode::process::standard::OnExit, BuildError> {
         match self {

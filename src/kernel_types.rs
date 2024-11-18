@@ -147,7 +147,7 @@ pub enum KernelCommand {
     /// The process that sends this command will be given messaging capabilities
     /// for the new process if `public` is false.
     ///
-    /// All capabilities passed into initial_capabilities must be held by the source
+    /// All capabilities passed into `initial_capabilities` must be held by the source
     /// of this message, or the kernel will discard them (silently for now).
     InitializeProcess {
         id: ProcessId,
@@ -273,7 +273,7 @@ impl StateError {
 /// - `image`: An optional field containing a URL to an image representing the package.
 /// - `external_url`: An optional field containing a URL for more information about the package. For example, a link to the github repository.
 /// - `animation_url`: An optional field containing a URL to an animation or video representing the package.
-/// - `properties`: A requried field containing important information about the package.
+/// - `properties`: A required field containing important information about the package.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Erc721Metadata {
     pub name: Option<String>,
@@ -288,15 +288,15 @@ pub struct Erc721Metadata {
 /// This follows the [ERC1155](https://github.com/ethereum/ercs/blob/master/ERCS/erc-1155.md#erc-1155-metadata-uri-json-schema) metadata standard.
 ///
 /// Fields:
-/// - `package_name`: The unique name of the package, used in the `PackageId`, e.g. `package_name:publisher`.
-/// - `publisher`: The KNS identity of the package publisher used in the `PackageId`, e.g. `package_name:publisher`
+/// - `package_name`: The unique name of the package, used in the [`crate::PackageId`], e.g. `package_name:publisher`.
+/// - `publisher`: The KNS identity of the package publisher used in the [`crate::PackageId`], e.g. `package_name:publisher`
 /// - `current_version`: A string representing the current version of the package, e.g. `1.0.0`.
 /// - `mirrors`: A list of NodeIds where the package can be found, providing redundancy.
 /// - `code_hashes`: A map from version names to their respective SHA-256 hashes.
 /// - `license`: An optional field containing the license of the package.
 /// - `screenshots`: An optional field containing a list of URLs to screenshots of the package.
 /// - `wit_version`: An optional field containing the version of the WIT standard that the package adheres to.
-/// - `dependencies`: An optional field containing a list of `PackageId`s: API dependencies.
+/// - `dependencies`: An optional field containing a list of [`crate::PackageId`]s: API dependencies.
 /// - `api_includes`: An optional field containing a list of `PathBuf`s: additional files to include in the `api.zip`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Erc721Properties {

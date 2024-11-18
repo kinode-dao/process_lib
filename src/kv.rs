@@ -3,9 +3,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::marker::PhantomData;
 use thiserror::Error;
 
-/// Actions are sent to a specific key value database, "db" is the name,
-/// "package_id" is the package. Capabilities are checked, you can access another process's
-/// database if it has given you the capability.
+/// Actions are sent to a specific key value database, `db` is the name,
+/// `package_id` is the [`PackageId`]. Capabilities are checked, you can access another process's
+/// database if it has given you the [`crate::Capability`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KvRequest {
     pub package_id: PackageId,
@@ -52,7 +52,7 @@ pub enum KvError {
 }
 
 /// Kv helper struct for a db.
-/// Opening or creating a kv will give you a Result<Kv>.
+/// Opening or creating a kv will give you a `Result<Kv>`.
 /// You can call it's impl functions to interact with it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Kv<K, V> {

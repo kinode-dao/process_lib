@@ -38,10 +38,6 @@ impl std::str::FromStr for ProcessId {
     type Err = ProcessIdParseError;
     /// Attempts to parse a `ProcessId` from a string. To succeed, the string must contain
     /// exactly 3 segments, separated by colons `:`. The segments must not contain colons.
-    /// Please note that while any string without colons will parse successfully
-    /// to create a `ProcessId`, not all strings without colons are actually
-    /// valid usernames, which the `publisher_node` field of a `ProcessId` will
-    /// always in practice be.
     fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
         let segments: Vec<&str> = input.split(':').collect();
         if segments.len() < 3 {

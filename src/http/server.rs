@@ -8,21 +8,21 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-/// HTTP Request received from the `http_server:distro:sys` service as a
+/// [`crate::Request`] received from the `http_server:distro:sys` service as a
 /// result of either an HTTP or WebSocket binding, created via [`HttpServerAction`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
     Http(IncomingHttpRequest),
     /// Processes will receive this kind of request when a client connects to them.
-    /// If a process does not want this websocket open, they should issue a *request*
+    /// If a process does not want this websocket open, they should issue a [`crate::Request`]
     /// containing a [`HttpServerAction::WebSocketClose`] message and this channel ID.
     WebSocketOpen {
         path: String,
         channel_id: u32,
     },
-    /// Processes can both SEND and RECEIVE this kind of request
+    /// Processes can both SEND and RECEIVE this kind of [`crate::Request`]
     /// (send as [`HttpServerAction::WebSocketPush`]).
-    /// When received, will contain the message bytes as lazy_load_blob.
+    /// When received, will contain the message bytes as [`crate::LazyLoadBlob`].
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
@@ -33,7 +33,7 @@ pub enum HttpServerRequest {
 }
 
 impl HttpServerRequest {
-    /// Parse a byte slice into an HttpServerRequest.
+    /// Parse a byte slice into an [`HttpServerRequest`].
     pub fn from_bytes(bytes: &[u8]) -> serde_json::Result<Self> {
         serde_json::from_slice(bytes)
     }
@@ -132,9 +132,9 @@ impl IncomingHttpRequest {
 
 /// The possible message types for [`HttpServerRequest::WebSocketPush`].
 /// Ping and Pong are limited to 125 bytes by the WebSockets protocol.
-/// Text will be sent as a Text frame, with the lazy_load_blob bytes
+/// Text will be sent as a Text frame, with the [`crate::LazyLoadBlob`] bytes
 /// being the UTF-8 encoding of the string. Binary will be sent as a
-/// Binary frame containing the unmodified lazy_load_blob bytes.
+/// Binary frame containing the unmodified [`crate::LazyLoadBlob`] bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum WsMessageType {
     Text,
@@ -144,26 +144,26 @@ pub enum WsMessageType {
     Close,
 }
 
-/// Request type sent to `http_server:distro:sys` in order to configure it.
+/// [`crate::Request`] type sent to `http_server:distro:sys` in order to configure it.
 ///
-/// If a response is expected, all actions will return a Response
+/// If a [`crate::Response`] is expected, all actions will return a [`crate::Response`]
 /// with the shape `Result<(), HttpServerActionError>` serialized to JSON.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HttpServerAction {
-    /// Bind expects a lazy_load_blob if and only if `cache` is TRUE. The lazy_load_blob should
-    /// be the static file to serve at this path.
+    /// Bind expects a [`crate::LazyLoadBlob`] if and only if `cache` is TRUE.
+    /// The [`crate::LazyLoadBlob`] should be the static file to serve at this path.
     Bind {
         path: String,
         /// Set whether the HTTP request needs a valid login cookie, AKA, whether
         /// the user needs to be logged in to access this path.
         authenticated: bool,
-        /// Set whether requests can be fielded from anywhere, or only the loopback address.
+        /// Set whether [`crate::Request`]s can be fielded from anywhere, or only the loopback address.
         local_only: bool,
-        /// Set whether to bind the lazy_load_blob statically to this path. That is, take the
-        /// lazy_load_blob bytes and serve them as the response to any request to this path.
+        /// Set whether to bind the [`crate::LazyLoadBlob`] statically to this path. That is, take the
+        /// [`crate::LazyLoadBlob`] bytes and serve them as the response to any request to this path.
         cache: bool,
     },
-    /// SecureBind expects a lazy_load_blob if and only if `cache` is TRUE. The lazy_load_blob should
+    /// SecureBind expects a [`crate::LazyLoadBlob`] if and only if `cache` is TRUE. The [`crate::LazyLoadBlob`] should
     /// be the static file to serve at this path.
     ///
     /// SecureBind is the same as Bind, except that it forces requests to be made from
@@ -174,8 +174,8 @@ pub enum HttpServerAction {
     /// will require the user to be logged in separately to the general domain authentication.
     SecureBind {
         path: String,
-        /// Set whether to bind the lazy_load_blob statically to this path. That is, take the
-        /// lazy_load_blob bytes and serve them as the response to any request to this path.
+        /// Set whether to bind the [`crate::LazyLoadBlob`] statically to this path. That is, take the
+        /// [`crate::LazyLoadBlob`] bytes and serve them as the response to any request to this path.
         cache: bool,
     },
     /// Unbind a previously-bound HTTP path
@@ -199,26 +199,26 @@ pub enum HttpServerAction {
     },
     /// Unbind a previously-bound WebSocket path
     WebSocketUnbind { path: String },
-    /// When sent, expects a lazy_load_blob containing the WebSocket message bytes to send.
+    /// When sent, expects a [`crate::LazyLoadBlob`] containing the WebSocket message bytes to send.
     WebSocketPush {
         channel_id: u32,
         message_type: WsMessageType,
     },
-    /// When sent, expects a `lazy_load_blob` containing the WebSocket message bytes to send.
-    /// Modifies the `lazy_load_blob` by placing into `WebSocketExtPushData` with id taken from
-    /// this `KernelMessage` and `kinode_message_type` set to `desired_reply_type`.
+    /// When sent, expects a [`crate::LazyLoadBlob`] containing the WebSocket message bytes to send.
+    /// Modifies the [`crate::LazyLoadBlob`] by placing into [`HttpServerAction::WebSocketExtPushData`]` with id taken from
+    /// this [`KernelMessage`]` and `kinode_message_type` set to `desired_reply_type`.
     WebSocketExtPushOutgoing {
         channel_id: u32,
         message_type: WsMessageType,
         desired_reply_type: MessageType,
     },
     /// For communicating with the ext.
-    /// Kinode's http_server sends this to the ext after receiving `WebSocketExtPushOutgoing`.
+    /// Kinode's http_server sends this to the ext after receiving [`HttpServerAction::WebSocketExtPushOutgoing`].
     /// Upon receiving reply with this type from ext, http_server parses, setting:
     /// * id as given,
-    /// * message type as given (Request or Response),
-    /// * body as HttpServerRequest::WebSocketPush,
-    /// * blob as given.
+    /// * message type as given ([`crate::Request`] or [`crate::Response`]),
+    /// * body as [`HttpServerRequest::WebSocketPush`],
+    /// * [`crate::LazyLoadBlob`] as given.
     WebSocketExtPushData {
         id: u64,
         kinode_message_type: MessageType,
@@ -230,11 +230,12 @@ pub enum HttpServerAction {
 
 /// HTTP Response type that can be shared over Wasm boundary to apps.
 /// Respond to [`IncomingHttpRequest`] with this type.
+///
+/// BODY is stored in the [`crate::LazyLoadBlob`] as bytes
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HttpResponse {
     pub status: u16,
     pub headers: HashMap<String, String>,
-    // BODY is stored in the lazy_load_blob, as bytes
 }
 
 impl HttpResponse {
@@ -268,7 +269,7 @@ impl HttpResponse {
     }
 }
 
-/// Part of the Response type issued by http_server
+/// Part of the [`crate::Response`] type issued by http_server
 #[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum HttpServerError {
     #[error("request could not be parsed to HttpServerAction: {req}.")]
@@ -287,7 +288,7 @@ pub enum HttpServerError {
     UnexpectedResponse,
 }
 
-/// Whether the WebSocketPush is a request or a response.
+/// Whether the [`HttpServerAction::WebSocketPush`] is [`crate::Request`] or [`crate::Response`].
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum MessageType {
     Request,
