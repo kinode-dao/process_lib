@@ -42,6 +42,11 @@ impl Address {
     pub fn package_id(&self) -> crate::PackageId {
         crate::PackageId::new(self.package(), self.publisher())
     }
+
+    /// Send a [`Request`] to `Address`.
+    pub fn send_request(&self) -> Request {
+        Request::to(self)
+    }
 }
 
 impl std::str::FromStr for Address {
