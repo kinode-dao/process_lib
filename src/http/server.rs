@@ -3,7 +3,8 @@ use crate::{
     get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
-use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+pub use http::StatusCode;
+use http::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -1041,11 +1042,11 @@ impl HttpServer {
 
     /// Push a WebSocket message to all channels on a given path.
     pub fn ws_push_all_channels(&self, path: &str, message_type: WsMessageType, blob: KiBlob) {
-        if let Some(channels) = self.ws_channels.get(path) {
-            channels.iter().for_each(|channel_id| {
-                send_ws_push(*channel_id, message_type, blob.clone());
-            });
-        }
+        ws_push_all_channels(&self.ws_channels, path, message_type, blob);
+    }
+
+    pub fn get_ws_channels(&self) -> HashMap<String, HashSet<u32>> {
+        self.ws_channels.clone()
     }
 }
 
@@ -1077,6 +1078,19 @@ pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) 
         .blob(blob)
         .send()
         .unwrap()
+}
+
+pub fn ws_push_all_channels(
+    ws_channels: &HashMap<String, HashSet<u32>>,
+    path: &str,
+    message_type: WsMessageType,
+    blob: KiBlob,
+) {
+    if let Some(channels) = ws_channels.get(path) {
+        channels.iter().for_each(|channel_id| {
+            send_ws_push(*channel_id, message_type, blob.clone());
+        });
+    }
 }
 
 /// Guess the MIME type of a file from its extension.
