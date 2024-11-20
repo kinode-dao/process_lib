@@ -307,3 +307,31 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
         cap.issuer == *issuer && params == cap_params
     })
 }
+
+/// The `Spawn!()` macro is defined here as a no-op.
+/// However, in practice, `kit build` will rewrite it during pre-processing.
+///
+/// Example:
+/// ```no_run
+/// fn init(our: Address) {
+///     Spawn!(|our| {
+///         println!("hello from {our}. I am Spawn of {}!", args["our"]);
+///     });
+///     ...
+/// }
+/// ```
+/// will be rewritten by `kit build` to:
+/// 1. Generate a new child process within the package that, here, `println!()`s,
+///    or, in general, executes the code given by the closure.
+/// 2. Replace the code lines in the parent process with [`spawn()`] to start
+///    the generated child and send a [`Request()`] to pass in the closure's args.
+/// 3. Update the relevant metadata for the package
+///    (i.e. `Cargo.toml`, `metadata.json`, etc.).
+#[macro_export]
+macro_rules! Spawn {
+    // Matches a closure with one parameter
+    (|$param:ident| $body:block) => {};
+
+    // If you also need to support multiple parameters in the closure:
+    (|$($param:ident),*| $body:block) => {};
+}
