@@ -314,7 +314,8 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 /// Example:
 /// ```no_run
 /// fn init(our: Address) {
-///     Spawn!(|our| {
+///     let parent = our.clone();
+///     Spawn!(|parent: Address| {
 ///         println!("hello from {our}. I am Spawn of {}!", args["our"]);
 ///     });
 ///     ...
@@ -329,9 +330,6 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 ///    (i.e. `Cargo.toml`, `metadata.json`, etc.).
 #[macro_export]
 macro_rules! Spawn {
-    // Matches a closure with one parameter
-    (|$param:ident| $body:block) => {};
-
-    // If you also need to support multiple parameters in the closure:
-    (|$($param:ident),*| $body:block) => {};
+    // Match one or more type-annotated parameters
+    (|$($param:ident : $type:ty),+ $(,)?| $body:block) => {};
 }
