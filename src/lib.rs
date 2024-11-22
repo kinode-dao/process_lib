@@ -316,7 +316,7 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 /// fn init(our: Address) {
 ///     let parent = our.clone();
 ///     Spawn!(|parent: Address| {
-///         println!("hello from {our}. I am Spawn of {}!", args["our"]);
+///         println!("hello from {our}. I am Spawn of {parent}!");
 ///     });
 ///     ...
 /// }
@@ -329,7 +329,9 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 /// 3. Update the relevant metadata for the package
 ///    (i.e. `Cargo.toml`, `metadata.json`, etc.).
 ///
+/// More example usage:
 ///
+/// Can pass function call rather than closure:
 /// ```no_run
 /// fn init(our: Address) {
 ///     let parent = our.clone();
@@ -337,11 +339,83 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 ///     ...
 /// }
 /// ```
+/// Nested function calls work as expected.
+///
+/// Can optionally supply subset of [`spawn()`] arguments, namely
+/// * name: &str,
+/// * on_exit: [`OnExit`],
+/// * request_capabilities: Vec<[`Capability`]>,
+/// * grant_capabilities: Vec<[`ProcessId`]>,
+/// * public: bool,
+/// for example:
+/// ```no_run
+/// fn init(our: Address) {
+///     let parent = our.clone();
+///     Spawn!(my_function(parent), name: "hello-world", public: true);
+///     ...
+/// }
+/// ```
 #[macro_export]
 macro_rules! Spawn {
-    // Pattern 1: Match closure with type-annotated parameters
+    // Pattern 1: Closure with type-annotated paramters & with no options
     (|$($param:ident : $type:ty),+ $(,)?| $body:block) => {};
 
-    // Pattern 2: Match function call
+    // Pattern 2: Function call with no options
     ($fn_name:ident($($arg:expr),* $(,)?)) => {};
+
+    // Pattern 3: Closure with type-annotated paramters & with options
+    (
+        |$($param:ident : $type:ty),+ $(,)?| $body:block,
+        $(
+            $key:ident : $value:expr
+            $(,)?
+        )*
+    ) => {{
+        // Validate each key at compile time using nested macro
+        validate_spawn_args!($($key),*);
+
+        // Your implementation here
+    }};
+
+    // Pattern 4: Function call with options
+    (
+        $fn_name:ident($($arg:expr),* $(,)?),
+        $(
+            $key:ident : $value:expr
+            $(,)?
+        )*
+    ) => {{
+        // Validate each key at compile time using nested macro
+        validate_spawn_args!($($key),*);
+
+        // Your implementation here
+    }};
+}
+
+#[macro_export]
+macro_rules! validate_spawn_args {
+    // Empty case - no args to validate
+    () => {};
+
+    // Validate single argument
+    (name) => {};
+    (on_exit) => {};
+    (request_capabilities) => {};
+    (grant_capabilities) => {};
+    (public) => {};
+
+    // Recursively validate multiple arguments
+    ($first:ident, $($rest:ident),+ $(,)?) => {
+        validate_spawn_args!($first);
+        validate_spawn_args!($($rest),+);
+    };
+
+    // Error case - invalid argument name
+    ($invalid:ident $(, $($rest:tt)*)?) => {
+        compile_error!(concat!(
+            "Invalid Spawn argument '",
+            stringify!($invalid),
+            "'. Valid options are: name, on_exit, request_capabilities, grant_capabilities, public"
+        ));
+    };
 }
