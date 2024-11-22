@@ -311,7 +311,7 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 /// The `Spawn!()` macro is defined here as a no-op.
 /// However, in practice, `kit build` will rewrite it during pre-processing.
 ///
-/// Example:
+/// Examples:
 /// ```no_run
 /// fn init(our: Address) {
 ///     let parent = our.clone();
@@ -328,8 +328,20 @@ pub fn get_capability(issuer: &Address, params: &str) -> Option<Capability> {
 ///    the generated child and send a [`Request()`] to pass in the closure's args.
 /// 3. Update the relevant metadata for the package
 ///    (i.e. `Cargo.toml`, `metadata.json`, etc.).
+///
+///
+/// ```no_run
+/// fn init(our: Address) {
+///     let parent = our.clone();
+///     Spawn!(my_function(parent));
+///     ...
+/// }
+/// ```
 #[macro_export]
 macro_rules! Spawn {
-    // Match one or more type-annotated parameters
+    // Pattern 1: Match closure with type-annotated parameters
     (|$($param:ident : $type:ty),+ $(,)?| $body:block) => {};
+
+    // Pattern 2: Match function call
+    ($fn_name:ident($($arg:expr),* $(,)?)) => {};
 }
