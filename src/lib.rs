@@ -372,7 +372,7 @@ macro_rules! Spawn {
         )*
     ) => {{
         // Validate each key at compile time using nested macro
-        validate_spawn_args!($($key),*);
+        $crate::validate_spawn_args!($($key),*);
 
         // Your implementation here
     }};
@@ -386,7 +386,7 @@ macro_rules! Spawn {
         )*
     ) => {{
         // Validate each key at compile time using nested macro
-        validate_spawn_args!($($key),*);
+        $crate::validate_spawn_args!($($key),*);
 
         // Your implementation here
     }};
