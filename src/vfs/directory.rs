@@ -1,7 +1,7 @@
 use super::{parse_response, vfs_request, DirEntry, FileType, VfsAction, VfsError, VfsResponse};
 
-/// Vfs helper struct for a directory.
-/// Opening or creating a directory will give you a Result<Directory>.
+/// VFS (Virtual File System) helper struct for a directory.
+/// Opening or creating a directory will give you a `Result<Directory>`.
 /// You can call it's impl functions to interact with it.
 pub struct Directory {
     pub path: String,
@@ -9,7 +9,7 @@ pub struct Directory {
 }
 
 impl Directory {
-    /// Iterates through children of directory, returning a vector of DirEntries.
+    /// Iterates through children of `Directory`, returning a vector of DirEntries.
     /// DirEntries contain the path and file type of each child.
     pub fn read(&self) -> Result<Vec<DirEntry>, VfsError> {
         let message = vfs_request(&self.path, VfsAction::ReadDir)
@@ -31,8 +31,8 @@ impl Directory {
     }
 }
 
-/// Opens or creates a directory at path.
-/// If trying to create an existing directory, will just give you the path.
+/// Opens or creates a `Directory` at path.
+/// If trying to create an existing `Directory`, will just give you the path.
 pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Directory, VfsError> {
     let timeout = timeout.unwrap_or(5);
     if !create {
@@ -88,7 +88,7 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
     }
 }
 
-/// Removes a dir at path, errors if path not found or path is not a directory.
+/// Removes a dir at path, errors if path not found or path is not a `Directory`.
 pub fn remove_dir(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
     let timeout = timeout.unwrap_or(5);
 

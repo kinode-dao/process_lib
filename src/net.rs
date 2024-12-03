@@ -65,9 +65,9 @@ pub enum NetAction {
     ///
     /// This cannot be sent locally.
     ConnectionRequest(NodeId),
-    /// Can only receive from trusted source: requires net root capability.
+    /// Can only receive from trusted source: requires net root [`crate::Capability`].
     KnsUpdate(KnsUpdate),
-    /// Can only receive from trusted source: requires net root capability.
+    /// Can only receive from trusted source: requires net root [`crate::Capability`].
     KnsBatchUpdate(Vec<KnsUpdate>),
     /// Get a list of peers with whom we have an open connection.
     GetPeers,
@@ -161,7 +161,7 @@ impl KnsUpdate {
 /// Note that the given message will be prepended with the source [`Address`]
 /// of this message. This is done in order to not allow different processes
 /// on the same node to sign messages for/as one another. The receiver of
-/// the signed message should use [`verify`] to verify the signature, which
+/// the signed message should use [`verify()`] to verify the signature, which
 /// takes a `from` address to match against that prepended signing [`Address`].
 ///
 /// This function uses a 30-second timeout to reach `net:distro:sys`. If more
@@ -213,7 +213,7 @@ where
         })
 }
 
-/// Get a [`kimap::Kimap`] entry name from its namehash.
+/// Get a [`crate::kimap::Kimap`] entry name from its namehash.
 ///
 /// Default timeout is 30 seconds. Note that the responsiveness of the indexer
 /// will depend on the block option used. The indexer will wait until it has

@@ -246,7 +246,7 @@ pub struct Fact {
 }
 
 /// Errors that can occur when decoding a log from the kimap using
-/// [`decode_mint_log`] or [`decode_note_log`].
+/// [`decode_mint_log()`] or [`decode_note_log()`].
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum DecodeLogError {
     /// The log's topic is not a mint or note event.
@@ -323,7 +323,7 @@ pub fn namehash(name: &str) -> String {
 
 /// Decode a mint log from the kimap into a 'resolved' format.
 ///
-/// Uses `valid_name` to check if the name is valid.
+/// Uses [`valid_name()`] to check if the name is valid.
 pub fn decode_mint_log(log: &crate::eth::Log) -> Result<Mint, DecodeLogError> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
         return Err(DecodeLogError::UnexpectedTopic(log.topics()[0]));
@@ -342,7 +342,7 @@ pub fn decode_mint_log(log: &crate::eth::Log) -> Result<Mint, DecodeLogError> {
 
 /// Decode a note log from the kimap into a 'resolved' format.
 ///
-/// Uses `valid_name` to check if the name is valid.
+/// Uses [`valid_name()`] to check if the name is valid.
 pub fn decode_note_log(log: &crate::eth::Log) -> Result<Note, DecodeLogError> {
     let contract::Note::SIGNATURE_HASH = log.topics()[0] else {
         return Err(DecodeLogError::UnexpectedTopic(log.topics()[0]));
@@ -393,7 +393,7 @@ pub fn resolve_parent(log: &crate::eth::Log, timeout: Option<u64>) -> Option<Str
 /// Given a [`crate::eth::Log`] (which must be a log from kimap), resolve the full name
 /// of the new entry or note.
 ///
-/// Uses `valid_name` to check if the name is valid.
+/// Uses [`valid_name()`] to check if the name is valid.
 pub fn resolve_full_name(log: &crate::eth::Log, timeout: Option<u64>) -> Option<String> {
     let parent_hash = log.topics()[1].to_string();
     let parent_name = net::get_name(&parent_hash, log.block_number, timeout)?;

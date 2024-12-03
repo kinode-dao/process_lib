@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Actions are sent to a specific sqlite database, "db" is the name,
-/// "package_id" is the package. Capabilities are checked, you can access another process's
-/// database if it has given you the capability.
+/// Actions are sent to a specific sqlite database, `db` is the name,
+/// `package_id` is the [`PackageId`]. Capabilities are checked, you can access another process's
+/// database if it has given you the [`crate::Capability`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqliteRequest {
     pub package_id: PackageId,
@@ -74,7 +74,7 @@ pub enum SqliteError {
 }
 
 /// Sqlite helper struct for a db.
-/// Opening or creating a db will give you a Result<sqlite>.
+/// Opening or creating a db will give you a `Result<Sqlite>`.
 /// You can call it's impl functions to interact with it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sqlite {

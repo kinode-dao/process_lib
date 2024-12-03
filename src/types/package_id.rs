@@ -132,11 +132,6 @@ impl std::str::FromStr for PackageId {
     /// Attempt to parse a `PackageId` from a string. The string must
     /// contain exactly two segments, where segments are non-empty strings
     /// separated by a colon (`:`). The segments cannot themselves contain colons.
-    ///
-    /// Please note that while any string without colons will parse successfully
-    /// to create a `PackageId`, not all strings without colons are actually
-    /// valid usernames, which the `publisher_node` field of a `PackageId` will
-    /// always in practice be.
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let segments: Vec<&str> = input.split(':').collect();
         if segments.len() < 2 {
