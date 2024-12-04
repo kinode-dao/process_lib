@@ -186,18 +186,13 @@ pub enum HttpServerAction {
     WebSocketBind {
         path: String,
         authenticated: bool,
-        encrypted: bool,
         extension: bool,
     },
     /// SecureBind is the same as Bind, except that it forces new connections to be made
     /// from the unique subdomain of the process that bound the path. These are *always*
     /// authenticated. Since the subdomain is unique, it will require the user to be
     /// logged in separately to the general domain authentication.
-    WebSocketSecureBind {
-        path: String,
-        encrypted: bool,
-        extension: bool,
-    },
+    WebSocketSecureBind { path: String, extension: bool },
     /// Unbind a previously-bound WebSocket path
     WebSocketUnbind { path: String },
     /// When sent, expects a [`crate::LazyLoadBlob`] containing the WebSocket message bytes to send.
@@ -398,16 +393,12 @@ impl HttpBindingConfig {
 /// `authenticated` is set to true by default and means that the WebSocket server will
 /// require a valid login cookie to access this path.
 ///
-/// `encrypted` is set to false by default and means that the WebSocket server will
-/// not apply a custom encryption to the WebSocket connection using the login cookie.
-///
 /// `extension` is set to false by default and means that the WebSocket will
 /// not use the WebSocket extension protocol to connect with a runtime extension.
 #[derive(Clone, Copy, Debug)]
 pub struct WsBindingConfig {
     authenticated: bool,
     secure_subdomain: bool,
-    encrypted: bool,
     extension: bool,
 }
 
@@ -419,22 +410,15 @@ impl WsBindingConfig {
         Self {
             authenticated: true,
             secure_subdomain: false,
-            encrypted: false,
             extension: false,
         }
     }
 
     /// Create a new WsBindingConfig with the given values.
-    pub fn new(
-        authenticated: bool,
-        secure_subdomain: bool,
-        encrypted: bool,
-        extension: bool,
-    ) -> Self {
+    pub fn new(authenticated: bool, secure_subdomain: bool, extension: bool) -> Self {
         Self {
             authenticated,
             secure_subdomain,
-            encrypted,
             extension,
         }
     }
@@ -535,7 +519,6 @@ impl HttpServer {
             .body(if config.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -543,7 +526,6 @@ impl HttpServer {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.clone(),
                     authenticated: config.authenticated,
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -672,7 +654,6 @@ impl HttpServer {
             .body(
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
-                    encrypted: false,
                     extension: false,
                 })
                 .unwrap(),
@@ -690,7 +671,6 @@ impl HttpServer {
                 WsBindingConfig {
                     authenticated: true,
                     secure_subdomain: true,
-                    encrypted: false,
                     extension: false,
                 },
             );
@@ -756,7 +736,6 @@ impl HttpServer {
             .body(if entry.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.to_string(),
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -764,7 +743,6 @@ impl HttpServer {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.to_string(),
                     authenticated: config.authenticated,
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
