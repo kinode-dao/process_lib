@@ -3,8 +3,8 @@ use super::{
 };
 use crate::{get_blob, PackageId};
 
-/// Vfs helper struct for a file.
-/// Opening or creating a file will give you a `Result<File, VfsError>`.
+/// VFS (Virtual File System) helper struct for a file.
+/// Opening or creating a `File` will give you a `Result<File, VfsError>`.
 /// You can call its impl functions to interact with it.
 pub struct File {
     pub path: String,

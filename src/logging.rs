@@ -107,12 +107,12 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
     }
 }
 
-/// Initialize `tracing`-based logging for the given process at the given level.
+/// Initialize [`tracing`](https://docs.rs/tracing)-based logging for the given process at the given level.
 ///
-/// To write to logs, import the re-exported `debug!`, `info!`, `warn!`, `error!`
-/// macros and use as usual. Logs will be printed to terminal as appropriate depending
-/// on given level. Logs will be logged into the logging file as appropriate depending
-/// on the given level.
+/// To write to logs, import the re-exported [`debug!()`], [`info!()`],
+/// [`warn!()`], [`error!()`] macros and use as usual.
+/// Logs will be printed to terminal as appropriate depending on given level.
+/// Logs will be logged into the logging file as appropriate depending on the given level.
 ///
 /// The logging file lives in the node's `vfs/` directory, specifically at
 /// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home
@@ -123,6 +123,7 @@ pub fn init_logging(
     file_level: Level,
     terminal_level: Level,
     remote: Option<RemoteLogSettings>,
+    terminal_levels_mapping: Option<(u8, u8, u8, u8)>,
 ) -> anyhow::Result<()> {
     let log_dir_path = create_drive(our.package_id(), "log", None)?;
     let log_file_path = format!("{log_dir_path}/{}.log", our.process());
@@ -142,10 +143,11 @@ pub fn init_logging(
         metadata.level() == &Level::DEBUG
     });
     let file_writer_maker = FileWriterMaker { file: log_file };
-    let error_terminal_writer_maker = TerminalWriterMaker { level: 0 };
-    let warn_terminal_writer_maker = TerminalWriterMaker { level: 1 };
-    let info_terminal_writer_maker = TerminalWriterMaker { level: 2 };
-    let debug_terminal_writer_maker = TerminalWriterMaker { level: 3 };
+    let (error, warn, info, debug) = terminal_levels_mapping.unwrap_or_else(|| (0, 1, 2, 3));
+    let error_terminal_writer_maker = TerminalWriterMaker { level: error };
+    let warn_terminal_writer_maker = TerminalWriterMaker { level: warn };
+    let info_terminal_writer_maker = TerminalWriterMaker { level: info };
+    let debug_terminal_writer_maker = TerminalWriterMaker { level: debug };
 
     let sub = tracing_subscriber::registry()
         .with(ErrorLayer::default())

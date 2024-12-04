@@ -8,10 +8,10 @@ pub mod file;
 pub use directory::*;
 pub use file::*;
 
-/// IPC body format for requests sent to vfs runtime module
+/// IPC body format for requests sent to vfs runtime module.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
-    /// path is always prepended by package_id, the capabilities of the topmost folder are checked
+    /// path is always prepended by [`crate::PackageId`], the capabilities of the topmost folder are checked
     /// "/your_package:publisher.os/drive_folder/another_folder_or_file"
     pub path: String,
     pub action: VfsAction,

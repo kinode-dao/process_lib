@@ -1,8 +1,8 @@
 use crate::{Context, Message, Request, SendError};
 use serde::{Deserialize, Serialize};
 
-/// The body field for requests to `timer:distro:sys`, a runtime module that allows processes
-/// to set timers with a duration specified in milliseconds.
+/// The [`Request::body()`] field for requests to `timer:distro:sys`, a runtime module
+/// that allows processes to set timers with a duration specified in milliseconds.
 ///
 /// The timer module is public, so no particular capabilities are required to use it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,7 +17,7 @@ impl Into<Vec<u8>> for TimerAction {
     }
 }
 
-/// Set a timer using the runtime that will return a Response after the specified duration.
+/// Set a timer using the runtime that will return a [`crate::Response`] after the specified duration.
 /// The duration should be a number of milliseconds.
 pub fn set_timer(duration: u64, context: Option<Context>) {
     let mut request = Request::to(("our", "timer", "distro", "sys"))
@@ -31,7 +31,7 @@ pub fn set_timer(duration: u64, context: Option<Context>) {
     request.send().unwrap();
 }
 
-/// Set a timer using the runtime that will return a Response after the specified duration,
+/// Set a timer using the runtime that will return a [`crate::Response`] after the specified duration,
 /// then wait for that timer to resolve. The duration should be a number of milliseconds.
 pub fn set_and_await_timer(duration: u64) -> Result<Message, SendError> {
     Request::to(("our", "timer", "distro", "sys"))

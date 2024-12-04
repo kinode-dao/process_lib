@@ -1,7 +1,11 @@
 # `kinode_process_lib`
 
 Library of functions for more ergonomic [Kinode](https://github.com/kinode-dao/kinode) Rust process development.
-Documentation can be found [here](https://docs.rs/kinode_process_lib).
+
+[Documentation can be found here](https://docs.rs/kinode_process_lib).
+
+[Crate can be found here](https://crates.io/crates/kinode_process_lib).
+
 See the [Kinode Book](https://book.kinode.org) for a guide on how to use this library to write Kinode apps in Rust.
 
 The major version of `kinode_process_lib` will always match the major version of Kinode OS.

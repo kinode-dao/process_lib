@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use thiserror::Error;
 
-/// Request type sent to the `http-client:distro:sys` service in order to open a
+/// [`crate::Request`] type sent to the `http-client:distro:sys` service in order to open a
 /// WebSocket connection, send a WebSocket message on an existing connection, or
 /// send an HTTP request.
 ///
-/// You will receive a Response with the format `Result<HttpClientResponse, HttpClientError>`.
+/// You will receive a [`crate::Response`] with the format `Result<HttpClientResponse, HttpClientError>`.
 ///
 /// Always serialized/deserialized as JSON.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,7 +47,7 @@ pub struct OutgoingHttpRequest {
     pub headers: HashMap<String, String>,
 }
 
-/// Request that comes from an open WebSocket client connection in the
+/// [`crate::Request`] that comes from an open WebSocket client connection in the
 /// `http-client:distro:sys` service. Be prepared to receive these after
 /// using a [`HttpClientAction::WebSocketOpen`] to open a connection.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ pub enum HttpClientRequest {
     },
 }
 
-/// Response type received from the `http-client:distro:sys` service after
+/// [`crate::Response`] type received from the `http-client:distro:sys` service after
 /// sending a successful [`HttpClientAction`] to it.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {
@@ -125,7 +125,7 @@ pub fn send_request(
 
 /// Make an HTTP request using http-client and await its response.
 ///
-/// Returns [`Response`] from the `http` crate if successful, with the body type as bytes.
+/// Returns HTTP response from the `http` crate if successful, with the body type as bytes.
 pub fn send_request_await_response(
     method: Method,
     url: url::Url,

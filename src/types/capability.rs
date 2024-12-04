@@ -3,13 +3,13 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeStruct};
 use std::hash::{Hash, Hasher};
 
-/// Capability is defined in the wit bindings, but constructors and methods here.
-/// A `Capability` is a combination of an Address and a set of Params (a serialized
+/// `Capability` is defined in the wit bindings, but constructors and methods here.
+/// A `Capability` is a combination of an [`Address`] and a set of Params (a serialized
 /// JSON string by convention). Capabilities are attached to messages to either share
 /// that capability with the receiving process, or to prove that a process has
 /// authority to perform a certain action.
 impl Capability {
-    /// Create a new [`Capability`]. Takes an [`Address`] and a parameter, which is a JSON string.
+    /// Create a new `Capability`. Takes an [`Address`] and a parameter, which is a JSON string.
     pub fn new<T, U>(address: T, params: U) -> Capability
     where
         T: Into<Address>,
