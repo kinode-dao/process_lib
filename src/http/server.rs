@@ -405,7 +405,7 @@ pub struct WsBindingConfig {
 impl WsBindingConfig {
     /// Create a new WsBindingConfig with default values.
     ///
-    /// Authenticated, not encrypted, not an extension.
+    /// Authenticated, not a secure subdomain, not an extension.
     pub fn default() -> Self {
         Self {
             authenticated: true,
@@ -432,13 +432,6 @@ impl WsBindingConfig {
     /// Set whether the WebSocket server will be bound on a secure subdomain.
     pub fn secure_subdomain(mut self, secure_subdomain: bool) -> Self {
         self.secure_subdomain = secure_subdomain;
-        self
-    }
-
-    /// Set whether the WebSocket server will apply a custom encryption to the WebSocket
-    /// connection using the login cookie.
-    pub fn encrypted(mut self, encrypted: bool) -> Self {
-        self.encrypted = encrypted;
         self
     }
 
@@ -758,7 +751,6 @@ impl HttpServer {
         if resp.is_ok() {
             entry.authenticated = config.authenticated;
             entry.secure_subdomain = config.secure_subdomain;
-            entry.encrypted = config.encrypted;
             entry.extension = config.extension;
         }
         resp
