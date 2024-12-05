@@ -249,7 +249,7 @@ impl Request {
             our_capabilities()
                 .into_iter()
                 .filter(|cap| cap.issuer == target)
-                .collect(),
+                .collect::<Vec<_>>(),
         );
         self
     }

@@ -156,8 +156,8 @@ impl Response {
         self.capabilities.extend(
             our_capabilities()
                 .into_iter()
-                .filter(|cap| cap.issues == target)
-                .collect(),
+                .filter(|cap| cap.issuer == target)
+                .collect::<Vec<_>>(),
         );
         self
     }
