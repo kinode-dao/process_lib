@@ -1,4 +1,4 @@
-use crate::{our_capabilities, types::message::BuildError, Capability, LazyLoadBlob};
+use crate::{our_capabilities, types::message::BuildError, Address, Capability, LazyLoadBlob};
 
 /// `Response` builder. Use [`Response::new()`] to start a `Response`, then build it,
 /// then call [`Response::send()`] on it to fire.
@@ -159,6 +159,7 @@ impl Response {
                 .filter(|cap| cap.issues == target)
                 .collect(),
         );
+        self
     }
     /// Attempt to send the `Response`. This will only fail if the IPC body field of
     /// the `Response` has not yet been set using `body()` or `try_body()`.
