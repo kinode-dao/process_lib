@@ -1050,8 +1050,7 @@ impl HttpServer {
     }
 
     /// Register multiple paths with the HTTP server using the same configuration.
-    /// Uses the security setting from HttpBindingConfig if secure is None,
-    /// forces secure binding if Some(true), or forces non-secure binding if Some(false).
+    /// The security setting is determined by the `secure_subdomain` field in `HttpBindingConfig`.
     /// All paths must be bound successfully, or none will be bound. If any path
     /// fails to bind, all previously bound paths will be unbound before returning
     /// the error.
@@ -1059,27 +1058,21 @@ impl HttpServer {
         &mut self,
         paths: Vec<T>,
         config: HttpBindingConfig,
-        secure: Option<bool>,
     ) -> Result<(), HttpServerError> {
         let mut bound_paths = Vec::new();
-        
+
         for path in paths {
             let path_str = path.into();
-            let result = match secure {
-                Some(true) => self.secure_bind_http_path(path_str.clone()),
-                Some(false) => self.bind_http_path(path_str.clone(), config.clone()),
-                None => {
-                    if config.secure_subdomain {
-                        self.secure_bind_http_path(path_str.clone())
-                    } else {
-                        self.bind_http_path(path_str.clone(), config.clone())
-                    }
-                }
+            let result = match config.secure_subdomain {
+                true => self.secure_bind_http_path(path_str.clone()),
+                false => self.bind_http_path(path_str.clone(), config.clone()),
             };
+
             match result {
+                // If binding succeeds, add the path to the list of bound paths
                 Ok(_) => bound_paths.push(path_str),
+                // If binding fails, unbind all previously bound paths
                 Err(e) => {
-                    // If binding fails, unbind all previously bound paths
                     for bound_path in bound_paths {
                         let _ = self.unbind_http_path(&bound_path);
                     }
