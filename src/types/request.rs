@@ -1,6 +1,6 @@
 use crate::{
-    Address, Capability, LazyLoadBlob, Message, SendError, _wit_message_to_message,
-    _wit_send_error_to_send_error, types::message::BuildError,
+    our_capabilities, Address, Capability, LazyLoadBlob, Message, SendError,
+    _wit_message_to_message, _wit_send_error_to_send_error, types::message::BuildError,
 };
 
 /// `Request` builder. Use [`Request::new()`] or [`Request::to()`] to start a request,
@@ -235,11 +235,23 @@ impl Request {
         self
     }
     /// Attach the [`Capability`] to message this process to the next message.
-    pub fn attach_messaging(mut self, our: &Address) {
+    pub fn attach_messaging(mut self, our: &Address) -> Self {
         self.capabilities.extend(vec![Capability {
             issuer: our.clone(),
             params: "\"messaging\"".to_string(),
         }]);
+        self
+    }
+    /// Attach all capabilities we have that were issued by `target` to the next message.
+    pub fn attach_all(mut self, target: &Address) -> Self {
+        let target = target.clone();
+        self.capabilities.extend(
+            our_capabilities()
+                .into_iter()
+                .filter(|cap| cap.issuer == target)
+                .collect::<Vec<_>>(),
+        );
+        self
     }
     /// Attempt to send the `Request`. This will only fail if the `target` or `body`
     /// fields have not been set.
