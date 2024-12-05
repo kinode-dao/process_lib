@@ -1048,6 +1048,48 @@ impl HttpServer {
     pub fn get_ws_channels(&self) -> HashMap<String, HashSet<u32>> {
         self.ws_channels.clone()
     }
+
+    /// Register multiple paths with the HTTP server using the same configuration.
+    /// Uses the security setting from HttpBindingConfig if secure is None,
+    /// forces secure binding if Some(true), or forces non-secure binding if Some(false).
+    /// All paths must be bound successfully, or none will be bound. If any path
+    /// fails to bind, all previously bound paths will be unbound before returning
+    /// the error.
+    pub fn bind_multiple_http_paths<T: Into<String>>(
+        &mut self,
+        paths: Vec<T>,
+        config: HttpBindingConfig,
+        secure: Option<bool>,
+    ) -> Result<(), HttpServerError> {
+        let mut bound_paths = Vec::new();
+        
+        for path in paths {
+            let path_str = path.into();
+            let result = match secure {
+                Some(true) => self.secure_bind_http_path(path_str.clone()),
+                Some(false) => self.bind_http_path(path_str.clone(), config.clone()),
+                None => {
+                    if config.secure_subdomain {
+                        self.secure_bind_http_path(path_str.clone())
+                    } else {
+                        self.bind_http_path(path_str.clone(), config.clone())
+                    }
+                }
+            };
+            match result {
+                Ok(_) => bound_paths.push(path_str),
+                Err(e) => {
+                    // If binding fails, unbind all previously bound paths
+                    for bound_path in bound_paths {
+                        let _ = self.unbind_http_path(&bound_path);
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Send an HTTP response to an incoming HTTP request ([`HttpServerRequest::Http`]).
