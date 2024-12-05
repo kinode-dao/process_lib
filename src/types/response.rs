@@ -1,4 +1,4 @@
-use crate::{types::message::BuildError, Capability, LazyLoadBlob};
+use crate::{our_capabilities, types::message::BuildError, Capability, LazyLoadBlob};
 
 /// `Response` builder. Use [`Response::new()`] to start a `Response`, then build it,
 /// then call [`Response::send()`] on it to fire.
@@ -149,6 +149,16 @@ impl Response {
     pub fn capabilities(mut self, capabilities: Vec<Capability>) -> Self {
         self.capabilities = capabilities;
         self
+    }
+    /// Attach all capabilities we have that were issued by `target` to the next message.
+    pub fn attach_all(mut self, target: &Address) {
+        let target = target.clone();
+        self.capabilities.extend(
+            our_capabilities()
+                .into_iter()
+                .filter(|cap| cap.issues == target)
+                .collect(),
+        );
     }
     /// Attempt to send the `Response`. This will only fail if the IPC body field of
     /// the `Response` has not yet been set using `body()` or `try_body()`.
