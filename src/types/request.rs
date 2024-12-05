@@ -235,14 +235,14 @@ impl Request {
         self
     }
     /// Attach the [`Capability`] to message this process to the next message.
-    pub fn attach_messaging(mut self, our: &Address) {
+    pub fn attach_messaging(mut self, our: &Address) -> Self {
         self.capabilities.extend(vec![Capability {
             issuer: our.clone(),
             params: "\"messaging\"".to_string(),
         }]);
     }
     /// Attach all capabilities we have that were issued by `target` to the next message.
-    pub fn attach_all(mut self, target: &Address) {
+    pub fn attach_all(mut self, target: &Address) -> Self {
         let target = target.clone();
         self.capabilities.extend(
             our_capabilities()

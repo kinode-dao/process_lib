@@ -151,7 +151,7 @@ impl Response {
         self
     }
     /// Attach all capabilities we have that were issued by `target` to the next message.
-    pub fn attach_all(mut self, target: &Address) {
+    pub fn attach_all(mut self, target: &Address) -> Self {
         let target = target.clone();
         self.capabilities.extend(
             our_capabilities()
