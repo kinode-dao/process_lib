@@ -1,4 +1,6 @@
 use crate::{Message, Request as KiRequest};
+pub use alloy::rpc::json_rpc::ErrorPayload;
+pub use alloy::rpc::types::eth::pubsub::SubscriptionResult;
 pub use alloy::rpc::types::pubsub::Params;
 pub use alloy::rpc::types::{
     request::{TransactionInput, TransactionRequest},
