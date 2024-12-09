@@ -1,6 +1,6 @@
 //
-// kinode.wit, copied from https://github.com/kinode-dao/kinode-wit/tree/1.0
-// https://raw.githubusercontent.com/kinode-dao/kinode-wit/1.0/kinode.wit
+// kinode.wit, copied from https://github.com/kinode-dao/kinode-wit
+// https://raw.githubusercontent.com/kinode-dao/kinode-wit/v1.0.0/kinode.wit
 //
 
 package kinode:process@1.0.0;
