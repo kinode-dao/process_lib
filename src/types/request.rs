@@ -34,7 +34,7 @@ impl Request {
             capabilities: vec![],
         }
     }
-    /// Start building a new Request with the `target` [`Address`]. In order
+    /// Start building a new `Request` with the `target` [`Address`]. In order
     /// to successfully send, you must still fill out at least the `body` field
     /// by calling [`Request::body()`] or [`Request::try_body()`] next.
     pub fn to<T>(target: T) -> Self
@@ -52,7 +52,7 @@ impl Request {
             capabilities: vec![],
         }
     }
-    /// Set the target [`Address`] that this request will go to.
+    /// Set the `target` [`Address`] that this `Request` will go to.
     pub fn target<T>(mut self, target: T) -> Self
     where
         T: Into<Address>,
@@ -241,6 +241,13 @@ impl Request {
             params: "\"messaging\"".to_string(),
         }]);
         self
+    }
+    /// Attach all capabilities we have that were issued by `target` (if set) to the next message.
+    pub fn try_attach_all(mut self) -> Result<Self, BuildError> {
+        let Some(ref target) = self.target else {
+            return Err(BuildError::NoTarget);
+        };
+        Ok(self.attach_all(target))
     }
     /// Attach all capabilities we have that were issued by `target` to the next message.
     pub fn attach_all(mut self, target: &Address) -> Self {
