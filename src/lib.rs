@@ -173,7 +173,7 @@ pub fn spawn(
     wasm_path: &str,
     on_exit: OnExit,
     request_capabilities: Vec<Capability>,
-    grant_capabilities: Vec<ProcessId>,
+    grant_capabilities: Vec<(ProcessId, Json)>,
     public: bool,
 ) -> Result<ProcessId, SpawnError> {
     crate::kinode::process::standard::spawn(
