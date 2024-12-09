@@ -33,7 +33,7 @@ pub mod homepage;
 /// Contains types from the `http` crate to use as well.
 ///
 /// Your process must have the [`Capability`] to message and receive messages from
-/// `http_server:distro:sys` and/or `http_client:distro:sys` to use this module.
+/// `http-server:distro:sys` and/or `http-client:distro:sys` to use this module.
 pub mod http;
 /// The types that the kernel itself uses -- warning -- these will
 /// be incompatible with WIT types in some cases, leading to annoying errors.
@@ -173,7 +173,7 @@ pub fn spawn(
     wasm_path: &str,
     on_exit: OnExit,
     request_capabilities: Vec<Capability>,
-    grant_capabilities: Vec<ProcessId>,
+    grant_capabilities: Vec<(ProcessId, Json)>,
     public: bool,
 ) -> Result<ProcessId, SpawnError> {
     crate::kinode::process::standard::spawn(
