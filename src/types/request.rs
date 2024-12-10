@@ -247,7 +247,7 @@ impl Request {
         let Some(ref target) = self.target else {
             return Err(BuildError::NoTarget);
         };
-        Ok(self.attach_all(target.clone()))
+        Ok(self.attach_all(&target.clone()))
     }
     /// Attach all capabilities we have that were issued by `target` to the next message.
     pub fn attach_all(mut self, target: &Address) -> Self {
