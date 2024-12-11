@@ -108,7 +108,7 @@ pub enum NetResponse {
     Verified(bool),
 }
 
-/// Request performed to `kns_indexer:kns_indexer:sys`, a userspace process
+/// Request performed to `kns-indexer:kns-indexer:sys`, a userspace process
 /// installed by default.
 ///
 /// Other requests exist but are only used internally.
@@ -131,7 +131,7 @@ pub struct NamehashToNameRequest {
     pub block: Option<u64>,
 }
 
-/// Response from `kns_indexer:kns_indexer:sys`.
+/// Response from `kns-indexer:kns-indexer:sys`.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum IndexerResponses {
     /// Response to [`IndexerRequests::NamehashToName`].
@@ -222,7 +222,7 @@ pub fn get_name<T>(namehash: T, block: Option<u64>, timeout: Option<u64>) -> Opt
 where
     T: Into<String>,
 {
-    let res = Request::to(("our", "kns_indexer", "kns_indexer", "sys"))
+    let res = Request::to(("our", "kns-indexer", "kns-indexer", "sys"))
         .body(
             serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
                 hash: namehash.into(),

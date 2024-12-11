@@ -220,7 +220,7 @@ pub mod contract {
 }
 
 /// A mint log from the kimap, converted to a 'resolved' format using
-/// namespace data saved in the kns_indexer.
+/// namespace data saved in the kns-indexer.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Mint {
     pub name: String,
@@ -228,7 +228,7 @@ pub struct Mint {
 }
 
 /// A note log from the kimap, converted to a 'resolved' format using
-/// namespace data saved in the kns_indexer
+/// namespace data saved in the kns-indexer
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Note {
     pub note: String,
@@ -237,7 +237,7 @@ pub struct Note {
 }
 
 /// A fact log from the kimap, converted to a 'resolved' format using
-/// namespace data saved in the kns_indexer
+/// namespace data saved in the kns-indexer
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Fact {
     pub fact: String,
@@ -255,7 +255,7 @@ pub enum DecodeLogError {
     InvalidName(String),
     /// An error occurred while decoding the log.
     DecodeError(String),
-    /// The parent name could not be resolved with `kns_indexer`.
+    /// The parent name could not be resolved with `kns-indexer`.
     UnresolvedParent(String),
 }
 

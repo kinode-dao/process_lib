@@ -1,5 +1,6 @@
 use crate::{Address, Capability, LazyLoadBlob, ProcessId};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// The basic `Message` type.
 /// A `Message` is either a [`crate::Request`] or a [`crate::Response`].
@@ -26,22 +27,13 @@ pub enum Message {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Error, Serialize, Deserialize)]
 pub enum BuildError {
+    #[error("no body set for message")]
     NoBody,
+    #[error("no target set for message")]
     NoTarget,
 }
-
-impl std::fmt::Display for BuildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            BuildError::NoBody => write!(f, "no body set for message"),
-            BuildError::NoTarget => write!(f, "no target set for  message"),
-        }
-    }
-}
-
-impl std::error::Error for BuildError {}
 
 impl Message {
     /// Get the `source` [`Address`] of a `Message`.
