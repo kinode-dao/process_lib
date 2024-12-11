@@ -1,11 +1,12 @@
 [package]
 name = "kinode_process_lib"
-description = "A library for writing Kinode processes in Rust."
+authors = ["Sybil Technologies AG"]
 version = "0.10.0"
 edition = "2021"
-license-file = "LICENSE"
+description = "A library for writing Kinode processes in Rust."
 homepage = "https://kinode.org"
 repository = "https://github.com/kinode-dao/process_lib"
+license = "Apache-2.0"
 
 [features]
 logging = ["dep:color-eyre", "dep:tracing", "dep:tracing-error", "dep:tracing-subscriber"]
