@@ -178,8 +178,14 @@ interface standard {
     receive: func() ->
         result<tuple<address, message>, tuple<send-error, option<context>>>;
 
-    /// Gets lazy-load-blob, if any, of the message we most recently received.
+    /// Returns whether or not the current message has a blob.
+    has-blob: func() -> bool;
+
+    /// Returns the blob of the current message, if any.
     get-blob: func() -> option<lazy-load-blob>;
+
+    /// Returns the last blob this process received.
+    last-blob: func() -> option<lazy-load-blob>;
 
     /// Send request to target.
     send-request: func(
