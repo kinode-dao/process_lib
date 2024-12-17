@@ -34,15 +34,9 @@ pub enum KvResponse {
     BeginTx { tx_id: u64 },
     Get { key: Vec<u8> },
     Err { error: KvError },
-    IterStart {
-        iterator_id: u64,
-    },
-    IterNext {
-        done: bool,
-    },
-    IterClose {
-        iterator_id: u64,
-    },
+    IterStart { iterator_id: u64 },
+    IterNext { done: bool },
+    IterClose { iterator_id: u64 },
 }
 
 #[derive(Debug, Serialize, Deserialize, Error)]
@@ -194,7 +188,7 @@ where
     }
 
     /// Get all key-value pairs with an optional prefix
-    /// 
+    ///
     /// # Example
     /// ```
     /// let entries = kv.iter_all(Some(&"user_"), 100)?;
@@ -209,8 +203,8 @@ where
             .body(serde_json::to_vec(&KvRequest {
                 package_id: self.package_id.clone(),
                 db: self.db.clone(),
-                action: KvAction::IterStart { 
-                    prefix: prefix.map(|p| serde_json::to_vec(p)).transpose()? 
+                action: KvAction::IterStart {
+                    prefix: prefix.map(|p| serde_json::to_vec(p)).transpose()?,
                 },
             })?)
             .send_and_await_response(self.timeout)?;
@@ -227,7 +221,7 @@ where
         };
 
         let mut all_entries = Vec::new();
-        
+
         // Collect all entries
         loop {
             let res = Request::new()
@@ -246,8 +240,10 @@ where
                 Ok(Message::Response { body, .. }) => {
                     match serde_json::from_slice::<KvResponse>(&body)? {
                         KvResponse::IterNext { done } => {
-                            let entries_bytes = get_blob().ok_or_else(|| anyhow::anyhow!("No blob data"))?;
-                            let entries: Vec<(Vec<u8>, Vec<u8>)> = serde_json::from_slice(&entries_bytes)?;
+                            let entries_bytes =
+                                get_blob().ok_or_else(|| anyhow::anyhow!("No blob data"))?;
+                            let entries: Vec<(Vec<u8>, Vec<u8>)> =
+                                serde_json::from_slice(&entries_bytes)?;
                             for (key_bytes, value_bytes) in entries {
                                 let key = serde_json::from_slice(&key_bytes)?;
                                 let value = serde_json::from_slice(&value_bytes)?;
@@ -279,7 +275,7 @@ where
     }
 
     /// Get all keys with an optional prefix
-    /// 
+    ///
     /// # Example
     /// ```
     /// let keys = kv.collect_keys(Some(&"user_"))?;
@@ -288,11 +284,15 @@ where
     /// }
     /// ```
     pub fn collect_keys(&self, prefix: Option<&K>) -> anyhow::Result<Vec<K>> {
-        Ok(self.iter_all(prefix, 100)?.into_iter().map(|(k, _)| k).collect())
+        Ok(self
+            .iter_all(prefix, 100)?
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect())
     }
 
     /// Get all values with an optional key prefix
-    /// 
+    ///
     /// # Example
     /// ```
     /// let values = kv.collect_values(Some(&"user_"))?;
@@ -301,7 +301,11 @@ where
     /// }
     /// ```
     pub fn collect_values(&self, prefix: Option<&K>) -> anyhow::Result<Vec<V>> {
-        Ok(self.iter_all(prefix, 100)?.into_iter().map(|(_, v)| v).collect())
+        Ok(self
+            .iter_all(prefix, 100)?
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect())
     }
 
     /// Commit a transaction.
