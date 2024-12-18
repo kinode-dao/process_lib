@@ -33,7 +33,7 @@ pub mod homepage;
 /// Contains types from the `http` crate to use as well.
 ///
 /// Your process must have the [`Capability`] to message and receive messages from
-/// `http_server:distro:sys` and/or `http_client:distro:sys` to use this module.
+/// `http-server:distro:sys` and/or `http-client:distro:sys` to use this module.
 pub mod http;
 /// The types that the kernel itself uses -- warning -- these will
 /// be incompatible with WIT types in some cases, leading to annoying errors.
@@ -129,6 +129,24 @@ macro_rules! kiprintln {
     }};
 }
 
+/// Uses the `print_to_terminal` function from the WIT interface on maximally-verbose
+/// mode, i.e., this print will always show up in the terminal. To control
+/// the verbosity, use the `print_to_terminal` function directly.
+///
+/// This version of println prepends the name of the process, so developers can see
+/// which process within a package is generating the print.
+#[macro_export]
+macro_rules! process_println {
+    () => {
+        let our = $crate::our();
+        $crate::print_to_terminal(0, format!("{}: ", our.process()).as_str());
+    };
+    ($($arg:tt)*) => {{
+        let our = $crate::our();
+        $crate::print_to_terminal(0, format!("{}: {}", our.process(), format!($($arg)*)).as_str());
+    }};
+}
+
 /// Await the next message sent to this process. The runtime will handle the
 /// queueing of incoming messages, and calling this function will provide the next one.
 /// Interwoven with incoming messages are errors from the network. If your process
@@ -173,7 +191,7 @@ pub fn spawn(
     wasm_path: &str,
     on_exit: OnExit,
     request_capabilities: Vec<Capability>,
-    grant_capabilities: Vec<ProcessId>,
+    grant_capabilities: Vec<(ProcessId, Json)>,
     public: bool,
 ) -> Result<ProcessId, SpawnError> {
     crate::kinode::process::standard::spawn(
