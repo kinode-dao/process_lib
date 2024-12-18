@@ -129,6 +129,24 @@ macro_rules! kiprintln {
     }};
 }
 
+/// Uses the `print_to_terminal` function from the WIT interface on maximally-verbose
+/// mode, i.e., this print will always show up in the terminal. To control
+/// the verbosity, use the `print_to_terminal` function directly.
+///
+/// This version of println prepends the name of the process, so developers can see
+/// which process within a package is generating the print.
+#[macro_export]
+macro_rules! process_println {
+    () => {
+        let our = $crate::our();
+        $crate::print_to_terminal(0, format!("{}: ", our.process()).as_str());
+    };
+    ($($arg:tt)*) => {{
+        let our = $crate::our();
+        $crate::print_to_terminal(0, format!("{}: {}", our.process(), format!($($arg)*)).as_str());
+    }};
+}
+
 /// Await the next message sent to this process. The runtime will handle the
 /// queueing of incoming messages, and calling this function will provide the next one.
 /// Interwoven with incoming messages are errors from the network. If your process
