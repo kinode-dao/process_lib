@@ -30,7 +30,7 @@ pub enum KvResponse {
     Ok,
     BeginTx { tx_id: u64 },
     Get { key: Vec<u8> },
-    Err { error: KvError },
+    Err(KvError),
 }
 
 #[derive(Debug, Serialize, Deserialize, Error)]
@@ -93,7 +93,7 @@ where
                             .map_err(|e| anyhow::anyhow!("Failed to deserialize value: {}", e))?;
                         Ok(value)
                     }
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -122,7 +122,7 @@ where
 
                 match response {
                     KvResponse::Ok => Ok(()),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -148,7 +148,7 @@ where
 
                 match response {
                     KvResponse::Ok => Ok(()),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -173,7 +173,7 @@ where
 
                 match response {
                     KvResponse::BeginTx { tx_id } => Ok(tx_id),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -198,7 +198,7 @@ where
 
                 match response {
                     KvResponse::Ok => Ok(()),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -235,7 +235,7 @@ where
                     timeout,
                     _marker: PhantomData,
                 }),
-                KvResponse::Err { error } => Err(error.into()),
+                KvResponse::Err(error) => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
         }
@@ -262,7 +262,7 @@ pub fn remove_db(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyho
 
             match response {
                 KvResponse::Ok => Ok(()),
-                KvResponse::Err { error } => Err(error.into()),
+                KvResponse::Err(error) => Err(error.into()),
                 _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
             }
         }

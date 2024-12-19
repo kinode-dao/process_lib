@@ -36,7 +36,7 @@ pub enum SqliteResponse {
     Ok,
     Read,
     BeginTx { tx_id: u64 },
-    Err { error: SqliteError },
+    Err(SqliteError),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -117,7 +117,7 @@ impl Sqlite {
                         })?;
                         Ok(values)
                     }
-                    SqliteResponse::Err { error } => Err(error.into()),
+                    SqliteResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!(
                         "sqlite: unexpected response {:?}",
                         response
@@ -151,7 +151,7 @@ impl Sqlite {
 
                 match response {
                     SqliteResponse::Ok => Ok(()),
-                    SqliteResponse::Err { error } => Err(error.into()),
+                    SqliteResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!(
                         "sqlite: unexpected response {:?}",
                         response
@@ -179,7 +179,7 @@ impl Sqlite {
 
                 match response {
                     SqliteResponse::BeginTx { tx_id } => Ok(tx_id),
-                    SqliteResponse::Err { error } => Err(error.into()),
+                    SqliteResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!(
                         "sqlite: unexpected response {:?}",
                         response
@@ -207,7 +207,7 @@ impl Sqlite {
 
                 match response {
                     SqliteResponse::Ok => Ok(()),
-                    SqliteResponse::Err { error } => Err(error.into()),
+                    SqliteResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!(
                         "sqlite: unexpected response {:?}",
                         response
@@ -242,7 +242,7 @@ pub fn open(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyhow::Re
                     db: db.to_string(),
                     timeout,
                 }),
-                SqliteResponse::Err { error } => Err(error.into()),
+                SqliteResponse::Err(error) => Err(error.into()),
                 _ => Err(anyhow::anyhow!(
                     "sqlite: unexpected response {:?}",
                     response
@@ -272,7 +272,7 @@ pub fn remove_db(package_id: PackageId, db: &str, timeout: Option<u64>) -> anyho
 
             match response {
                 SqliteResponse::Ok => Ok(()),
-                SqliteResponse::Err { error } => Err(error.into()),
+                SqliteResponse::Err(error) => Err(error.into()),
                 _ => Err(anyhow::anyhow!(
                     "sqlite: unexpected response {:?}",
                     response
