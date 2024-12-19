@@ -1,6 +1,6 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
+    get_blob, last_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
 pub use http::StatusCode;
@@ -1000,7 +1000,7 @@ impl HttpServer {
             HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,
-            } => ws_handler(channel_id, message_type, get_blob().unwrap_or_default()),
+            } => ws_handler(channel_id, message_type, last_blob().unwrap_or_default()),
             HttpServerRequest::WebSocketOpen { path, channel_id } => {
                 self.handle_websocket_open(&path, channel_id);
             }

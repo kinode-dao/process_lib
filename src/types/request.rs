@@ -243,7 +243,7 @@ impl Request {
         self
     }
     /// Attach all capabilities we have that were issued by `target` (if set) to the next message.
-    pub fn try_attach_all(mut self) -> Result<Self, BuildError> {
+    pub fn try_attach_all(self) -> Result<Self, BuildError> {
         let Some(ref target) = self.target else {
             return Err(BuildError::NoTarget);
         };
