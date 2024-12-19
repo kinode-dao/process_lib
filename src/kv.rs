@@ -13,47 +13,143 @@ pub struct KvRequest {
     pub action: KvAction,
 }
 
+/// IPC Action format, representing operations that can be performed on the key-value runtime module.
+/// These actions are included in a KvRequest sent to the kv:distro:sys runtime module.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum KvAction {
+    /// Opens an existing key-value database or creates a new one if it doesn't exist.
     Open,
+    /// Permanently deletes the entire key-value database.
     RemoveDb,
+    /// Sets a value for the specified key in the database.
+    ///
+    /// # Parameters
+    /// * `key` - The key as a byte vector
+    /// * `tx_id` - Optional transaction ID if this operation is part of a transaction
     Set { key: Vec<u8>, tx_id: Option<u64> },
+    /// Deletes a key-value pair from the database.
+    ///
+    /// # Parameters
+    /// * `key` - The key to delete as a byte vector
+    /// * `tx_id` - Optional transaction ID if this operation is part of a transaction
     Delete { key: Vec<u8>, tx_id: Option<u64> },
+    /// Retrieves the value associated with the specified key.
+    ///
+    /// # Parameters
+    /// * `key` - The key to look up as a byte vector
     Get { key: Vec<u8> },
+    /// Begins a new transaction for atomic operations.
     BeginTx,
+    /// Commits all operations in the specified transaction.
+    ///
+    /// # Parameters
+    /// * `tx_id` - The ID of the transaction to commit
     Commit { tx_id: u64 },
+    /// Creates a backup of the database.
     Backup,
+    /// Starts an iterator over the database contents.
+    ///
+    /// # Parameters
+    /// * `prefix` - Optional byte vector to filter keys by prefix
     IterStart { prefix: Option<Vec<u8>> },
+    /// Advances the iterator and returns the next batch of items.
+    ///
+    /// # Parameters
+    /// * `iterator_id` - The ID of the iterator to advance
+    /// * `count` - Maximum number of items to return
     IterNext { iterator_id: u64, count: u64 },
+    /// Closes an active iterator.
+    ///
+    /// # Parameters
+    /// * `iterator_id` - The ID of the iterator to close
     IterClose { iterator_id: u64 },
 }
 
+/// Response types for key-value store operations.
+/// These responses are returned after processing a KvAction request.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KvResponse {
+    /// Indicates successful completion of an operation.
     Ok,
+    /// Returns the transaction ID for a newly created transaction.
+    ///
+    /// # Fields
+    /// * `tx_id` - The ID of the newly created transaction
     BeginTx { tx_id: u64 },
+    /// Returns the key that was retrieved from the database.
+    ///
+    /// # Fields
+    /// * `key` - The retrieved key as a byte vector
     Get { key: Vec<u8> },
+    /// Indicates an error occurred during the operation.
+    ///
+    /// # Fields
+    /// * `error` - The specific error that occurred
     Err { error: KvError },
+    /// Returns the ID of a newly created iterator.
+    ///
+    /// # Fields
+    /// * `iterator_id` - The ID of the created iterator
     IterStart { iterator_id: u64 },
+    /// Indicates whether the iterator has more items.
+    ///
+    /// # Fields
+    /// * `done` - True if there are no more items to iterate over
     IterNext { done: bool },
+    /// Confirms the closure of an iterator.
+    ///
+    /// # Fields
+    /// * `iterator_id` - The ID of the closed iterator
     IterClose { iterator_id: u64 },
 }
 
+/// Errors that can occur during key-value store operations.
+/// These errors are returned as part of `KvResponse::Err` when an operation fails.
 #[derive(Debug, Serialize, Deserialize, Error)]
 pub enum KvError {
-    #[error("kv: DbDoesNotExist")]
+    /// The requested database does not exist.
+    #[error("Database does not exist")]
     NoDb,
-    #[error("kv: KeyNotFound")]
+
+    /// The requested key was not found in the database.
+    #[error("Key not found in database")]
     KeyNotFound,
-    #[error("kv: no Tx found")]
+
+    /// No active transaction found for the given transaction ID.
+    #[error("Transaction not found")]
     NoTx,
-    #[error("kv: No capability: {error}")]
+
+    /// The specified iterator was not found.
+    #[error("Iterator not found")]
+    NoIterator,
+
+    /// The operation requires capabilities that the caller doesn't have.
+    ///
+    /// # Fields
+    /// * `error` - Description of the missing capability or permission
+    #[error("Missing required capability: {error}")]
     NoCap { error: String },
-    #[error("kv: rocksdb internal error: {error}")]
+
+    /// An internal RocksDB error occurred during the operation.
+    ///
+    /// # Fields
+    /// * `action` - The operation that was being performed
+    /// * `error` - The specific error message from RocksDB
+    #[error("RocksDB error during {action}: {error}")]
     RocksDBError { action: String, error: String },
-    #[error("kv: input bytes/json/key error: {error}")]
+
+    /// Error parsing or processing input data.
+    ///
+    /// # Fields
+    /// * `error` - Description of what was invalid about the input
+    #[error("Invalid input: {error}")]
     InputError { error: String },
-    #[error("kv: IO error: {error}")]
+
+    /// An I/O error occurred during the operation.
+    ///
+    /// # Fields
+    /// * `error` - Description of the I/O error
+    #[error("I/O error: {error}")]
     IOError { error: String },
 }
 
@@ -240,10 +336,10 @@ where
                 Ok(Message::Response { body, .. }) => {
                     match serde_json::from_slice::<KvResponse>(&body)? {
                         KvResponse::IterNext { done } => {
-                            let entries_bytes =
+                            let blob =
                                 get_blob().ok_or_else(|| anyhow::anyhow!("No blob data"))?;
                             let entries: Vec<(Vec<u8>, Vec<u8>)> =
-                                serde_json::from_slice(&entries_bytes)?;
+                                serde_json::from_slice(&blob.bytes)?;
                             for (key_bytes, value_bytes) in entries {
                                 let key = serde_json::from_slice(&key_bytes)?;
                                 let value = serde_json::from_slice(&value_bytes)?;
