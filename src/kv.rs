@@ -336,8 +336,7 @@ where
                 Ok(Message::Response { body, .. }) => {
                     match serde_json::from_slice::<KvResponse>(&body)? {
                         KvResponse::IterNext { done } => {
-                            let blob =
-                                get_blob().ok_or_else(|| anyhow::anyhow!("No blob data"))?;
+                            let blob = get_blob().ok_or_else(|| anyhow::anyhow!("No blob data"))?;
                             let entries: Vec<(Vec<u8>, Vec<u8>)> =
                                 serde_json::from_slice(&blob.bytes)?;
                             for (key_bytes, value_bytes) in entries {
