@@ -81,9 +81,9 @@ impl File {
     /// Read into buffer from current cursor position
     /// Returns the amount of bytes read.
     pub fn read_at(&self, buffer: &mut [u8]) -> Result<usize, VfsError> {
-        let length = buffer.len();
+        let length = buffer.len() as u64;
 
-        let message = vfs_request(&self.path, VfsAction::ReadExact(length as u64))
+        let message = vfs_request(&self.path, VfsAction::ReadExact { length })
             .send_and_await_response(self.timeout)
             .unwrap()
             .map_err(|e| VfsError::IOError {
@@ -216,7 +216,7 @@ impl File {
     /// Seek file to position.
     /// Returns the new position.
     pub fn seek(&mut self, pos: SeekFrom) -> Result<u64, VfsError> {
-        let message = vfs_request(&self.path, VfsAction::Seek { seek_from: pos })
+        let message = vfs_request(&self.path, VfsAction::Seek(pos))
             .send_and_await_response(self.timeout)
             .unwrap()
             .map_err(|e| VfsError::IOError {
@@ -225,7 +225,9 @@ impl File {
             })?;
 
         match parse_response(message.body())? {
-            VfsResponse::SeekFrom(new_pos) => Ok(new_pos),
+            VfsResponse::SeekFrom {
+                new_offset: new_pos,
+            } => Ok(new_pos),
             VfsResponse::Err(e) => Err(e),
             _ => Err(VfsError::ParseError {
                 error: "unexpected response".to_string(),
