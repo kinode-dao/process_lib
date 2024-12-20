@@ -13,40 +13,98 @@ pub struct KvRequest {
     pub action: KvAction,
 }
 
+/// IPC Action format, representing operations that can be performed on the key-value runtime module.
+/// These actions are included in a KvRequest sent to the kv:distro:sys runtime module.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum KvAction {
+    /// Opens an existing key-value database or creates a new one if it doesn't exist.
     Open,
+    /// Permanently deletes the entire key-value database.
     RemoveDb,
+    /// Sets a value for the specified key in the database.
+    ///
+    /// # Parameters
+    /// * `key` - The key as a byte vector
+    /// * `tx_id` - Optional transaction ID if this operation is part of a transaction
     Set { key: Vec<u8>, tx_id: Option<u64> },
+    /// Deletes a key-value pair from the database.
+    ///
+    /// # Parameters
+    /// * `key` - The key to delete as a byte vector
+    /// * `tx_id` - Optional transaction ID if this operation is part of a transaction
     Delete { key: Vec<u8>, tx_id: Option<u64> },
+    /// Retrieves the value associated with the specified key.
+    ///
+    /// # Parameters
+    /// * `key` - The key to look up as a byte vector
     Get { key: Vec<u8> },
+    /// Begins a new transaction for atomic operations.
     BeginTx,
+    /// Commits all operations in the specified transaction.
+    ///
+    /// # Parameters
+    /// * `tx_id` - The ID of the transaction to commit
     Commit { tx_id: u64 },
+    /// Creates a backup of the database.
     Backup,
 }
 
+/// Response types for key-value store operations.
+/// These responses are returned after processing a KvAction request.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KvResponse {
+    /// Indicates successful completion of an operation.
     Ok,
+    /// Returns the transaction ID for a newly created transaction.
+    ///
+    /// # Fields
+    /// * `tx_id` - The ID of the newly created transaction
     BeginTx { tx_id: u64 },
+    /// Returns the key that was retrieved from the database.
+    ///
+    /// # Fields
+    /// * `key` - The retrieved key as a byte vector
     Get { key: Vec<u8> },
+    /// Indicates an error occurred during the operation.
     Err(KvError),
 }
 
+/// Errors that can occur during key-value store operations.
+/// These errors are returned as part of `KvResponse::Err` when an operation fails.
 #[derive(Debug, Serialize, Deserialize, Error)]
 pub enum KvError {
+    /// The requested database does not exist.
     #[error("kv: DbDoesNotExist")]
     NoDb,
+    /// The requested key was not found in the database.
     #[error("kv: KeyNotFound")]
     KeyNotFound,
+    /// No active transaction found for the given transaction ID.
     #[error("kv: no Tx found")]
     NoTx,
+    /// The operation requires capabilities that the caller doesn't have.
+    ///
+    /// # Fields
+    /// * `error` - Description of the missing capability or permission
     #[error("kv: No capability: {error}")]
     NoCap { error: String },
+    /// An internal RocksDB error occurred during the operation.
+    ///
+    /// # Fields
+    /// * `action` - The operation that was being performed
+    /// * `error` - The specific error message from RocksDB
     #[error("kv: rocksdb internal error: {error}")]
     RocksDBError { action: String, error: String },
+    /// Error parsing or processing input data.
+    ///
+    /// # Fields
+    /// * `error` - Description of what was invalid about the input
     #[error("kv: input bytes/json/key error: {error}")]
     InputError { error: String },
+    /// An I/O error occurred during the operation.
+    ///
+    /// # Fields
+    /// * `error` - Description of the I/O error
     #[error("kv: IO error: {error}")]
     IOError { error: String },
 }
