@@ -389,9 +389,7 @@ impl Kv<Vec<u8>, Vec<u8>> {
                         };
                         Ok(bytes)
                     }
-                    KvResponse::Err { 
-                        0: error
-                     } => Err(error.into()),
+                    KvResponse::Err { 0: error } => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
