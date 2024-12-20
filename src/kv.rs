@@ -1,4 +1,5 @@
 use crate::{get_blob, Message, PackageId, Request};
+use alloy::rpc::types::error;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::marker::PhantomData;
 use thiserror::Error;
@@ -362,6 +363,107 @@ where
             _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
         }
     }
+}
+
+impl Kv<Vec<u8>, Vec<u8>> {
+    /// Get raw bytes directly
+    pub fn get_raw(&self, key: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let res = Request::new()
+            .target(("our", "kv", "distro", "sys"))
+            .body(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Get { key: key.to_vec() },
+            })?)
+            .send_and_await_response(self.timeout)?;
+
+        match res {
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
+
+                match response {
+                    KvResponse::Get { .. } => {
+                        let bytes = match get_blob() {
+                            Some(bytes) => bytes.bytes,
+                            None => return Err(anyhow::anyhow!("kv: no blob")),
+                        };
+                        Ok(bytes)
+                    }
+                    KvResponse::Err { 
+                        0: error
+                     } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+        }
+    }
+
+    /// Set raw bytes directly
+    pub fn set_raw(&self, key: &[u8], value: &[u8], tx_id: Option<u64>) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "kv", "distro", "sys"))
+            .body(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Set {
+                    key: key.to_vec(),
+                    tx_id,
+                },
+            })?)
+            .blob_bytes(value.to_vec())
+            .send_and_await_response(self.timeout)?;
+
+        match res {
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
+
+                match response {
+                    KvResponse::Ok => Ok(()),
+                    KvResponse::Err { 0: error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+        }
+    }
+
+    /// Delete raw bytes directly
+    pub fn delete_raw(&self, key: &[u8], tx_id: Option<u64>) -> anyhow::Result<()> {
+        let res = Request::new()
+            .target(("our", "kv", "distro", "sys"))
+            .body(serde_json::to_vec(&KvRequest {
+                package_id: self.package_id.clone(),
+                db: self.db.clone(),
+                action: KvAction::Delete {
+                    key: key.to_vec(),
+                    tx_id,
+                },
+            })?)
+            .send_and_await_response(self.timeout)?;
+
+        match res {
+            Ok(Message::Response { body, .. }) => {
+                let response = serde_json::from_slice::<KvResponse>(&body)?;
+
+                match response {
+                    KvResponse::Ok => Ok(()),
+                    KvResponse::Err { 0: error } => Err(error.into()),
+                    _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
+                }
+            }
+            _ => Err(anyhow::anyhow!("kv: unexpected message: {:?}", res)),
+        }
+    }
+}
+
+/// Helper function to open a raw bytes key-value store
+pub fn open_raw(
+    package_id: PackageId,
+    db: &str,
+    timeout: Option<u64>,
+) -> anyhow::Result<Kv<Vec<u8>, Vec<u8>>> {
+    open(package_id, db, timeout)
 }
 
 /// Opens or creates a kv db.
