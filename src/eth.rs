@@ -666,13 +666,19 @@ impl Provider {
     }
 
     /// Subscribe in a loop until successful
-    pub fn subscribe_loop(&self, sub_id: u64, filter: Filter) {
+    pub fn subscribe_loop(
+        &self,
+        sub_id: u64,
+        filter: Filter,
+        print_verbosity_success: u8,
+        print_verbosity_error: u8,
+    ) {
         loop {
             match self.subscribe(sub_id, filter.clone()) {
                 Ok(()) => break,
                 Err(_) => {
                     crate::print_to_terminal(
-                        0,
+                        print_verbosity_error,
                         "failed to subscribe to chain! trying again in 5s...",
                     );
                     std::thread::sleep(std::time::Duration::from_secs(5));
@@ -680,7 +686,7 @@ impl Provider {
                 }
             }
         }
-        crate::print_to_terminal(0, "subscribed to logs successfully");
+        crate::print_to_terminal(print_verbosity_success, "subscribed to logs successfully");
     }
 
     /// Unsubscribes from a previously created subscription.
