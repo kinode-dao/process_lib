@@ -130,7 +130,7 @@ where
                             .map_err(|e| anyhow::anyhow!("Failed to deserialize value: {}", e))?;
                         Ok(value)
                     }
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -191,7 +191,7 @@ where
 
                 match response {
                     KvResponse::Ok => Ok(()),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
@@ -247,7 +247,7 @@ where
 
                 match response {
                     KvResponse::Ok => Ok(()),
-                    KvResponse::Err { error } => Err(error.into()),
+                    KvResponse::Err(error) => Err(error.into()),
                     _ => Err(anyhow::anyhow!("kv: unexpected response {:?}", response)),
                 }
             }
