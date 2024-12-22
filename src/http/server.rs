@@ -1,6 +1,6 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
+    get_blob, last_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
 pub use http::StatusCode;
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-/// [`crate::Request`] received from the `http_server:distro:sys` service as a
+/// [`crate::Request`] received from the `http-server:distro:sys` service as a
 /// result of either an HTTP or WebSocket binding, created via [`HttpServerAction`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HttpServerRequest {
@@ -145,7 +145,7 @@ pub enum WsMessageType {
     Close,
 }
 
-/// [`crate::Request`] type sent to `http_server:distro:sys` in order to configure it.
+/// [`crate::Request`] type sent to `http-server:distro:sys` in order to configure it.
 ///
 /// If a [`crate::Response`] is expected, all actions will return a [`crate::Response`]
 /// with the shape `Result<(), HttpServerActionError>` serialized to JSON.
@@ -186,18 +186,13 @@ pub enum HttpServerAction {
     WebSocketBind {
         path: String,
         authenticated: bool,
-        encrypted: bool,
         extension: bool,
     },
     /// SecureBind is the same as Bind, except that it forces new connections to be made
     /// from the unique subdomain of the process that bound the path. These are *always*
     /// authenticated. Since the subdomain is unique, it will require the user to be
     /// logged in separately to the general domain authentication.
-    WebSocketSecureBind {
-        path: String,
-        encrypted: bool,
-        extension: bool,
-    },
+    WebSocketSecureBind { path: String, extension: bool },
     /// Unbind a previously-bound WebSocket path
     WebSocketUnbind { path: String },
     /// When sent, expects a [`crate::LazyLoadBlob`] containing the WebSocket message bytes to send.
@@ -214,8 +209,8 @@ pub enum HttpServerAction {
         desired_reply_type: MessageType,
     },
     /// For communicating with the ext.
-    /// Kinode's http_server sends this to the ext after receiving [`HttpServerAction::WebSocketExtPushOutgoing`].
-    /// Upon receiving reply with this type from ext, http_server parses, setting:
+    /// Kinode's http-server sends this to the ext after receiving [`HttpServerAction::WebSocketExtPushOutgoing`].
+    /// Upon receiving reply with this type from ext, http-server parses, setting:
     /// * id as given,
     /// * message type as given ([`crate::Request`] or [`crate::Response`]),
     /// * body as [`HttpServerRequest::WebSocketPush`],
@@ -270,7 +265,7 @@ impl HttpResponse {
     }
 }
 
-/// Part of the [`crate::Response`] type issued by http_server
+/// Part of the [`crate::Response`] type issued by http-server
 #[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum HttpServerError {
     #[error("request could not be parsed to HttpServerAction: {req}.")]
@@ -281,11 +276,11 @@ pub enum HttpServerError {
     PathBindError { error: String },
     #[error("WebSocket error: {error}")]
     WebSocketPushError { error: String },
-    /// Not actually issued by `http_server:distro:sys`, just this library
+    /// Not actually issued by `http-server:distro:sys`, just this library
     #[error("timeout")]
     Timeout,
-    /// Not actually issued by `http_server:distro:sys`, just this library
-    #[error("unexpected response from http_server")]
+    /// Not actually issued by `http-server:distro:sys`, just this library
+    #[error("unexpected response from http-server")]
     UnexpectedResponse,
 }
 
@@ -303,7 +298,7 @@ pub struct HttpServer {
     ws_paths: HashMap<String, WsBindingConfig>,
     /// A mapping of WebSocket paths to the channels that are open on them.
     ws_channels: HashMap<String, HashSet<u32>>,
-    /// The timeout given for `http_server:distro:sys` to respond to a configuration request.
+    /// The timeout given for `http-server:distro:sys` to respond to a configuration request.
     pub timeout: u64,
 }
 
@@ -398,43 +393,32 @@ impl HttpBindingConfig {
 /// `authenticated` is set to true by default and means that the WebSocket server will
 /// require a valid login cookie to access this path.
 ///
-/// `encrypted` is set to false by default and means that the WebSocket server will
-/// not apply a custom encryption to the WebSocket connection using the login cookie.
-///
 /// `extension` is set to false by default and means that the WebSocket will
 /// not use the WebSocket extension protocol to connect with a runtime extension.
 #[derive(Clone, Copy, Debug)]
 pub struct WsBindingConfig {
     authenticated: bool,
     secure_subdomain: bool,
-    encrypted: bool,
     extension: bool,
 }
 
 impl WsBindingConfig {
     /// Create a new WsBindingConfig with default values.
     ///
-    /// Authenticated, not encrypted, not an extension.
+    /// Authenticated, not a secure subdomain, not an extension.
     pub fn default() -> Self {
         Self {
             authenticated: true,
             secure_subdomain: false,
-            encrypted: false,
             extension: false,
         }
     }
 
     /// Create a new WsBindingConfig with the given values.
-    pub fn new(
-        authenticated: bool,
-        secure_subdomain: bool,
-        encrypted: bool,
-        extension: bool,
-    ) -> Self {
+    pub fn new(authenticated: bool, secure_subdomain: bool, extension: bool) -> Self {
         Self {
             authenticated,
             secure_subdomain,
-            encrypted,
             extension,
         }
     }
@@ -448,13 +432,6 @@ impl WsBindingConfig {
     /// Set whether the WebSocket server will be bound on a secure subdomain.
     pub fn secure_subdomain(mut self, secure_subdomain: bool) -> Self {
         self.secure_subdomain = secure_subdomain;
-        self
-    }
-
-    /// Set whether the WebSocket server will apply a custom encryption to the WebSocket
-    /// connection using the login cookie.
-    pub fn encrypted(mut self, encrypted: bool) -> Self {
-        self.encrypted = encrypted;
         self
     }
 
@@ -487,7 +464,7 @@ impl HttpServer {
     {
         let path: String = path.into();
         let cache = config.static_content.is_some();
-        let req = KiRequest::to(("our", "http_server", "distro", "sys")).body(
+        let req = KiRequest::to(("our", "http-server", "distro", "sys")).body(
             serde_json::to_vec(&if config.secure_subdomain {
                 HttpServerAction::SecureBind {
                     path: path.clone(),
@@ -531,11 +508,10 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(if config.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -543,7 +519,6 @@ impl HttpServer {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.clone(),
                     authenticated: config.authenticated,
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -575,7 +550,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::Bind {
                     path: path.clone(),
@@ -626,7 +601,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::SecureBind {
                     path: path.clone(),
@@ -668,11 +643,10 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.clone(),
-                    encrypted: false,
                     extension: false,
                 })
                 .unwrap(),
@@ -690,7 +664,6 @@ impl HttpServer {
                 WsBindingConfig {
                     authenticated: true,
                     secure_subdomain: true,
-                    encrypted: false,
                     extension: false,
                 },
             );
@@ -713,7 +686,7 @@ impl HttpServer {
             .ok_or(HttpServerError::PathBindError {
                 error: "path not found".to_string(),
             })?;
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::Bind {
                     path: path.to_string(),
@@ -752,11 +725,10 @@ impl HttpServer {
             .ok_or(HttpServerError::PathBindError {
                 error: "path not found".to_string(),
             })?;
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(if entry.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
                     path: path.to_string(),
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -764,7 +736,6 @@ impl HttpServer {
                 serde_json::to_vec(&HttpServerAction::WebSocketBind {
                     path: path.to_string(),
                     authenticated: config.authenticated,
-                    encrypted: config.encrypted,
                     extension: config.extension,
                 })
                 .unwrap()
@@ -780,7 +751,6 @@ impl HttpServer {
         if resp.is_ok() {
             entry.authenticated = config.authenticated;
             entry.secure_subdomain = config.secure_subdomain;
-            entry.encrypted = config.encrypted;
             entry.extension = config.extension;
         }
         resp
@@ -792,7 +762,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(serde_json::to_vec(&HttpServerAction::Unbind { path: path.clone() }).unwrap())
             .send_and_await_response(self.timeout)
             .unwrap();
@@ -814,7 +784,7 @@ impl HttpServer {
         T: Into<String>,
     {
         let path: String = path.into();
-        let res = KiRequest::to(("our", "http_server", "distro", "sys"))
+        let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::WebSocketUnbind { path: path.clone() })
                     .unwrap(),
@@ -911,7 +881,7 @@ impl HttpServer {
     }
 
     /// Serve static files from a given directory by binding all of them
-    /// in http_server to their filesystem path.
+    /// in http-server to their filesystem path.
     ///
     /// The directory is relative to the `pkg` folder within this package's drive.
     ///
@@ -1030,7 +1000,7 @@ impl HttpServer {
             HttpServerRequest::WebSocketPush {
                 channel_id,
                 message_type,
-            } => ws_handler(channel_id, message_type, get_blob().unwrap_or_default()),
+            } => ws_handler(channel_id, message_type, last_blob().unwrap_or_default()),
             HttpServerRequest::WebSocketOpen { path, channel_id } => {
                 self.handle_websocket_open(&path, channel_id);
             }
@@ -1102,7 +1072,7 @@ pub fn send_response(status: StatusCode, headers: Option<HashMap<String, String>
 
 /// Send a WebSocket push message on an open WebSocket channel.
 pub fn send_ws_push(channel_id: u32, message_type: WsMessageType, blob: KiBlob) {
-    KiRequest::to(("our", "http_server", "distro", "sys"))
+    KiRequest::to(("our", "http-server", "distro", "sys"))
         .body(
             serde_json::to_vec(&HttpServerRequest::WebSocketPush {
                 channel_id,
