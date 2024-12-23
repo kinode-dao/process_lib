@@ -30,12 +30,11 @@ pub enum HttpClientAction {
     },
 }
 
-/// HTTP Request type that can be shared over Wasm boundary to apps.
-/// This is the one you send to the `http-client:distro:sys` service.
+/// HTTP Request type contained in [`HttpClientAction::Http`].
 ///
 /// BODY is stored in the lazy_load_blob, as bytes
 ///
-/// TIMEOUT is stored in the message expect_response value
+/// TIMEOUT is stored in the message's `expects_response` value
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutgoingHttpRequest {
     /// must parse to [`http::Method`]
@@ -63,32 +62,38 @@ pub enum HttpClientRequest {
 
 /// [`crate::Response`] type received from the `http-client:distro:sys` service after
 /// sending a successful [`HttpClientAction`] to it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HttpClientResponse {
     Http(HttpResponse),
     WebSocketAck,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum HttpClientError {
     // HTTP errors
-    #[error("http-client: request is not valid HttpClientRequest: {req}.")]
-    BadRequest { req: String },
-    #[error("http-client: http method not supported: {method}.")]
+    #[error("request could not be deserialized to valid HttpClientRequest")]
+    MalformedRequest,
+    #[error("http method not supported: {method}")]
     BadMethod { method: String },
-    #[error("http-client: url could not be parsed: {url}.")]
+    #[error("url could not be parsed: {url}")]
     BadUrl { url: String },
-    #[error("http-client: http version not supported: {version}.")]
+    #[error("http version not supported: {version}")]
     BadVersion { version: String },
-    #[error("http-client: failed to execute request {error}.")]
-    RequestFailed { error: String },
+    #[error("client failed to build request: {0}")]
+    BuildRequestFailed(String),
+    #[error("client failed to execute request: {0}")]
+    ExecuteRequestFailed(String),
 
     // WebSocket errors
-    #[error("websocket_client: failed to open connection {url}.")]
+    #[error("could not open connection to {url}")]
     WsOpenFailed { url: String },
-    #[error("websocket_client: failed to send message {req}.")]
-    WsPushFailed { req: String },
-    #[error("websocket_client: failed to close connection {channel_id}.")]
+    #[error("sent WebSocket push to unknown channel {channel_id}")]
+    WsPushUnknownChannel { channel_id: u32 },
+    #[error("WebSocket push failed because message had no blob attached")]
+    WsPushNoBlob,
+    #[error("WebSocket push failed because message type was Text, but blob was not a valid UTF-8 string")]
+    WsPushBadText,
+    #[error("failed to close connection {channel_id} because it was not open")]
     WsCloseFailed { channel_id: u32 },
 }
 
@@ -141,17 +146,15 @@ pub fn send_request_await_response(
                 url: url.to_string(),
                 headers: headers.unwrap_or_default(),
             }))
-            .map_err(|e| HttpClientError::BadRequest {
-                req: format!("{e:?}"),
-            })?,
+            .map_err(|_| HttpClientError::MalformedRequest)?,
         )
         .blob_bytes(body)
         .send_and_await_response(timeout)
         .unwrap();
     let Ok(Message::Response { body, .. }) = res else {
-        return Err(HttpClientError::RequestFailed {
-            error: "http-client timed out".to_string(),
-        });
+        return Err(HttpClientError::ExecuteRequestFailed(
+            "http-client timed out".to_string(),
+        ));
     };
     let resp = match serde_json::from_slice::<
         std::result::Result<HttpClientResponse, HttpClientError>,
@@ -159,15 +162,15 @@ pub fn send_request_await_response(
     {
         Ok(Ok(HttpClientResponse::Http(resp))) => resp,
         Ok(Ok(HttpClientResponse::WebSocketAck)) => {
-            return Err(HttpClientError::RequestFailed {
-                error: "http-client gave unexpected response".to_string(),
-            })
+            return Err(HttpClientError::ExecuteRequestFailed(
+                "http-client gave unexpected response".to_string(),
+            ))
         }
         Ok(Err(e)) => return Err(e),
         Err(e) => {
-            return Err(HttpClientError::RequestFailed {
-                error: format!("http-client gave invalid response: {e:?}"),
-            })
+            return Err(HttpClientError::ExecuteRequestFailed(format!(
+                "http-client gave invalid response: {e:?}"
+            )))
         }
     };
     let mut http_response = http::Response::builder()
@@ -175,14 +178,10 @@ pub fn send_request_await_response(
     let headers = http_response.headers_mut().unwrap();
     for (key, value) in &resp.headers {
         let Ok(key) = http::header::HeaderName::from_str(key) else {
-            return Err(HttpClientError::RequestFailed {
-                error: format!("http-client gave invalid header key: {key}"),
-            });
+            continue;
         };
         let Ok(value) = http::header::HeaderValue::from_str(value) else {
-            return Err(HttpClientError::RequestFailed {
-                error: format!("http-client gave invalid header value: {value}"),
-            });
+            continue;
         };
         headers.insert(key, value);
     }
