@@ -15,10 +15,7 @@ impl Directory {
         let message = vfs_request(&self.path, VfsAction::ReadDir)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::ReadDir(entries) => Ok(entries),
@@ -39,17 +36,13 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
         let message = vfs_request(path, VfsAction::Metadata)
             .send_and_await_response(timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: path.to_string(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
         match parse_response(message.body())? {
             VfsResponse::Metadata(m) => {
                 if m.file_type != FileType::Directory {
-                    return Err(VfsError::IOError {
-                        error: "Entry at path not a directory".to_string(),
-                        path: path.to_string(),
-                    });
+                    return Err(VfsError::IOError(
+                        "entry at path is not a directory".to_string(),
+                    ));
                 }
             }
             VfsResponse::Err(e) => return Err(e),
@@ -70,10 +63,7 @@ pub fn open_dir(path: &str, create: bool, timeout: Option<u64>) -> Result<Direct
     let message = vfs_request(path, VfsAction::CreateDirAll)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(Directory {
@@ -95,10 +85,7 @@ pub fn remove_dir(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
     let message = vfs_request(path, VfsAction::RemoveDir)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(()),

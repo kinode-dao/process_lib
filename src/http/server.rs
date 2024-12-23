@@ -268,14 +268,16 @@ impl HttpResponse {
 /// Part of the [`crate::Response`] type issued by http-server
 #[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum HttpServerError {
-    #[error("request could not be parsed to HttpServerAction: {req}.")]
-    BadRequest { req: String },
-    #[error("action expected lazy_load_blob")]
+    #[error("request could not be deserialized to valid HttpServerRequest")]
+    MalformedRequest,
+    #[error("action expected blob")]
     NoBlob,
-    #[error("path binding error: {error}")]
-    PathBindError { error: String },
-    #[error("WebSocket error: {error}")]
-    WebSocketPushError { error: String },
+    #[error("path binding error: invalid source process")]
+    InvalidSourceProcess,
+    #[error("WebSocket error: ping/pong message too long")]
+    WsPingPongTooLong,
+    #[error("WebSocket error: channel not found")]
+    WsChannelNotFound,
     /// Not actually issued by `http-server:distro:sys`, just this library
     #[error("timeout")]
     Timeout,
@@ -683,9 +685,7 @@ impl HttpServer {
         let entry = self
             .http_paths
             .get_mut(path)
-            .ok_or(HttpServerError::PathBindError {
-                error: "path not found".to_string(),
-            })?;
+            .ok_or(HttpServerError::MalformedRequest)?;
         let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(
                 serde_json::to_vec(&HttpServerAction::Bind {
@@ -722,9 +722,7 @@ impl HttpServer {
         let entry = self
             .ws_paths
             .get_mut(path)
-            .ok_or(HttpServerError::PathBindError {
-                error: "path not found".to_string(),
-            })?;
+            .ok_or(HttpServerError::MalformedRequest)?;
         let res = KiRequest::to(("our", "http-server", "distro", "sys"))
             .body(if entry.secure_subdomain {
                 serde_json::to_vec(&HttpServerAction::WebSocketSecureBind {
@@ -826,7 +824,7 @@ impl HttpServer {
                     ),
                     action: VfsAction::Read,
                 })
-                .map_err(|e| HttpServerError::BadRequest { req: e.to_string() })?,
+                .map_err(|_| HttpServerError::MalformedRequest)?,
             )
             .send_and_await_response(self.timeout)
             .unwrap();
@@ -861,7 +859,7 @@ impl HttpServer {
                     path: file_path.to_string(),
                     action: VfsAction::Read,
                 })
-                .map_err(|e| HttpServerError::BadRequest { req: e.to_string() })?,
+                .map_err(|_| HttpServerError::MalformedRequest)?,
             )
             .send_and_await_response(self.timeout)
             .unwrap();
@@ -911,9 +909,7 @@ impl HttpServer {
                 .send_and_await_response(self.timeout)
                 .unwrap()
             else {
-                return Err(HttpServerError::PathBindError {
-                    error: format!("no ui directory to serve: {initial_path}"),
-                });
+                return Err(HttpServerError::MalformedRequest);
             };
 
             let directory_body = serde_json::from_slice::<VfsResponse>(directory_response.body())
@@ -976,7 +972,7 @@ impl HttpServer {
 
     pub fn parse_request(&self, body: &[u8]) -> Result<HttpServerRequest, HttpServerError> {
         let request = serde_json::from_slice::<HttpServerRequest>(body)
-            .map_err(|e| HttpServerError::BadRequest { req: e.to_string() })?;
+            .map_err(|_| HttpServerError::MalformedRequest)?;
         Ok(request)
     }
 

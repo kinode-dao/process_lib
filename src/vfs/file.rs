@@ -26,10 +26,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::Read)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Read => {
@@ -58,10 +55,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::Read)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Read => {
@@ -86,10 +80,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::ReadExact { length })
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Read => {
@@ -112,10 +103,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::ReadToEnd)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Read => Ok(get_blob().unwrap_or_default().bytes),
@@ -134,10 +122,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::ReadToString)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::ReadToString(s) => Ok(s),
@@ -156,10 +141,7 @@ impl File {
             .blob_bytes(buffer)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(()),
@@ -177,10 +159,7 @@ impl File {
             .blob_bytes(buffer)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(()),
@@ -198,10 +177,7 @@ impl File {
             .blob_bytes(buffer)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(()),
@@ -219,10 +195,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::Seek(pos))
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::SeekFrom {
@@ -246,10 +219,7 @@ impl File {
         )
         .send_and_await_response(self.timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: self.path.clone(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(File {
@@ -269,10 +239,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::SetLen(size))
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(()),
@@ -289,10 +256,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::Metadata)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Metadata(metadata) => Ok(metadata),
@@ -309,10 +273,7 @@ impl File {
         let message = vfs_request(&self.path, VfsAction::SyncAll)
             .send_and_await_response(self.timeout)
             .unwrap()
-            .map_err(|e| VfsError::IOError {
-                error: e.to_string(),
-                path: self.path.clone(),
-            })?;
+            .map_err(|e| VfsError::SendError(e.kind))?;
 
         match parse_response(message.body())? {
             VfsResponse::Ok => Ok(()),
@@ -347,10 +308,7 @@ pub fn create_drive(
     let message = vfs_request(&path, VfsAction::CreateDrive)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.clone(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(path),
@@ -369,10 +327,7 @@ pub fn open_file(path: &str, create: bool, timeout: Option<u64>) -> Result<File,
     let message = vfs_request(path, VfsAction::OpenFile { create })
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(File {
@@ -394,10 +349,7 @@ pub fn create_file(path: &str, timeout: Option<u64>) -> Result<File, VfsError> {
     let message = vfs_request(path, VfsAction::CreateFile)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(File {
@@ -419,10 +371,7 @@ pub fn remove_file(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
     let message = vfs_request(path, VfsAction::RemoveFile)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Ok => Ok(()),

@@ -12,7 +12,7 @@ pub use file::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VfsRequest {
     /// path is always prepended by [`crate::PackageId`], the capabilities of the topmost folder are checked
-    /// "/your_package:publisher.os/drive_folder/another_folder_or_file"
+    /// "/your-package:publisher.os/drive_folder/another_folder_or_file"
     pub path: String,
     pub action: VfsAction,
 }
@@ -87,42 +87,27 @@ pub enum VfsResponse {
     Hash([u8; 32]),
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum VfsError {
-    #[error("vfs: No capability for action {action} at path {path}")]
-    NoCap { action: String, path: String },
-    #[error("vfs: Bytes blob required for {action} at path {path}")]
-    BadBytes { action: String, path: String },
-    #[error("vfs: bad request error: {error}")]
-    BadRequest { error: String },
-    #[error("vfs: error parsing path: {path}, error: {error}")]
+    #[error("no write capability for requested drive")]
+    NoWriteCap,
+    #[error("no read capability for requested drive")]
+    NoReadCap,
+    #[error("failed to generate capability for new drive")]
+    AddCapFailed,
+    #[error("request could not be deserialized to valid VfsRequest")]
+    MalformedRequest,
+    #[error("request type used requires a blob")]
+    NoBlob,
+    #[error("error parsing path: {path}: {error}")]
     ParseError { error: String, path: String },
-    #[error("vfs: IO error: {error}, at path {path}")]
-    IOError { error: String, path: String },
-    #[error("vfs: kernel capability channel error: {error}")]
-    CapChannelFail { error: String },
-    #[error("vfs: Bad JSON blob: {error}")]
-    BadJson { error: String },
-    #[error("vfs: File not found at path {path}")]
-    NotFound { path: String },
-    #[error("vfs: Creating directory failed at path: {path}: {error}")]
-    CreateDirError { path: String, error: String },
-}
-
-impl VfsError {
-    pub fn kind(&self) -> &str {
-        match *self {
-            VfsError::NoCap { .. } => "NoCap",
-            VfsError::BadBytes { .. } => "BadBytes",
-            VfsError::BadRequest { .. } => "BadRequest",
-            VfsError::ParseError { .. } => "ParseError",
-            VfsError::IOError { .. } => "IOError",
-            VfsError::CapChannelFail { .. } => "CapChannelFail",
-            VfsError::BadJson { .. } => "NoJson",
-            VfsError::NotFound { .. } => "NotFound",
-            VfsError::CreateDirError { .. } => "CreateDirError",
-        }
-    }
+    #[error("IO error: {0}")]
+    IOError(String),
+    #[error("non-file non-dir in zip")]
+    UnzipError,
+    /// Not actually issued by `vfs:distro:sys`, just this library
+    #[error("SendError")]
+    SendError(crate::SendErrorKind),
 }
 
 pub fn vfs_request<T>(path: T, action: VfsAction) -> Request
@@ -145,10 +130,7 @@ pub fn metadata(path: &str, timeout: Option<u64>) -> Result<FileMetadata, VfsErr
     let message = vfs_request(path, VfsAction::Metadata)
         .send_and_await_response(timeout)
         .unwrap()
-        .map_err(|e| VfsError::IOError {
-            error: e.to_string(),
-            path: path.to_string(),
-        })?;
+        .map_err(|e| VfsError::SendError(e.kind))?;
 
     match parse_response(message.body())? {
         VfsResponse::Metadata(metadata) => Ok(metadata),
@@ -175,7 +157,5 @@ pub fn remove_path(path: &str, timeout: Option<u64>) -> Result<(), VfsError> {
 }
 
 pub fn parse_response(body: &[u8]) -> Result<VfsResponse, VfsError> {
-    serde_json::from_slice::<VfsResponse>(body).map_err(|e| VfsError::BadJson {
-        error: e.to_string(),
-    })
+    serde_json::from_slice::<VfsResponse>(body).map_err(|_| VfsError::MalformedRequest)
 }
