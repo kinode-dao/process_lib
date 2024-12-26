@@ -129,28 +129,18 @@ impl<'de> Deserialize<'de> for PackageId {
 
 impl std::str::FromStr for PackageId {
     type Err = ProcessIdParseError;
-    /// Attempt to parse a `PackageId` from a string. The string must
-    /// contain exactly two segments, where segments are non-empty strings
-    /// separated by a colon (`:`). The segments cannot themselves contain colons.
+    /// Attempts to parse a `PackageId` from a string. The string must match the pattern
+    /// of two segments containing only lowercase letters, numbers and hyphens, separated by a colon.
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let segments: Vec<&str> = input.split(':').collect();
-        if segments.len() < 2 {
-            return Err(ProcessIdParseError::MissingField);
-        } else if segments.len() > 2 {
-            return Err(ProcessIdParseError::TooManyColons);
-        }
-        let package_name = segments[0].to_string();
-        if package_name.is_empty() {
-            return Err(ProcessIdParseError::MissingField);
-        }
-        let publisher_node = segments[1].to_string();
-        if publisher_node.is_empty() {
-            return Err(ProcessIdParseError::MissingField);
+        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-]+$").unwrap();
+        if !re.is_match(input) {
+            return Err(ProcessIdParseError::InvalidCharacter);
         }
 
+        let segments: Vec<&str> = input.split(':').collect();
         Ok(PackageId {
-            package_name,
-            publisher_node,
+            package_name: segments[0].to_string(),
+            publisher_node: segments[1].to_string(),
         })
     }
 }
