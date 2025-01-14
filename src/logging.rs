@@ -119,12 +119,12 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
 /// directory, `package` is the package name, `publisher.os` is the publisher of the
 /// package, and `process` is the process name of the process doing the logging.
 pub fn init_logging(
-    our: &Address,
     file_level: Level,
     terminal_level: Level,
     remote: Option<RemoteLogSettings>,
     terminal_levels_mapping: Option<(u8, u8, u8, u8)>,
 ) -> anyhow::Result<()> {
+    let our = crate::our();
     let log_dir_path = create_drive(our.package_id(), "log", None)?;
     let log_file_path = format!("{log_dir_path}/{}.log", our.process());
     let log_file = open_file(&log_file_path, true, None)?;

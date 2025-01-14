@@ -1,6 +1,6 @@
 use crate::vfs::{FileType, VfsAction, VfsRequest, VfsResponse};
 use crate::{
-    get_blob, last_blob, Address, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
+    get_blob, last_blob, LazyLoadBlob as KiBlob, Message, Request as KiRequest,
     Response as KiResponse,
 };
 pub use http::StatusCode;
@@ -809,11 +809,11 @@ impl HttpServer {
     /// An error will be returned if the file does not exist.
     pub fn serve_file(
         &mut self,
-        our: &Address,
         file_path: &str,
         paths: Vec<&str>,
         config: HttpBindingConfig,
     ) -> Result<(), HttpServerError> {
+        let our = crate::our();
         let _res = KiRequest::to(("our", "vfs", "distro", "sys"))
             .body(
                 serde_json::to_vec(&VfsRequest {
@@ -887,11 +887,11 @@ impl HttpServer {
     /// An error will be returned if the file does not exist.
     pub fn serve_ui(
         &mut self,
-        our: &Address,
         directory: &str,
         roots: Vec<&str>,
         config: HttpBindingConfig,
     ) -> Result<(), HttpServerError> {
+        let our = crate::our();
         let initial_path = format!("{}/pkg/{}", our.package_id(), directory);
 
         let mut queue = std::collections::VecDeque::new();
