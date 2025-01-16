@@ -5,6 +5,7 @@ use alloy::rpc::types::request::{TransactionInput, TransactionRequest};
 use alloy::{hex, primitives::keccak256};
 use alloy_primitives::{Address, Bytes, FixedBytes, B256};
 use alloy_sol_types::{SolCall, SolEvent, SolValue};
+use contract::tokenCall;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -212,12 +213,19 @@ pub mod contract {
 
         function supportsInterface(bytes4 interfaceId) external view returns (bool);
 
-        /// Retrieves the address of the ERC-6551 implementation of the
-        /// zeroth entry. This is set once at initialization.
+        /// Gets the token identifier that owns this token-bound account (TBA).
+        /// This is a core function of the ERC-6551 standard that returns the
+        /// identifying information about the NFT that owns this account.
+        /// The return values are constant and cannot change over time.
         ///
         /// Returns:
-        /// - implementation: The address of the ERC-6551 implementation.
-        function get6551Implementation() external view returns (address);
+        /// - chainId: The EIP-155 chain ID where the owning NFT exists
+        /// - tokenContract: The contract address of the owning NFT
+        /// - tokenId: The token ID of the owning NFT
+        function token()
+            external
+            view
+            returns (uint256 chainId, address tokenContract, uint256 tokenId);
     }
 }
 
@@ -267,7 +275,9 @@ impl fmt::Display for DecodeLogError {
             DecodeLogError::UnexpectedTopic(topic) => write!(f, "Unexpected topic: {:?}", topic),
             DecodeLogError::InvalidName(name) => write!(f, "Invalid name: {}", name),
             DecodeLogError::DecodeError(err) => write!(f, "Decode error: {}", err),
-            DecodeLogError::UnresolvedParent(parent) => write!(f, "Could not resolve parent: {}", parent),
+            DecodeLogError::UnresolvedParent(parent) => {
+                write!(f, "Could not resolve parent: {}", parent)
+            }
         }
     }
 }
@@ -527,6 +537,28 @@ impl Kimap {
         };
 
         Ok((res.tba, res.owner, note_data))
+    }
+
+    /// Gets a namehash from an existing TBA address.
+    ///
+    /// # Parameters
+    /// - `tba`: The TBA to get the namehash of.
+    /// # Returns
+    /// A `Result<String, EthError>` representing the namehash of the TBA.
+    pub fn get_namehash_from_tba(&self, tba: Address) -> Result<String, EthError> {
+        let token_call = tokenCall {}.abi_encode();
+
+        let tx_req = TransactionRequest::default()
+            .input(TransactionInput::new(token_call.into()))
+            .to(tba);
+
+        let res_bytes = self.provider.call(tx_req, None)?;
+
+        let res = tokenCall::abi_decode_returns(&res_bytes, false)
+            .map_err(|_| EthError::RpcMalformedResponse)?;
+
+        let bytes = res.tokenId.to_be_bytes::<32>();
+        Ok(format!("0x{}", hex::encode(bytes)))
     }
 
     /// Create a filter for all mint events.
