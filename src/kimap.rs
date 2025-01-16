@@ -6,6 +6,8 @@ use alloy::{hex, primitives::keccak256};
 use alloy_primitives::{Address, Bytes, FixedBytes, B256};
 use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::fmt;
 use std::str::FromStr;
 
 /// kimap deployment address on optimism
@@ -258,6 +260,19 @@ pub enum DecodeLogError {
     /// The parent name could not be resolved with `kns-indexer`.
     UnresolvedParent(String),
 }
+
+impl fmt::Display for DecodeLogError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DecodeLogError::UnexpectedTopic(topic) => write!(f, "Unexpected topic: {:?}", topic),
+            DecodeLogError::InvalidName(name) => write!(f, "Invalid name: {}", name),
+            DecodeLogError::DecodeError(err) => write!(f, "Decode error: {}", err),
+            DecodeLogError::UnresolvedParent(parent) => write!(f, "Could not resolve parent: {}", parent),
+        }
+    }
+}
+
+impl Error for DecodeLogError {}
 
 /// Canonical function to determine if a kimap entry is valid. This should
 /// be used whenever reading a new kimap entry from a mints query, because

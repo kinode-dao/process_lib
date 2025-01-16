@@ -10,6 +10,8 @@ pub use alloy::rpc::types::{
 pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
+use std::fmt;
 
 /// Subscription kind. Pulled directly from alloy (https://github.com/alloy-rs/alloy).
 /// Why? Because alloy is not yet 1.0 and the types in this interface must be stable.
@@ -129,6 +131,24 @@ pub enum EthError {
     /// RPC gave garbage back
     RpcMalformedResponse,
 }
+
+impl fmt::Display for EthError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EthError::RpcError(e) => write!(f, "RPC error: {:?}", e),
+            EthError::MalformedRequest => write!(f, "Malformed request"),
+            EthError::NoRpcForChain => write!(f, "No RPC provider for chain"),
+            EthError::SubscriptionClosed(id) => write!(f, "Subscription {} closed", id),
+            EthError::InvalidMethod(m) => write!(f, "Invalid method: {}", m),
+            EthError::InvalidParams => write!(f, "Invalid parameters"),
+            EthError::PermissionDenied => write!(f, "Permission denied"),
+            EthError::RpcTimeout => write!(f, "RPC request timed out"),
+            EthError::RpcMalformedResponse => write!(f, "RPC returned malformed response"),
+        }
+    }
+}
+
+impl Error for EthError {}
 
 /// The action type used for configuring eth:distro:sys. Only processes which have the "root"
 /// [`crate::Capability`] from eth:distro:sys can successfully send this action.
