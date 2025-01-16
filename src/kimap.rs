@@ -557,8 +557,8 @@ impl Kimap {
         let res = tokenCall::abi_decode_returns(&res_bytes, false)
             .map_err(|_| EthError::RpcMalformedResponse)?;
 
-        let bytes = res.tokenId.to_be_bytes::<32>();
-        Ok(format!("0x{}", hex::encode(bytes)))
+        let namehash: FixedBytes<32> = res.tokenId.into();
+        Ok(format!("0x{}", hex::encode(namehash)))
     }
 
     /// Create a filter for all mint events.
