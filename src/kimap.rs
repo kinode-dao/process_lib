@@ -8,12 +8,12 @@ use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// kimap deployment address on optimism
-pub const KIMAP_ADDRESS: &'static str = "0xcA92476B2483aBD5D82AEBF0b56701Bb2e9be658";
-/// optimism chain id
-pub const KIMAP_CHAIN_ID: u64 = 10;
-/// first block of kimap deployment on optimism
-pub const KIMAP_FIRST_BLOCK: u64 = 123_908_000;
+/// kimap deployment address on base
+pub const KIMAP_ADDRESS: &'static str = "0x000000000033e5CCbC52Ec7BDa87dB768f9aA93F";
+/// base chain id
+pub const KIMAP_CHAIN_ID: u64 = 8453;
+/// first block (minus one) of kimap deployment on base
+pub const KIMAP_FIRST_BLOCK: u64 = 25_346_377;
 /// the root hash of kimap, empty bytes32
 pub const KIMAP_ROOT_HASH: &'static str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
