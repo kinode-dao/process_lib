@@ -128,7 +128,7 @@ pub enum IndexerRequests {
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct NamehashToNameRequest {
     pub hash: String,
-    pub block: Option<u64>,
+    pub block: u64,
 }
 
 /// Response from `kns-indexer:kns-indexer:sys`.
@@ -226,7 +226,7 @@ where
         .body(
             serde_json::to_vec(&IndexerRequests::NamehashToName(NamehashToNameRequest {
                 hash: namehash.into(),
-                block,
+                block: block.unwrap_or(0),
             }))
             .unwrap(),
         )
