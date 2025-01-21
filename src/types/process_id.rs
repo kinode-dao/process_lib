@@ -36,31 +36,19 @@ impl ProcessId {
 
 impl std::str::FromStr for ProcessId {
     type Err = ProcessIdParseError;
-    /// Attempts to parse a `ProcessId` from a string. To succeed, the string must contain
-    /// exactly 3 segments, separated by colons `:`. The segments must not contain colons.
+    /// Attempts to parse a `ProcessId` from a string. The string must match the pattern
+    /// of three segments containing only lowercase letters, numbers and hyphens, separated by colons.
     fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
+        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-]+$").unwrap();
+        if !re.is_match(input) {
+            return Err(ProcessIdParseError::InvalidCharacter);
+        }
+
         let segments: Vec<&str> = input.split(':').collect();
-        if segments.len() < 3 {
-            return Err(ProcessIdParseError::MissingField);
-        } else if segments.len() > 3 {
-            return Err(ProcessIdParseError::TooManyColons);
-        }
-        let process_name = segments[0].to_string();
-        if process_name.is_empty() {
-            return Err(ProcessIdParseError::MissingField);
-        }
-        let package_name = segments[1].to_string();
-        if package_name.is_empty() {
-            return Err(ProcessIdParseError::MissingField);
-        }
-        let publisher_node = segments[2].to_string();
-        if publisher_node.is_empty() {
-            return Err(ProcessIdParseError::MissingField);
-        }
         Ok(ProcessId {
-            process_name,
-            package_name,
-            publisher_node,
+            process_name: segments[0].to_string(),
+            package_name: segments[1].to_string(),
+            publisher_node: segments[2].to_string(),
         })
     }
 }
@@ -134,6 +122,7 @@ impl PartialEq<ProcessId> for &str {
 pub enum ProcessIdParseError {
     TooManyColons,
     MissingField,
+    InvalidCharacter,
 }
 
 impl std::fmt::Display for ProcessIdParseError {
@@ -144,6 +133,7 @@ impl std::fmt::Display for ProcessIdParseError {
             match self {
                 ProcessIdParseError::TooManyColons => "Too many colons",
                 ProcessIdParseError::MissingField => "Missing field",
+                ProcessIdParseError::InvalidCharacter => "Invalid character",
             }
         )
     }
@@ -154,6 +144,7 @@ impl std::error::Error for ProcessIdParseError {
         match self {
             ProcessIdParseError::TooManyColons => "Too many colons",
             ProcessIdParseError::MissingField => "Missing field",
+            ProcessIdParseError::InvalidCharacter => "Invalid character",
         }
     }
 }

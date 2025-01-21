@@ -1,7 +1,7 @@
 [package]
 name = "kinode_process_lib"
 authors = ["Sybil Technologies AG"]
-version = "0.10.1"
+version = "0.10.2"
 edition = "2021"
 description = "A library for writing Kinode processes in Rust."
 homepage = "https://kinode.org"
@@ -27,6 +27,7 @@ mime_guess = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.120"
 rand = "0.8"
+regex = "1.11.1"
 rmp-serde = "1.1.2"
 thiserror = "1.0"
 tracing = { version = "0.1", optional = true }

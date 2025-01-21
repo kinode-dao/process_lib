@@ -1,13 +1,12 @@
-pub use tracing::{debug, error, info, warn, Level};
-use tracing_error::ErrorLayer;
-use tracing_subscriber::{
-    fmt, layer::SubscriberExt, prelude::*, util::SubscriberInitExt, EnvFilter,
-};
-
 use crate::{
     print_to_terminal,
     vfs::{create_drive, open_file, File},
     Address, Request,
+};
+pub use tracing::{debug, error, info, warn, Level};
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{
+    fmt, layer::SubscriberExt, prelude::*, util::SubscriberInitExt, EnvFilter,
 };
 
 pub struct RemoteLogSettings {
@@ -25,10 +24,12 @@ pub struct RemoteWriterMaker {
 
 pub struct FileWriter {
     pub file: File,
+    pub max_size: u64,
 }
 
 pub struct FileWriterMaker {
     pub file: File,
+    pub max_size: u64,
 }
 
 pub struct TerminalWriter {
@@ -65,6 +66,28 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RemoteWriterMaker {
 impl std::io::Write for FileWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         // TODO: use non-blocking call instead? (.append() `send_and_await()`s)
+        let metadata = self
+            .file
+            .metadata()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+        if metadata.len > self.max_size {
+            // Get current contents
+            let contents = self
+                .file
+                .read()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+            // Take second half of file
+            let half_len = contents.len() / 2;
+            let new_contents = &contents[half_len..];
+
+            // Truncate and write back second half
+            self.file
+                .write(new_contents)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        }
+
         self.file
             .append(buf)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
@@ -82,6 +105,7 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for FileWriterMaker {
     fn make_writer(&'a self) -> Self::Writer {
         FileWriter {
             file: File::new(self.file.path.clone(), self.file.timeout),
+            max_size: self.max_size,
         }
     }
 }
@@ -114,17 +138,21 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TerminalWriterMaker {
 /// Logs will be printed to terminal as appropriate depending on given level.
 /// Logs will be logged into the logging file as appropriate depending on the given level.
 ///
+/// If `max_log_file_size` is provided, the log file will be rotated when it reaches
+/// the given size. The default size is 1MB.
+///
 /// The logging file lives in the node's `vfs/` directory, specifically at
 /// `node/vfs/package:publisher.os/log/process.log`, where `node` is your node's home
 /// directory, `package` is the package name, `publisher.os` is the publisher of the
 /// package, and `process` is the process name of the process doing the logging.
 pub fn init_logging(
-    our: &Address,
     file_level: Level,
     terminal_level: Level,
     remote: Option<RemoteLogSettings>,
     terminal_levels_mapping: Option<(u8, u8, u8, u8)>,
+    max_log_file_size: Option<u64>,
 ) -> anyhow::Result<()> {
+    let our = crate::our();
     let log_dir_path = create_drive(our.package_id(), "log", None)?;
     let log_file_path = format!("{log_dir_path}/{}.log", our.process());
     let log_file = open_file(&log_file_path, true, None)?;
@@ -142,7 +170,10 @@ pub fn init_logging(
     let debug_filter = tracing_subscriber::filter::filter_fn(|metadata: &tracing::Metadata<'_>| {
         metadata.level() == &Level::DEBUG
     });
-    let file_writer_maker = FileWriterMaker { file: log_file };
+    let file_writer_maker = FileWriterMaker {
+        file: log_file,
+        max_size: max_log_file_size.unwrap_or(1024 * 1024),
+    };
     let (error, warn, info, debug) = terminal_levels_mapping.unwrap_or_else(|| (0, 1, 2, 3));
     let error_terminal_writer_maker = TerminalWriterMaker { level: error };
     let warn_terminal_writer_maker = TerminalWriterMaker { level: warn };

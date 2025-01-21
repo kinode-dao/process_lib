@@ -235,9 +235,10 @@ impl Request {
         self
     }
     /// Attach the [`Capability`] to message this process to the next message.
-    pub fn attach_messaging(mut self, our: &Address) -> Self {
+    pub fn attach_messaging(mut self) -> Self {
+        let our = crate::our();
         self.capabilities.extend(vec![Capability {
-            issuer: our.clone(),
+            issuer: our,
             params: "\"messaging\"".to_string(),
         }]);
         self

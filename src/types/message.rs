@@ -83,7 +83,8 @@ impl Message {
     }
     /// Check if a `Message` was sent by a local process.
     /// Returns `false` if the `source` node is not our local node.
-    pub fn is_local(&self, our: &Address) -> bool {
+    pub fn is_local(&self) -> bool {
+        let our = crate::our();
         match self {
             Message::Request { source, .. } => source.node == our.node,
             Message::Response { source, .. } => source.node == our.node,
