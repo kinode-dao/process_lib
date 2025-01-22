@@ -132,7 +132,7 @@ impl std::str::FromStr for PackageId {
     /// Attempts to parse a `PackageId` from a string. The string must match the pattern
     /// of two segments containing only lowercase letters, numbers and hyphens, separated by a colon.
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-]+$").unwrap();
+        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-.]+$").unwrap();
         if !re.is_match(input) {
             return Err(ProcessIdParseError::InvalidCharacter);
         }

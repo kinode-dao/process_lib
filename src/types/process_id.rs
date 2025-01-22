@@ -39,7 +39,7 @@ impl std::str::FromStr for ProcessId {
     /// Attempts to parse a `ProcessId` from a string. The string must match the pattern
     /// of three segments containing only lowercase letters, numbers and hyphens, separated by colons.
     fn from_str(input: &str) -> Result<Self, ProcessIdParseError> {
-        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-]+$").unwrap();
+        let re = regex::Regex::new(r"^[a-z0-9-]+:[a-z0-9-]+:[a-z0-9-.]+$").unwrap();
         if !re.is_match(input) {
             return Err(ProcessIdParseError::InvalidCharacter);
         }
