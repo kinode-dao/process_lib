@@ -1,5 +1,4 @@
 use crate::{Message, Request as KiRequest};
-pub use alloy::rpc::client::Authorization;
 pub use alloy::rpc::json_rpc::ErrorPayload;
 pub use alloy::rpc::types::eth::pubsub::SubscriptionResult;
 pub use alloy::rpc::types::pubsub::Params;
@@ -8,6 +7,7 @@ pub use alloy::rpc::types::{
     Block, BlockId, BlockNumberOrTag, FeeHistory, Filter, FilterBlockOption, Log, Transaction,
     TransactionReceipt,
 };
+pub use alloy::transports::Authorization as AlloyAuthorization;
 pub use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, U128, U256, U64, U8};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -220,6 +220,23 @@ pub struct ProviderConfig {
     pub provider: NodeOrRpcUrl,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Hash, Eq, PartialEq)]
+pub enum Authorization {
+    Basic(String),
+    Bearer(String),
+    Raw(String),
+}
+
+impl From<Authorization> for AlloyAuthorization {
+    fn from(auth: Authorization) -> AlloyAuthorization {
+        match auth {
+            Authorization::Basic(value) => AlloyAuthorization::Basic(value),
+            Authorization::Bearer(value) => AlloyAuthorization::Bearer(value),
+            Authorization::Raw(value) => AlloyAuthorization::Raw(value),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Hash, Eq, PartialEq)]
 pub enum NodeOrRpcUrl {
     Node {
@@ -242,7 +259,7 @@ impl std::cmp::PartialEq<str> for NodeOrRpcUrl {
 }
 
 impl<'de> Deserialize<'de> for NodeOrRpcUrl {
-    fn deserialize<D>(serde::deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -257,10 +274,9 @@ impl<'de> Deserialize<'de> for NodeOrRpcUrl {
         }
 
         #[derive(Deserialize)]
-        #[serde(tag = "type")]
         enum Helper {
             Node {
-                kns_update: crate::core::KnsUpdate,
+                kns_update: crate::net::KnsUpdate,
                 use_as_provider: bool,
             },
             RpcUrl(RpcUrlHelper),
