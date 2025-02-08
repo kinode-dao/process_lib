@@ -60,6 +60,7 @@ dependencies = [
  "alloy-rpc-client",
  "alloy-rpc-types",
  "alloy-serde",
+ "alloy-transport",
  "alloy-transport-http",
 ]
 
@@ -1802,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "kinode_process_lib"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "alloy",
  "alloy-primitives",
