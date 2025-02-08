@@ -17,6 +17,7 @@ alloy-sol-macro = "0.8.15"
 alloy-sol-types = "0.8.15"
 alloy = { version = "0.8.1", features = [
     "json-rpc",
+    "rpc-client",
     "rpc-types",
 ] }
 anyhow = "1.0"
